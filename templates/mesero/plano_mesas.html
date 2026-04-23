@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+{% block title %}Plano de Mesas — RestaurantOS{% endblock %}
+{% block nav_mesas %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .mesa-card {
+    border-radius: 16px; cursor: pointer; padding: 1.25rem;
+    border: 2px solid transparent; transition: all .25s;
+    min-height: 130px; position: relative;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .mesa-card.libre    { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.3); }
+  .mesa-card.ocupada  { background:rgba(239,68,68,.08);  border-color:rgba(239,68,68,.3); }
+  .mesa-card.reservada{ background:rgba(245,158,11,.08); border-color:rgba(245,158,11,.3); }
+  .mesa-card.mantenimiento{ background:rgba(100,116,139,.08); border-color:rgba(100,116,139,.3); }
+  .mesa-card.ocupada:hover { border-color:#ef4444; box-shadow:0 8px 24px rgba(239,68,68,.25); transform:translateY(-3px); }
+  .mesa-card.libre:hover   { border-color:#10b981; box-shadow:0 8px 24px rgba(16,185,129,.2);  transform:translateY(-3px); }
+  .mesa-num { font-size:2rem; font-weight:800; line-height:1; }
+  .libre .mesa-num     { color:#10b981; }
+  .ocupada .mesa-num   { color:#ef4444; }
+  .reservada .mesa-num { color:#f59e0b; }
+  .mantenimiento .mesa-num { color:#64748b; }
+  .mesa-estado-dot {
+    width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px;
+  }
+  .dot-libre     { background:#10b981; box-shadow:0 0 6px #10b981; }
+  .dot-ocupada   { background:#ef4444; box-shadow:0 0 6px #ef4444; }
+  .dot-reservada { background:#f59e0b; box-shadow:0 0 6px #f59e0b; }
+  .dot-mantenimiento { background:#64748b; }
+  .piso-badge {
+    display:inline-block; padding:.25rem .75rem; border-radius:20px; font-size:.8rem;
+    font-weight:600; border:1px solid var(--color-border); color:var(--color-muted);
+    cursor:pointer; transition:all .2s;
+  }
+  .piso-badge.activo, .piso-badge:hover {
+    background:var(--color-accent); color:#fff; border-color:var(--color-accent);
+  }
+  .modal-content { background:var(--color-surface); border:1px solid var(--color-border); }
+  .linea-row { padding:.65rem .85rem; border-radius:10px; margin-bottom:.5rem;
+    background:var(--color-surface2); border:1px solid var(--color-border); }
+  .estado-icon { font-size:1.1rem; }
+  .pulse { animation: pulse-anim 1.5s ease-in-out infinite; }
+  @keyframes pulse-anim { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .polling-indicator {
+    width:8px; height:8px; border-radius:50%; background:#10b981;
+    display:inline-block; animation: pulse-anim 2s ease-in-out infinite;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="planoApp()" x-init="inicializar()" x-cloak>
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+    <div>
+      <h4 class="mb-0 fw-bold">
+        <i class="bi bi-grid-3x3-gap me-2" style="color:var(--color-accent);"></i>Plano de Mesas
+      </h4>
+      <p class="text-muted mb-0" style="font-size:.85rem;">
+        <span class="polling-indicator me-1"></span>
+        Actualizando cada 10s ·
+        <span x-text="resumen.libres"></span> libres /
+        <span x-text="resumen.ocupadas"></span> ocupadas
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <!-- Filtros por piso -->
+      <div class="d-flex gap-2 flex-wrap">
+        <span class="piso-badge" :class="{activo: pisoActivo===''}" @click="pisoActivo=''">Todos</span>
+        {% for val, label in pisos %}
+        <span class="piso-badge" :class="{activo: pisoActivo==='{{ val }}'}"
+              @click="pisoActivo='{{ val }}'">{{ label }}</span>
+        {% endfor %}
+      </div>
+      <a href="/mesero/nueva-comanda/" class="btn btn-accent">
+        <i class="bi bi-plus-circle me-1"></i> Nueva Comanda
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Cargando ────────────────────────────────────────────────── -->
+  <div x-show="cargando" class="text-center py-5 text-muted">
+    <div class="spinner-border me-2"></div> Cargando plano...
+  </div>
+
+  <!-- ── Grid de mesas ──────────────────────────────────────────── -->
+  <div x-show="!cargando"
+       class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-xl-6 g-3">
+    <template x-for="mesa in mesasFiltradas" :key="mesa.id">
+      <div class="col">
+        <div class="mesa-card"
+             :class="mesa.estado.toLowerCase()"
+             @click="abrirDetalle(mesa)">
+
+          <div>
+            <div class="mesa-num" x-text="mesa.numero"></div>
+            <div class="small mt-1" style="color:var(--color-muted);"
+                 x-text="mesa.piso_label"></div>
+          </div>
+
+          <div>
+            <div class="d-flex align-items-center mb-1">
+              <span class="mesa-estado-dot" :class="'dot-' + mesa.estado.toLowerCase()"></span>
+              <span class="small fw-600" x-text="mesa.estado_label"
+                    style="font-size:.8rem;font-weight:600;"></span>
+            </div>
+            <div class="small text-muted" style="font-size:.75rem;">
+              <i class="bi bi-people-fill me-1"></i><span x-text="mesa.capacidad"></span>
+              <template x-if="mesa.comanda">
+                <span class="ms-2">
+                  <i class="bi bi-clock me-1"></i><span x-text="mesa.comanda.fecha_apertura"></span>
+                </span>
+              </template>
+            </div>
+            <template x-if="mesa.comanda">
+              <div class="mt-1" style="font-size:.75rem;color:var(--color-accent);">
+                <i class="bi bi-receipt me-1"></i>$<span x-text="mesa.comanda.total"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MODAL — Detalle de Comanda
+  ═══════════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="modalComanda" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-receipt me-2" style="color:var(--color-accent);"></i>
+            Mesa <span x-text="mesaActual?.numero"></span> —
+            <span class="text-muted" style="font-size:.9rem;"
+                  x-text="'Apertura: ' + (mesaActual?.comanda?.fecha_apertura ?? '')"></span>
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body px-4">
+
+          <!-- Mesero y notas -->
+          <div class="d-flex gap-3 mb-3 flex-wrap">
+            <span class="badge rounded-pill" style="background:var(--color-surface2);color:var(--color-text);border:1px solid var(--color-border);">
+              <i class="bi bi-person me-1"></i>
+              <span x-text="mesaActual?.comanda?.mesero"></span>
+            </span>
+            <span class="badge rounded-pill" style="background:var(--color-surface2);color:var(--color-muted);border:1px solid var(--color-border);"
+                  x-show="mesaActual?.comanda?.notas">
+              <i class="bi bi-chat-left me-1"></i>
+              <span x-text="mesaActual?.comanda?.notas"></span>
+            </span>
+          </div>
+
+          <!-- Lista de líneas -->
+          <template x-if="mesaActual?.comanda?.lineas?.length">
+            <div>
+              <template x-for="linea in mesaActual.comanda.lineas" :key="linea.id">
+                <div class="linea-row">
+                  <div class="d-flex align-items-start justify-content-between gap-2">
+
+                    <!-- Ícono de estado cocina -->
+                    <div class="pt-1">
+                      <!-- PENDIENTE: reloj pulsante -->
+                      <template x-if="linea.estado === 'PENDIENTE'">
+                        <i class="bi bi-hourglass-split estado-icon pulse" style="color:#f59e0b;" title="Pendiente"></i>
+                      </template>
+                      <!-- EN_PREPARACION: fuego -->
+                      <template x-if="linea.estado === 'EN_PREPARACION'">
+                        <i class="bi bi-fire estado-icon" style="color:#fb923c;" title="En preparación"></i>
+                      </template>
+                      <!-- LISTO: check verde -->
+                      <template x-if="linea.estado === 'LISTO'">
+                        <i class="bi bi-check-circle-fill estado-icon" style="color:#10b981;" title="Listo"></i>
+                      </template>
+                      <!-- CANCELADO: x rojo -->
+                      <template x-if="linea.estado === 'CANCELADO'">
+                        <i class="bi bi-x-circle-fill estado-icon" style="color:#ef4444;" title="Cancelado"></i>
+                      </template>
+                    </div>
+
+                    <!-- Nombre y cantidad -->
+                    <div class="flex-grow-1">
+                      <div class="fw-600" style="font-size:.92rem;font-weight:600;"
+                           x-text="linea.cantidad + 'x ' + linea.plato_nombre"></div>
+                      <div class="small text-muted d-flex gap-3 mt-1 flex-wrap">
+                        <span x-text="linea.estado_label"
+                              :style="estadoColor(linea.estado)"></span>
+                        <span x-show="linea.notas_cocina" x-text="'📝 ' + linea.notas_cocina"></span>
+                      </div>
+                    </div>
+
+                    <!-- Subtotal -->
+                    <div class="text-end">
+                      <span style="color:var(--color-accent);font-weight:700;"
+                            x-text="'$' + linea.subtotal"></span>
+                    </div>
+                  </div>
+
+                  <!-- ── Formulario edición (solo si CANCELADO) ─── -->
+                  <template x-if="linea.estado === 'CANCELADO'">
+                    <div class="mt-2 pt-2" style="border-top:1px solid var(--color-border);">
+                      <div x-show="lineaEditando !== linea.id">
+                        <button class="btn btn-sm btn-outline-warning"
+                                @click="lineaEditando = linea.id; editForm = {cantidad: linea.cantidad, notas: linea.notas_cocina}">
+                          <i class="bi bi-pencil me-1"></i> Editar ítem cancelado
+                        </button>
+                      </div>
+
+                      <div x-show="lineaEditando === linea.id" class="row g-2 align-items-end">
+                        <div class="col-3">
+                          <label class="form-label small text-muted mb-1">Cantidad</label>
+                          <input type="number" min="1" class="form-control form-control-dark form-control-sm"
+                                 x-model="editForm.cantidad">
+                        </div>
+                        <div class="col-5">
+                          <label class="form-label small text-muted mb-1">Nota</label>
+                          <input type="text" class="form-control form-control-dark form-control-sm"
+                                 x-model="editForm.notas" placeholder="Nota...">
+                        </div>
+                        <div class="col-4 d-flex gap-1">
+                          <button class="btn btn-sm btn-accent flex-grow-1"
+                                  :disabled="guardandoLinea"
+                                  @click="guardarEdicionLinea(linea.id)">
+                            <span x-show="!guardandoLinea">Guardar</span>
+                            <span x-show="guardandoLinea"><div class="spinner-border spinner-border-sm"></div></span>
+                          </button>
+                          <button class="btn btn-sm btn-outline-secondary"
+                                  @click="lineaEditando = null">✕</button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Sin líneas -->
+          <template x-if="!mesaActual?.comanda?.lineas?.length">
+            <p class="text-muted text-center py-4">Sin ítems registrados.</p>
+          </template>
+        </div>
+
+        <div class="modal-footer justify-content-between">
+          <div class="fw-bold fs-5">
+            Total: <span style="color:var(--color-accent);"
+                         x-text="'$' + (mesaActual?.comanda?.total ?? '0.00')"></span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <button class="btn btn-accent"
+                    :disabled="liberando"
+                    @click="liberarMesa()">
+              <template x-if="!liberando">
+                <span><i class="bi bi-cash-coin me-1"></i> Liberar Mesa / Cobrar</span>
+              </template>
+              <template x-if="liberando">
+                <span><div class="spinner-border spinner-border-sm me-1"></div> Procesando...</span>
+              </template>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /x-data -->
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  Alpine.js Component: planoApp()                           ║
+ * ║  Polling cada 10s + Modal de detalle de comanda            ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ */
+function planoApp() {
+  return {
+    // ── Estado ──────────────────────────────────────────────────
+    mesas:          [],
+    pisoActivo:     '',
+    mesaActual:     null,     // Mesa cuyo modal está abierto
+    cargando:       true,
+    liberando:      false,
+
+    // ── Edición de línea cancelada ───────────────────────────────
+    lineaEditando:  null,
+    editForm:       { cantidad: 1, notas: '' },
+    guardandoLinea: false,
+
+    // ── Bootstrap modal instance ─────────────────────────────────
+    _modal: null,
+    _pollingTimer: null,
+
+    // ════════════════════════════════════════════════════════════
+    // INICIALIZACIÓN
+    // ════════════════════════════════════════════════════════════
+    async inicializar() {
+      // Crear instancia del modal Bootstrap
+      this._modal = new bootstrap.Modal(document.getElementById('modalComanda'));
+
+      // Primera carga
+      await this.cargarEstado();
+
+      // Iniciar polling cada 10 segundos
+      this._pollingTimer = setInterval(() => this.cargarEstado(), 10000);
+
+      // Limpiar interval cuando el componente sea eliminado del DOM
+      this.$el.addEventListener('alpine:destroy', () => {
+        clearInterval(this._pollingTimer);
+      });
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // POLLING: GET /api/mesas/estado-actual/
+    // ════════════════════════════════════════════════════════════
+    async cargarEstado() {
+      try {
+        const resp = await fetch('/api/mesas/estado-actual/');
+        const data = await resp.json();
+        this.mesas   = data.mesas;
+        this.cargando = false;
+
+        // Si el modal está abierto, actualizar también el detalle activo
+        if (this.mesaActual) {
+          const actualizada = data.mesas.find(m => m.id === this.mesaActual.id);
+          if (actualizada) this.mesaActual = actualizada;
+        }
+      } catch (e) {
+        console.error('Error en polling:', e);
+      }
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // COMPUTED: mesas filtradas por piso
+    // ════════════════════════════════════════════════════════════
+    get mesasFiltradas() {
+      if (!this.pisoActivo) return this.mesas;
+      return this.mesas.filter(m => m.piso === this.pisoActivo);
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // COMPUTED: resumen de mesas
+    // ════════════════════════════════════════════════════════════
+    get resumen() {
+      return {
+        libres:   this.mesas.filter(m => m.estado === 'LIBRE').length,
+        ocupadas: this.mesas.filter(m => m.estado === 'OCUPADA').length,
+      };
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // ABRIR MODAL DE DETALLE
+    // ════════════════════════════════════════════════════════════
+    abrirDetalle(mesa) {
+      // Solo mostrar modal si la mesa tiene comanda activa
+      if (mesa.estado === 'LIBRE') return;
+      this.mesaActual    = mesa;
+      this.lineaEditando = null;
+      this._modal.show();
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // EDITAR LÍNEA CANCELADA
+    // PATCH /api/comandas/linea/<id>/editar/
+    // ════════════════════════════════════════════════════════════
+    async guardarEdicionLinea(lineaId) {
+      this.guardandoLinea = true;
+      try {
+        const resp = await fetch(`/api/comandas/linea/${lineaId}/editar/`, {
+          method:  'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken':  this._getCsrfToken(),
+          },
+          body: JSON.stringify({
+            cantidad: parseInt(this.editForm.cantidad),
+            notas:    this.editForm.notas,
+            estado:   'PENDIENTE',   // Reactivar el ítem al editar
+          }),
+        });
+        if (resp.ok) {
+          this.lineaEditando = null;
+          await this.cargarEstado();  // Refrescar datos
+        }
+      } catch (e) {
+        console.error('Error editando línea:', e);
+      } finally {
+        this.guardandoLinea = false;
+      }
+    },
+
+    // ════════════════════════════════════════════════════════════
+    // LIBERAR MESA / COBRAR
+    // POST /api/comandas/mesa/<id>/liberar/
+    // ════════════════════════════════════════════════════════════
+    async liberarMesa() {
+      if (!confirm(`¿Confirmar cobro y liberar Mesa ${this.mesaActual.numero}?`)) return;
+      this.liberando = true;
+      try {
+        const resp = await fetch(`/api/comandas/mesa/${this.mesaActual.id}/liberar/`, {
+          method:  'POST',
+          headers: { 'X-CSRFToken': this._getCsrfToken() },
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          this._modal.hide();
+          this.mesaActual = null;
+          await this.cargarEstado();
+        }
+      } catch (e) {
+        console.error('Error liberando mesa:', e);
+      } finally {
+        this.liberando = false;
+      }
+    },
+
+    // ── Helper: color texto según estado de cocina ────────────────
+    estadoColor(estado) {
+      const map = {
+        'PENDIENTE':      'color:#f59e0b;',
+        'EN_PREPARACION': 'color:#fb923c;',
+        'LISTO':          'color:#10b981;',
+        'CANCELADO':      'color:#ef4444;',
+      };
+      return map[estado] || '';
+    },
+
+    // ── Helper: CSRF token ───────────────────────────────────────
+    _getCsrfToken() {
+      const c = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+      return c ? c.trim().split('=')[1] : '';
+    },
+  };
+}
+</script>
+{% endblock %}
