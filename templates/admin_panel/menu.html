@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Menú — Admin Panel{% endblock %}
-{% block nav_menu %}active{% endblock %}
+{% block title %}Gestión de Menú — Admin Panel{% endblock %}
+{% block nav_menu_sidebar %}active{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4" x-data="menuApp()" x-init="init()">
     <div class="mb-4 d-flex justify-content-between align-items-center">
         <div>
             <h2 class="mb-0 text-white font-black text-2xl">Gestión de Menú</h2>
-            <p class="text-on-surface-variant small font-bold">Configuración de Categorías y Platos del sistema</p>
+            <p class="text-on-surface-variant small font-bold">Configuración de Categorías, Platos e Insumos del sistema</p>
         </div>
         <div>
             <!-- Tabs / Segmented Control para cambiar entre Categorías y Platos -->
@@ -41,6 +41,7 @@
                             <th class="px-4 py-3">Ícono</th>
                             <th class="px-4 py-3">Nombre</th>
                             <th class="px-4 py-3">Orden</th>
+                            <th class="px-4 py-3 text-center">N° Platos</th>
                             <th class="px-4 py-3 text-end">Acciones</th>
                         </tr>
                     </thead>
@@ -59,11 +60,12 @@
                                 </td>
                                 <td class="px-4 py-2 align-middle font-bold text-white" x-text="cat.nombre"></td>
                                 <td class="px-4 py-2 align-middle text-on-surface-variant" x-text="cat.orden"></td>
+                                <td class="px-4 py-2 align-middle text-center text-on-surface-variant font-bold" x-text="platos.filter(p => p.categoria == cat.id).length"></td>
                                 <td class="px-4 py-2 align-middle text-end">
                                     <button class="btn btn-sm text-primary hover:bg-primary/10 rounded-lg border-0" @click="editarCategoria(cat)" title="Editar">
                                         <span class="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
-                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="eliminarCategoria(cat.id)" title="Eliminar">
+                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="abrirConfirmarEliminarCategoria(cat)" title="Eliminar">
                                         <span class="material-symbols-outlined text-[18px]">delete</span>
                                     </button>
                                 </td>
@@ -82,13 +84,13 @@
 
     <!-- Pestaña Platos -->
     <div x-show="tab === 'platos'" x-transition.opacity x-cloak>
-        <div class="card card-dark shadow-sm">
+        <div class="card card-dark shadow-sm mb-4">
             <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center p-4">
                 <h3 class="h5 mb-0 font-bold text-white flex items-center gap-2">
                     <span class="material-symbols-outlined text-secondary">restaurant_menu</span> Listado de Platos
                 </h3>
                 <div class="d-flex gap-3">
-                    <select class="form-select form-select-sm border-0 bg-surface rounded-lg text-xs font-bold" x-model="filtroCategoriaPlatos" @change="fetchPlatos()">
+                    <select class="form-select form-select-sm border-0 bg-surface rounded-lg text-xs font-bold" x-model="filtroCategoriaPlatos" @change="platosPaginacion.paginaActual = 1">
                         <option value="">Todas las Categorías</option>
                         <template x-for="cat in categorias" :key="cat.id">
                             <option :value="cat.id" x-text="cat.nombre"></option>
@@ -103,17 +105,28 @@
                 <table class="table table-dark table-sm mb-0">
                     <thead class="bg-black/20 text-on-surface-variant text-[10px] uppercase tracking-widest">
                         <tr>
+                            <th class="px-4 py-3 text-center" style="width: 50px;">Imagen</th>
                             <th class="px-4 py-3">Plato</th>
                             <th class="px-4 py-3">Categoría</th>
                             <th class="px-4 py-3">Precio</th>
                             <th class="px-4 py-3 text-center">Tiempo Prep.</th>
-                            <th class="px-4 py-3 text-center">Disp.</th>
+                            <th class="px-4 py-3 text-center">Disponible</th>
                             <th class="px-4 py-3 text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5 border-t border-white/5">
-                        <template x-for="plato in platos" :key="plato.id">
+                        <template x-for="plato in platosActuales" :key="plato.id">
                             <tr class="hover:bg-white/5 transition-colors">
+                                <td class="px-4 py-2 align-middle text-center">
+                                    <template x-if="plato.imagen_url">
+                                        <img :src="plato.imagen_url" :alt="plato.nombre" class="w-10 h-10 rounded-lg object-cover border border-white/10">
+                                    </template>
+                                    <template x-if="!plato.imagen_url">
+                                        <div class="w-10 h-10 rounded-lg bg-surface border border-white/10 flex items-center justify-center">
+                                            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">image</span>
+                                        </div>
+                                    </template>
+                                </td>
                                 <td class="px-4 py-2 align-middle">
                                     <div class="font-bold text-white" x-text="plato.nombre"></div>
                                     <div class="text-[10px] text-on-surface-variant truncate max-w-[200px]" x-text="plato.descripcion"></div>
@@ -129,30 +142,52 @@
                                     </span>
                                 </td>
                                 <td class="px-4 py-2 align-middle text-center">
-                                    <span class="material-symbols-outlined text-[18px]" :class="plato.disponible ? 'text-secondary' : 'text-on-surface-variant/30'">
-                                        toggle_on
-                                    </span>
+                                    <button @click="toggleDisponible(plato)" 
+                                            class="btn btn-sm border-0 transition-all rounded-lg" 
+                                            :class="plato.disponible ? 'bg-secondary/20 text-secondary hover:bg-secondary/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'"
+                                            :title="plato.disponible ? 'Click para no disponible' : 'Click para disponible'">
+                                        <span class="material-symbols-outlined text-[18px]" x-text="plato.disponible ? 'toggle_on' : 'toggle_off'"></span>
+                                    </button>
                                 </td>
                                 <td class="px-4 py-2 align-middle text-end">
                                     <button class="btn btn-sm text-secondary hover:bg-secondary/10 rounded-lg border-0" @click="editarPlato(plato)" title="Editar">
                                         <span class="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
-                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="eliminarPlato(plato.id)" title="Eliminar">
+                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="abrirConfirmarEliminarPlato(plato)" title="Eliminar">
                                         <span class="material-symbols-outlined text-[18px]">delete</span>
                                     </button>
                                 </td>
                             </tr>
                         </template>
-                        <template x-if="platos.length === 0">
+                        <template x-if="platosActuales.length === 0">
                             <tr>
-                                <td colspan="6" class="text-center py-8 text-on-surface-variant">No hay platos registrados en esta categoría.</td>
+                                <td colspan="7" class="text-center py-8 text-on-surface-variant">No hay platos registrados en esta categoría.</td>
                             </tr>
                         </template>
                     </tbody>
                 </table>
+                <!-- Paginación -->
+                <template x-if="platosPaginacion.totalPaginas > 1">
+                    <div class="d-flex justify-content-center align-items-center gap-2 mt-4 pb-3">
+                        <button @click="platosPaginacion.paginaActual = Math.max(1, platosPaginacion.paginaActual - 1)" 
+                                :disabled="platosPaginacion.paginaActual === 1"
+                                class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0" 
+                                :class="platosPaginacion.paginaActual === 1 ? 'opacity-50 cursor-not-allowed' : ''">Anterior</button>
+                        <template x-for="pag in platosPaginacion.totalPaginas" :key="pag">
+                            <button @click="platosPaginacion.paginaActual = pag" 
+                                    class="btn btn-sm rounded-lg border-0 font-bold"
+                                    :class="platosPaginacion.paginaActual === pag ? 'bg-primary text-[#160066]' : 'bg-surface text-on-surface-variant hover:bg-surface/80'">
+                                <span x-text="pag"></span>
+                            </button>
+                        </template>
+                        <button @click="platosPaginacion.paginaActual = Math.min(platosPaginacion.totalPaginas, platosPaginacion.paginaActual + 1)" 
+                                :disabled="platosPaginacion.paginaActual === platosPaginacion.totalPaginas"
+                                class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0"
+                                :class="platosPaginacion.paginaActual === platosPaginacion.totalPaginas ? 'opacity-50 cursor-not-allowed' : ''">Siguiente</button>
+                    </div>
+                </template>
             </div>
         </div>
-    </div>
 
     <!-- Modal Categoría -->
     <div class="modal fade" id="modalCategoria" tabindex="-1">
@@ -192,110 +227,83 @@
             </div>
         </div>
     </div>
-
-    <!-- Modal Plato -->
-    <div class="modal fade" id="modalPlato" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content card-dark border-secondary/20 shadow-2xl">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title font-black text-white flex items-center gap-2">
-                        <span class="material-symbols-outlined text-secondary">restaurant</span>
-                        <span x-text="platoForm.id ? 'Editar Plato' : 'Nuevo Plato'"></span>
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form @submit.prevent="guardarPlato">
-                        <div class="row">
-                            <div class="col-md-8 mb-3">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre del Plato</label>
-                                <input type="text" class="form-control" x-model="platoForm.nombre" required placeholder="Ej: Torta de Chocolate">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Categoría</label>
-                                <select class="form-select" x-model="platoForm.categoria" required>
-                                    <option value="">Seleccionar...</option>
-                                    <template x-for="cat in categorias" :key="cat.id">
-                                        <option :value="cat.id" x-text="cat.nombre"></option>
-                                    </template>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Imagen del Plato</label>
-                            <input type="file" id="imagen_plato_input" class="form-control text-xs" accept="image/*" @change="platoForm.nueva_imagen = $event.target.files[0]">
-                            <div class="form-text text-[9px] text-on-surface-variant mt-1">Formatos: JPG, PNG. Se recomienda imagen cuadrada.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Descripción (Opcional)</label>
-                            <textarea class="form-control" x-model="platoForm.descripcion" rows="2" placeholder="Detalles o ingredientes principales..."></textarea>
-                        </div>
-
-                        <div class="row bg-surface p-3 rounded-2xl border border-white/5 mx-0 mb-3">
-                            <div class="col-md-6 mb-3 mb-md-0">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-secondary">Precio de Venta (S/.)</label>
-                                <div class="input-group">
-                                    <span class="input-group-text border-0 bg-black/20 text-secondary font-black">S/.</span>
-                                    <input type="number" step="0.01" class="form-control font-black text-lg text-secondary" x-model="platoForm.precio_actual" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-primary">Tiempo de Preparación</label>
-                                <div class="input-group">
-                                    <input type="number" class="form-control font-black text-lg text-primary text-end" x-model="platoForm.tiempo_preparacion_min" required min="0">
-                                    <span class="input-group-text border-0 bg-black/20 text-primary font-black">minutos</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="d-flex gap-4 mt-2">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch" id="platoDisponible" x-model="platoForm.disponible">
-                                <label class="form-check-label text-sm text-white font-bold ms-2" for="platoDisponible">Disponible para venta</label>
-                            </div>
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch" id="platoActivo" x-model="platoForm.activo">
-                                <label class="form-check-label text-sm text-white font-bold ms-2" for="platoActivo">Registro Activo</label>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn text-on-surface-variant hover:text-primary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn bg-primary text-[#160066] font-black px-4 rounded-xl" @click="guardarPlato">Guardar Plato</button>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 {% block extra_js %}
 <script>
 function menuApp() {
     return {
-        tab: 'categorias', // 'categorias' o 'platos'
-        
+        tab: 'categorias',
         categorias: [],
         platos: [],
+        insumosDisponibles: [],
+        insumosCriticos: [],
         filtroCategoriaPlatos: '',
         
         modalCategoriaInst: null,
-        categoriaForm: { id: null, nombre: '', icono: '', orden: 0, activo: true },
-        
         modalPlatoInst: null,
+        modalEliminarCategoriaInst: null,
+        modalEliminarPlatoInst: null,
+        modalErrorInst: null,
+        mensajeError: '',
+        
+        categoriaForm: { id: null, nombre: '', icono: '', orden: 0, activo: true },
+        categoriaEliminarId: null,
+        categoriaEliminarNombre: '',
+        categoriaEliminarMensaje: 'Si tiene platos asociados, no se podrá eliminar.',
+        
         platoForm: { 
             id: null, categoria: '', nombre: '', descripcion: '', 
             precio_actual: 0.00, tiempo_preparacion_min: 0, 
-            disponible: true, activo: true 
+            disponible: true, activo: true, recetas: []
+        },
+        platoEliminarId: null,
+        platoEliminarNombre: '',
+        platoEliminarMensaje: 'Esta acción no se puede deshacer.',
+        
+        newInsumoId: '',
+        
+        platosPaginacion: {
+            paginaActual: 1,
+            porPagina: 5,
+            totalPaginas: 1
+        },
+
+        get platosActuales() {
+            let filtered = this.platos;
+            if(this.filtroCategoriaPlatos) {
+                filtered = filtered.filter(p => p.categoria == this.filtroCategoriaPlatos);
+            }
+            const inicio = (this.platosPaginacion.paginaActual - 1) * this.platosPaginacion.porPagina;
+            const fin = inicio + this.platosPaginacion.porPagina;
+            this.platosPaginacion.totalPaginas = Math.ceil(filtered.length / this.platosPaginacion.porPagina) || 1;
+            return filtered.slice(inicio, fin);
         },
 
         init() {
             this.modalCategoriaInst = new bootstrap.Modal(document.getElementById('modalCategoria'));
             this.modalPlatoInst = new bootstrap.Modal(document.getElementById('modalPlato'));
+            this.modalEliminarCategoriaInst = new bootstrap.Modal(document.getElementById('modalEliminarCategoria'));
+            this.modalEliminarPlatoInst = new bootstrap.Modal(document.getElementById('modalEliminarPlato'));
+            this.modalErrorInst = new bootstrap.Modal(document.getElementById('modalError'));
             this.fetchCategorias();
             this.fetchPlatos();
+            this.fetchInsumosDisponibles();
+            this.fetchInsumoCriticos();
+        },
+
+        mostrarError(mensaje) {
+            this.mensajeError = mensaje;
+            this.modalErrorInst.show();
+            // Asegurar que el backdrop y el modal estén por encima del modal de platos
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                if (backdrops.length > 0) {
+                    backdrops[backdrops.length - 1].style.zIndex = '1074';
+                }
+                const el = document.getElementById('modalError');
+                if (el) el.style.zIndex = '1075';
+            }, 10);
         },
 
         getCsrfToken() {
@@ -319,7 +327,7 @@ function menuApp() {
         },
         
         async guardarCategoria() {
-            if(!this.categoriaForm.nombre) return alert('El nombre es obligatorio');
+            if(!this.categoriaForm.nombre) return this.mostrarError('El nombre es obligatorio');
             
             const method = this.categoriaForm.id ? 'PUT' : 'POST';
             const url = this.categoriaForm.id ? `/api/menu/categorias/${this.categoriaForm.id}/` : '/api/menu/categorias/';
@@ -338,38 +346,94 @@ function menuApp() {
                     this.modalCategoriaInst.hide();
                     this.fetchCategorias();
                 } else {
-                    alert('Error al guardar categoría');
+                    this.mostrarError('Error al guardar categoría');
                 }
             } catch(e) {
                 console.error(e);
             }
         },
         
-        async eliminarCategoria(id) {
-            if(!confirm('¿Está seguro de eliminar esta categoría? Si tiene platos asociados, la operación podría fallar o quedar inactiva.')) return;
+        abrirConfirmarEliminarCategoria(cat) {
+            this.categoriaEliminarId = cat.id;
+            this.categoriaEliminarNombre = cat.nombre;
+            this.categoriaEliminarMensaje = 'Si tiene platos asociados, no se podrá eliminar.';
+            this.modalEliminarCategoriaInst.show();
+        },
+
+        async confirmarEliminarCategoria() {
+            if(!this.categoriaEliminarId) return;
+
             try {
-                const res = await fetch(`/api/menu/categorias/${id}/`, {
+                const res = await fetch(`/api/menu/categorias/${this.categoriaEliminarId}/`, {
                     method: 'DELETE',
                     headers: { 'X-CSRFToken': this.getCsrfToken() }
                 });
-                if(res.ok) this.fetchCategorias();
-                else alert('No se puede eliminar. Verifique que no tenga platos asociados.');
-            } catch(e) { console.error(e); }
+
+                if(res.ok) {
+                    this.modalEliminarCategoriaInst.hide();
+                    this.fetchCategorias();
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    this.categoriaEliminarMensaje = data.detail || data.error || 'No se puede eliminar. Verifique que no tenga platos asociados.';
+                }
+            } catch(e) {
+                console.error(e);
+                this.categoriaEliminarMensaje = 'Error de conexión. Revisa la consola del servidor.';
+            }
         },
 
         // --- Platos ---
         async fetchPlatos() {
-            let url = '/api/menu/platos/';
-            // Si hay filtro manual, en una API real podríamos usar query params, 
-            // pero el ModelViewSet retorna todos. Filtramos en frontend o usamos query params si está configurado django-filter.
-            // Para simplificar, obtenemos todos y filtramos en local.
-            const res = await fetch(url);
+            const res = await fetch('/api/menu/platos/');
             if(res.ok) {
-                let data = await res.json();
-                if(this.filtroCategoriaPlatos) {
-                    data = data.filter(p => p.categoria == this.filtroCategoriaPlatos);
+                this.platos = await res.json();
+                this.platosPaginacion.paginaActual = 1;
+            }
+        },
+
+        async fetchInsumosDisponibles() {
+            try {
+                const res = await fetch('/api/inventario/insumos/', {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if(res.ok) {
+                    this.insumosDisponibles = await res.json();
+                } else {
+                    console.error('Error cargando insumos:', res.status);
                 }
-                this.platos = data;
+            } catch(e) {
+                console.error('Error fetching insumos:', e);
+            }
+        },
+
+        
+        abrirConfirmarEliminarPlato(plato) {
+            this.platoEliminarId = plato.id;
+            this.platoEliminarNombre = plato.nombre;
+            this.platoEliminarMensaje = 'Esta acción no se puede deshacer.';
+            this.modalEliminarPlatoInst.show();
+        },
+
+        async confirmarEliminarPlato() {
+            if(!this.platoEliminarId) return;
+
+            try {
+                const res = await fetch(`/api/menu/platos/${this.platoEliminarId}/`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': this.getCsrfToken() }
+                });
+
+                if(res.ok) {
+                    this.modalEliminarPlatoInst.hide();
+                    this.fetchPlatos();
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    this.platoEliminarMensaje = data.detail || data.error || 'No se puede eliminar este plato.';
+                }
+            } catch(e) {
+                console.error(e);
+                this.platoEliminarMensaje = 'Error de conexión. Revisa la consola del servidor.';
             }
         },
 
@@ -378,23 +442,75 @@ function menuApp() {
                 id: null, categoria: this.filtroCategoriaPlatos || '', 
                 nombre: '', descripcion: '', 
                 precio_actual: 0.00, tiempo_preparacion_min: 15, 
-                disponible: true, activo: true, nueva_imagen: null
+                disponible: true, activo: true, nueva_imagen: null, recetas: []
             };
+            this.newInsumoId = '';
             const fileInput = document.getElementById('imagen_plato_input');
             if(fileInput) fileInput.value = '';
             this.modalPlatoInst.show();
         },
         
         editarPlato(plato) {
-            this.platoForm = { ...plato, nueva_imagen: null };
+            // La API devuelve 'receta' (singular); el form usa 'recetas' (plural)
+            const recetasMapeadas = (plato.receta || []).map(r => ({
+                id:                  r.id,
+                insumo_id:           r.insumo_id,
+                insumo_nombre:       r.insumo_nombre,
+                insumo_unidad:       r.insumo_unidad,
+                insumo_stock:        r.insumo_stock,
+                cantidad_por_porcion: r.cantidad_por_porcion,
+                merma_porcentaje:    r.merma_porcentaje,
+                activo:              r.activo
+            }));
+            this.platoForm = { ...plato, nueva_imagen: null, recetas: recetasMapeadas };
+            this.newInsumoId = '';
             const fileInput = document.getElementById('imagen_plato_input');
             if(fileInput) fileInput.value = '';
             this.modalPlatoInst.show();
         },
+
+        agregarInsumo() {
+            if(!this.newInsumoId) return;
+            
+            const insumo = this.insumosDisponibles.find(i => i.id == this.newInsumoId);
+            if(!insumo) return;
+
+            // Inicializar recetas si no existe
+            if(!Array.isArray(this.platoForm.recetas)) {
+                this.platoForm.recetas = [];
+            }
+
+            // Verificar si ya existe
+            if(this.platoForm.recetas.some(r => r.insumo_id == this.newInsumoId)) {
+                this.mostrarError('Este insumo ya está agregado');
+                return;
+            }
+
+            this.platoForm.recetas = [
+                ...this.platoForm.recetas,
+                {
+                    id: null,
+                    insumo_id: insumo.id,
+                    insumo_nombre: insumo.nombre,
+                    insumo_unidad: insumo.unidad_abreviatura || insumo.unidad_nombre || '',
+                    insumo_stock: insumo.stock_real,
+                    cantidad_por_porcion: 1,
+                    merma_porcentaje: 0,
+                    activo: true
+                }
+            ];
+
+            this.newInsumoId = '';
+        },
+
+        eliminarReceta(receta) {
+            if(!Array.isArray(this.platoForm.recetas)) return;
+            this.platoForm.recetas = this.platoForm.recetas.filter(r => r.insumo_id !== receta.insumo_id);
+        },
         
         async guardarPlato() {
             if(!this.platoForm.nombre || !this.platoForm.categoria || !this.platoForm.precio_actual) {
-                return alert('Nombre, categoría y precio son obligatorios');
+                return this.mostrarError('Nombre, categoría y precio son obligatorios');
             }
             
             const method = this.platoForm.id ? 'PUT' : 'POST';
@@ -413,6 +529,11 @@ function menuApp() {
                 formData.append('imagen', this.platoForm.nueva_imagen);
             }
 
+            // Agregar recetas
+            this.platoForm.recetas.forEach((receta, idx) => {
+                formData.append(`receta`, JSON.stringify(receta));
+            });
+
             try {
                 const res = await fetch(url, {
                     method: method,
@@ -425,26 +546,15 @@ function menuApp() {
                 if(res.ok) {
                     this.modalPlatoInst.hide();
                     this.fetchPlatos();
+                    this.fetchInsumoCriticos();
                 } else {
                     const error = await res.json();
                     console.error(error);
-                    alert('Error al guardar plato. Verifique los datos.');
+                    this.mostrarError('Error al guardar plato. Verifique los datos.');
                 }
             } catch(e) {
                 console.error(e);
             }
-        },
-        
-        async eliminarPlato(id) {
-            if(!confirm('¿Está seguro de eliminar este plato?')) return;
-            try {
-                const res = await fetch(`/api/menu/platos/${id}/`, {
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': this.getCsrfToken() }
-                });
-                if(res.ok) this.fetchPlatos();
-                else alert('No se puede eliminar. Puede estar asociado a comandas o recetas.');
-            } catch(e) { console.error(e); }
         }
     }
 }
