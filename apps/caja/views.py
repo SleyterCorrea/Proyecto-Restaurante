@@ -106,14 +106,7 @@ def cobrar_view(request):
     for c in comandas_listas:
         lineas_activas = [l for l in c.lineas.all() if l.estado != LineaComanda.Estado.ANULADO]
         c.total_pendiente = sum(l.subtotal for l in lineas_activas)
-        # Serializar lineas para Alpine.js (selector de platos individuales)
-        c.lineas_json = json.dumps([{
-            'id': l.id,
-            'plato_nombre': l.plato.nombre,
-            'cantidad': l.cantidad,
-            'subtotal': float(l.subtotal),
-            'estado': l.estado,
-        } for l in c.lineas.all()])
+        # lineas_json ya es @property del modelo Comanda — no necesita reasignarse
 
     metodos_pago = MetodoPago.objects.filter(activo=True)
 
