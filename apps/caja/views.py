@@ -107,7 +107,7 @@ def cobrar_view(request):
         lineas_activas = [l for l in c.lineas.all() if l.estado != LineaComanda.Estado.ANULADO]
         c.total_pendiente = sum(l.subtotal for l in lineas_activas)
         # Serializar lineas para Alpine.js (selector de platos individuales)
-        c.lineas_json = json.dumps([{
+        c.lineas_caja_json = json.dumps([{
             'id': l.id,
             'plato_nombre': l.plato.nombre,
             'cantidad': l.cantidad,

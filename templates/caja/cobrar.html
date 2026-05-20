@@ -68,7 +68,7 @@
                     {% for c in comandas %}
                     <div class="col">
                         <div class="glass-card rounded-3xl p-4 cursor-pointer hover:border-primary/50 transition-all group relative overflow-hidden"
-                             @click='seleccionarComanda({{ c.id }}, "{{ c.mesa.numero }}", "{{ c.total }}", {{ c.lineas_json|safe }}, "{{ c.nombre_cliente|default:''|escapejs }}", "{{ c.union_label|default:''|escapejs }}")'
+                             @click='seleccionarComanda({{ c.id }}, "{{ c.mesa.numero }}", "{{ c.total }}", {{ c.lineas_caja_json|safe }}, "{{ c.nombre_cliente|default:''|escapejs }}", "{{ c.union_label|default:''|escapejs }}")'
                              :class="selectedComanda && selectedComanda.id == {{ c.id }} ? 'ring-2 ring-primary border-transparent' : ''">
                             
                             <!-- Background Decoration -->
