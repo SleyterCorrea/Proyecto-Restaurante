@@ -112,18 +112,6 @@
                                 <h3 class="text-white font-black text-3xl">S/. {{ c.total }}</h3>
                             </div>
 
-                            <!-- Platos de la comanda (preview) -->
-                            <div class="mb-3 relative z-10 space-y-1">
-                                {% for linea in c.lineas.all %}
-                                {% if linea.estado != 'ANULADO' %}
-                                <div class="flex justify-between items-center text-xs py-1 border-b border-white/5 {% if linea.estado == 'ENTREGADO' %}opacity-40{% endif %}">
-                                    <span class="text-on-surface font-medium">{{ linea.cantidad }}x {{ linea.plato.nombre }}</span>
-                                    <span class="text-primary font-bold">S/. {{ linea.subtotal }}</span>
-                                </div>
-                                {% endif %}
-                                {% endfor %}
-                            </div>
-
                             <div class="pt-2 border-t border-white/5 relative z-10 flex flex-col gap-2">
                                 <p class="text-on-surface-variant text-xs flex items-center gap-1 mb-0">
                                     <span class="material-symbols-outlined text-sm">person</span>
