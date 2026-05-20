@@ -106,7 +106,7 @@ def procesar_cobro(comanda_id, pagos_data, usuario, linea_ids=None, observacion=
                 referencia=p_data.get('referencia', ''),
                 transaccion_id=transaccion_id,
                 estado=Pago.Estado.PAGADO,
-                observacion=observacion or '',
+                observacion=p_data.get('observacion') or observacion or '',
             )
 
             # Asociar las líneas pagadas (M2M)
