@@ -70,6 +70,7 @@ def generar_pdf_boleta(pago, qr_url=None):
     """
     Genera un PDF con el diseño solicitado para RESTAURANT OS.
     """
+    from apps.caja.models import Pago
     buffer = io.BytesIO()
     
     ancho_ticket = 80 * mm_unit
@@ -106,9 +107,7 @@ def generar_pdf_boleta(pago, qr_url=None):
     c.setFont("Helvetica", 8)
     line_h = 4 * mm
     
-    cliente = pago.comanda.nombre_cliente or "PÚBLICO EN GENERAL"
-    if pago.observacion:
-        cliente = f"{cliente} - {pago.observacion}"
+    cliente = pago.observacion or pago.comanda.nombre_cliente or "PÚBLICO EN GENERAL"
     c.drawString(10*mm, y, f"Cliente : {cliente.upper()}")
     y -= line_h
     
@@ -160,15 +159,20 @@ def generar_pdf_boleta(pago, qr_url=None):
     y -= 6 * mm_unit
     
     # ─── TOTALES ─────────────────────────────────────────────────────────────
-    monto_total = float(pago.monto - pago.vuelto)
-    igv = monto_total * 0.10
+    if pago.transaccion_id:
+        pagos_transaccion = list(Pago.objects.filter(transaccion_id=pago.transaccion_id, estado=Pago.Estado.PAGADO).select_related('metodo_pago'))
+    else:
+        pagos_transaccion = [pago]
+
+    monto_total = float(sum(p.monto - p.vuelto for p in pagos_transaccion))
+    igv = monto_total * 0.18
     subtotal = monto_total - igv
     
     c.setFont("Helvetica", 8)
     c.drawRightString(55*mm, y, "Subtotal")
     c.drawString(58*mm, y, f": S/ {subtotal:.2f}")
     y -= 4 * mm_unit
-    c.drawRightString(55*mm, y, "Total I.G.V. (10%)")
+    c.drawRightString(55*mm, y, "Total I.G.V. (18%)")
     c.drawString(58*mm, y, f": S/ {igv:.2f}")
     y -= 4 * mm_unit
     
@@ -177,15 +181,37 @@ def generar_pdf_boleta(pago, qr_url=None):
     c.drawString(58*mm, y, f": S/ {monto_total:.2f}")
     y -= 6 * mm_unit
     
-    if pago.vuelto > 0:
+    # ─── FORMA DE PAGO ───────────────────────────────────────────────────────
+    c.setDash(2, 1)
+    c.line(10*mm, y, ancho_ticket - 10*mm, y)
+    c.setDash()
+    y -= 4 * mm_unit
+    
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(10*mm, y, "FORMA DE PAGO:")
+    y -= 4 * mm_unit
+    
+    c.setFont("Helvetica", 8)
+    for p_tr in pagos_transaccion:
+        metodo_nombre = p_tr.metodo_pago.nombre.upper()
+        c.drawString(12*mm, y, metodo_nombre)
+        c.drawRightString(ancho_ticket - 12*mm, y, f"S/ {float(p_tr.monto):.2f}")
+        y -= 4 * mm_unit
+        
+    total_efectivo_recibido = sum(float(p.monto) for p in pagos_transaccion if p.metodo_pago.codigo == 'EFECTIVO')
+    total_vuelto = sum(float(p.vuelto) for p in pagos_transaccion)
+    
+    if total_vuelto > 0:
+        y -= 2 * mm_unit
         c.setFont("Helvetica", 8)
         c.drawRightString(55*mm, y, "Efectivo Recibido")
-        c.drawString(58*mm, y, f": S/ {float(pago.monto):.2f}")
+        c.drawString(58*mm, y, f": S/ {total_efectivo_recibido:.2f}")
         y -= 4 * mm_unit
         c.drawRightString(55*mm, y, "Vuelto")
-        c.drawString(58*mm, y, f": S/ {float(pago.vuelto):.2f}")
-        y -= 6 * mm_unit
+        c.drawString(58*mm, y, f": S/ {total_vuelto:.2f}")
+        y -= 4 * mm_unit
     
+    y -= 2 * mm_unit
     c.line(10*mm, y, ancho_ticket - 10*mm, y)
     y -= 4 * mm_unit
     

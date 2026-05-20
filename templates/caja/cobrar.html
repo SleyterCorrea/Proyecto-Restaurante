@@ -267,7 +267,7 @@
                                     <div class="flex gap-2 items-baseline">
                                         <span class="text-primary font-bold text-sm" x-text="item.cantidad + 'x'"></span>
                                         <span class="text-sm transition-colors"
-                                              :class="item.ya_pagado ? 'text-green-400 underline font-medium' : 'text-on-surface group-hover:text-white'"
+                                              :class="item.ya_pagado ? 'text-green-400 line-through font-medium opacity-65' : 'text-on-surface group-hover:text-white'"
                                               x-text="item.plato_nombre"></span>
                                     </div>
                                     <div class="flex items-center gap-2">
@@ -281,9 +281,16 @@
                         </template>
                     </div>
 
-                    <div class="d-flex justify-content-between border-t border-white/10 pt-4 mt-2">
+                    <div class="d-flex justify-content-between border-t border-white/10 pt-4 mt-2 mb-3">
                         <span class="text-on-surface font-bold text-lg">TOTAL A COBRAR</span>
                         <span class="text-primary font-black text-2xl" x-text="'S/. ' + totalACobrar.toFixed(2)"></span>
+                    </div>
+
+                    <!-- Nombre del Cliente Global para este Pago -->
+                    <div class="space-y-1 pt-3 border-t border-white/5">
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1 block">Cliente que paga</label>
+                        <input type="text" class="w-full bg-white/5 border border-white/10 rounded-2xl py-2 px-3 text-xs text-white placeholder-white/30 focus:border-primary focus:ring-0 transition-all font-semibold" 
+                               x-model="cliente_pago_nombre" placeholder="Ej: Alicia">
                     </div>
                 </div>
 
@@ -296,9 +303,8 @@
                         </template>
                         <template x-for="(pago, index) in pagosRegistrados" :key="index">
                             <div class="flex justify-between items-center bg-white/5 p-3 rounded-2xl border border-white/5">
-                                <div class="text-left">
+                                <div class="flex-1">
                                     <span class="text-xs font-bold text-primary" x-text="pago.metodo_nombre"></span>
-                                    <span class="text-[10px] text-on-surface-variant block leading-tight mt-0.5" x-text="pago.observacion || 'Sin detalle'"></span>
                                     <span class="text-[9px] text-on-surface-variant block mt-0.5" x-show="pago.referencia" x-text="'Ref: ' + pago.referencia"></span>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -344,12 +350,6 @@
                         <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1 block">N° Referencia / Operación</label>
                         <input type="text" class="w-full bg-surface/50 border border-on-surface/10 rounded-xl py-2 px-3 text-xs text-on-surface focus:border-primary focus:ring-0 transition-all" 
                                x-model="form_referencia" placeholder="Ej: 123456">
-                    </div>
-
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1 block">Detalle del Pago (Ej: Nombre del cliente)</label>
-                        <input type="text" class="w-full bg-surface/50 border border-on-surface/10 rounded-xl py-2 px-3 text-xs text-on-surface focus:border-primary focus:ring-0 transition-all" 
-                               x-model="form_detalle" placeholder="Ej: Pago de Juan">
                     </div>
 
                     <button type="button" @click="agregarPagoRegistrado()"
@@ -423,6 +423,7 @@ function cobrarApp() {
         // Selección de platos individuales
         lineasSeleccionadas: [],     // IDs de líneas seleccionadas para pagar
         totalSeleccionado: 0,        // Total de las líneas seleccionadas
+        cliente_pago_nombre: '',     // Nombre global de quien realiza este pago
 
         get lineasPagables() {
             if (!this.selectedComanda) return [];
@@ -498,13 +499,11 @@ function cobrarApp() {
                 metodo_id: this.form_metodo_id,
                 metodo_nombre: nombre,
                 monto: monto,
-                referencia: this.form_referencia,
-                observacion: this.form_detalle
+                referencia: this.form_referencia
             });
 
             // Limpiar inputs de formulario
             this.form_referencia = '';
-            this.form_detalle = '';
             
             // Actualizar sugerencia para el siguiente método de pago
             this.sugerirMontoRestante();
@@ -568,6 +567,7 @@ function cobrarApp() {
                 union_label: union_label || ''
             };
             this.pagosRegistrados = [];
+            this.cliente_pago_nombre = '';
             
             // Seleccionar solo las líneas que NO están pagadas por defecto
             this.$nextTick(() => {
@@ -610,7 +610,8 @@ function cobrarApp() {
                 }));
 
                 const body = {
-                    pagos: pagos
+                    pagos: pagos,
+                    observacion: this.cliente_pago_nombre
                 };
                 if (esParcial) body.linea_ids = selectedIds;
 
