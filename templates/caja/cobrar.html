@@ -421,7 +421,7 @@ function cobrarApp() {
         get lineasPagables() {
             if (!this.selectedComanda) return [];
             return (this.selectedComanda.lineas || []).filter(l =>
-                l.estado !== 'ANULADO' && l.estado !== 'ENTREGADO'
+                l.estado !== 'ANULADO'
             );
         },
 
