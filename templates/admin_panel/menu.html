@@ -189,45 +189,85 @@
             </div>
         </div>
 
-    <!-- Modal Categoría -->
-    <div class="modal fade" id="modalCategoria" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content card-dark border-primary/20 shadow-2xl">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title font-black text-white" x-text="categoriaForm.id ? 'Editar Categoría' : 'Nueva Categoría'"></h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <!-- Insumos Críticos -->
+        <div class="card card-dark shadow-sm">
+            <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center p-4">
+                <h3 class="h5 mb-0 font-bold text-white flex items-center gap-2">
+                    <span class="material-symbols-outlined text-warning">warning</span> Insumos Críticos
+                </h3>
+                <div class="flex items-center gap-3">
+                    <a href="/admin-panel/inventario/" class="btn btn-sm text-secondary hover:text-white text-[12px] font-bold flex items-center gap-1 border border-secondary/30 rounded-lg px-3 py-1.5 hover:bg-secondary/10 transition-all">
+                        <span class="material-symbols-outlined text-[14px]">inventory_2</span>
+                        Ver inventario completo
+                    </a>
+                    <button class="btn btn-sm text-on-surface-variant hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all" @click="fetchInsumoCriticos()" title="Actualizar">
+                        <span class="material-symbols-outlined text-[18px]">refresh</span>
+                    </button>
                 </div>
-                <div class="modal-body">
-                    <form @submit.prevent="guardarCategoria">
-                        <div class="mb-3">
-                            <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre</label>
-                            <input type="text" class="form-control" x-model="categoriaForm.nombre" required placeholder="Ej: Postres">
-                        </div>
-                        <div class="row">
-                            <div class="col-8 mb-3">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ícono (Material Symbol)</label>
-                                <input type="text" class="form-control" x-model="categoriaForm.icono" placeholder="Ej: cake, local_pizza">
-                                <div class="form-text text-[9px] text-on-surface-variant mt-1">Nombres de Google Material Symbols.</div>
+            </div>
+            <div class="card-body pt-0">
+                <template x-if="insumosCriticos.length > 0">
+                    <div class="row g-3">
+                        <template x-for="insumo in insumosCriticos" :key="insumo.id">
+                            <div class="col-12 col-sm-6 col-lg-3">
+                                <div class="rounded-2xl p-3 border transition-all"
+                                     :class="insumo.estado === 'agotado'
+                                         ? 'bg-red-500/10 border-red-500/40'
+                                         : 'bg-amber-500/10 border-amber-500/40'">
+                                    <!-- Header del card -->
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <p class="text-[10px] font-black uppercase tracking-widest mb-0"
+                                           :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
+                                           x-text="insumo.nombre"></p>
+                                        <!-- Ícono de estado -->
+                                        <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                                             :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'">
+                                            <span class="material-symbols-outlined text-white text-[14px]"
+                                                  x-text="insumo.estado === 'agotado' ? 'error' : 'warning'"></span>
+                                        </div>
+                                    </div>
+                                    <!-- Stock actual -->
+                                    <div class="mb-1">
+                                        <span class="text-2xl font-black"
+                                              :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
+                                              x-text="insumo.stock_real.toFixed(1)"></span>
+                                        <span class="text-xs text-on-surface-variant font-bold ml-1" x-text="insumo.unidad"></span>
+                                    </div>
+                                    <!-- Barra de progreso -->
+                                    <div class="w-full bg-white/10 rounded-full mb-2" style="height:4px;">
+                                        <div class="rounded-full transition-all"
+                                             style="height:4px;"
+                                             :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'"
+                                             :style="'width:' + Math.min(100, insumo.stock_minimo > 0 ? (insumo.stock_real / insumo.stock_minimo * 100) : 0) + '%'">
+                                        </div>
+                                    </div>
+                                    <!-- Detalle min/falta -->
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-[10px] text-on-surface-variant">
+                                            Mín: <strong x-text="insumo.stock_minimo.toFixed(1) + ' ' + insumo.unidad"></strong>
+                                        </span>
+                                        <template x-if="insumo.platos_afectados.length > 0">
+                                            <span class="text-[9px] font-black px-2 py-0.5 rounded-full"
+                                                  :class="insumo.estado === 'agotado' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'"
+                                                  x-text="insumo.platos_afectados.length + ' plato(s)'"></span>
+                                        </template>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-4 mb-3">
-                                <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Orden</label>
-                                <input type="number" class="form-control" x-model="categoriaForm.orden" required min="0">
-                            </div>
-                        </div>
-                        <div class="form-check form-switch mt-2">
-                            <input class="form-check-input" type="checkbox" role="switch" id="catActivo" x-model="categoriaForm.activo">
-                            <label class="form-check-label text-sm text-white font-bold ms-2" for="catActivo">Categoría Activa</label>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn text-on-surface-variant hover:text-white" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn bg-primary text-[#160066] font-black px-4 rounded-xl" @click="guardarCategoria">Guardar</button>
-                </div>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="insumosCriticos.length === 0">
+                    <div class="text-center py-8 text-on-surface-variant">
+                        <span class="material-symbols-outlined text-4xl text-secondary block mb-2">check_circle</span>
+                        <p class="mb-0 font-bold text-sm">✓ Todos los insumos tienen stock suficiente</p>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
-</div>
+
+    {% include 'admin_panel/menu_modals.html' %}
 
 {% block extra_js %}
 <script>
@@ -407,7 +447,45 @@ function menuApp() {
             }
         },
 
-        
+        async fetchInsumoCriticos() {
+            try {
+                const res = await fetch('/api/menu/platos/insumos_criticos/', {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if(res.ok) {
+                    const data = await res.json();
+                    this.insumosCriticos = data.insumos || [];
+                } else {
+                    const txt = await res.text().catch(() => '');
+                    console.error('fetchInsumoCriticos HTTP', res.status, txt.slice(0, 400));
+                }
+            } catch(e) {
+                console.error('Error fetching insumos críticos:', e);
+            }
+        },
+
+        async toggleDisponible(plato) {
+            try {
+                const res = await fetch(`/api/menu/platos/${plato.id}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCsrfToken()
+                    },
+                    body: JSON.stringify({ disponible: !plato.disponible })
+                });
+                if(res.ok) {
+                    const updated = await res.json();
+                    plato.disponible = updated.disponible;
+                } else {
+                    console.error('Error al cambiar disponibilidad');
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        },
+
         abrirConfirmarEliminarPlato(plato) {
             this.platoEliminarId = plato.id;
             this.platoEliminarNombre = plato.nombre;

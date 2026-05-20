@@ -28,14 +28,14 @@ class CategoriaViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save()
         log_auditoria(self.request.user, 'CREACION', 'CATEGORIA', instance.id, 
-        detalle_nuevo=serializer.data, request=self.request)
+                      detalle_nuevo=serializer.data, request=self.request)
 
     def perform_update(self, serializer):
         old_instance = self.get_object()
         old_data = CategoriaSerializer(old_instance).data
         instance = serializer.save()
         log_auditoria(self.request.user, 'EDICION', 'CATEGORIA', instance.id, 
-        detalle_anterior=old_data, detalle_nuevo=serializer.data, request=self.request)
+                      detalle_anterior=old_data, detalle_nuevo=serializer.data, request=self.request)
 
     def perform_destroy(self, instance):
         if instance.platos.exists():
@@ -45,7 +45,7 @@ class CategoriaViewSet(viewsets.ModelViewSet):
         instance_id = instance.id
         instance.delete()
         log_auditoria(self.request.user, 'ELIMINACION', 'CATEGORIA', instance_id, 
-        detalle_anterior=old_data, request=self.request)
+                      detalle_anterior=old_data, request=self.request)
 
 class PlatoViewSet(viewsets.ModelViewSet):
     queryset = Plato.objects.prefetch_related('receta__insumo__unidad_medida').order_by('categoria__orden', 'nombre')
@@ -58,7 +58,7 @@ class PlatoViewSet(viewsets.ModelViewSet):
         # Asignar recetas si vienen en los datos
         self._asignar_recetas(instance)
         log_auditoria(self.request.user, 'CREACION', 'PLATOS', instance.id, 
-        detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
+                      detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
 
     def perform_update(self, serializer):
         # Obtener detalle anterior
@@ -68,14 +68,14 @@ class PlatoViewSet(viewsets.ModelViewSet):
         # Asignar recetas si vienen en los datos
         self._asignar_recetas(instance)
         log_auditoria(self.request.user, 'EDICION', 'PLATOS', instance.id, 
-        detalle_anterior=old_data, detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
+                      detalle_anterior=old_data, detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
 
     def perform_destroy(self, instance):
         old_data = PlatoSerializer(instance).data
         instance_id = instance.id
         instance.delete()
         log_auditoria(self.request.user, 'ELIMINACION', 'PLATOS', instance_id, 
-        detalle_anterior=old_data, request=self.request)
+                      detalle_anterior=old_data, request=self.request)
 
     def _asignar_recetas(self, plato):
         """Asigna recetas al plato si vienen en request.data"""
@@ -108,6 +108,18 @@ class PlatoViewSet(viewsets.ModelViewSet):
                 )
             except (json.JSONDecodeError, Exception):
                 continue
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, EsAdmin])
+    def insumos_criticos(self, request):
+        """
+        Retorna lista de insumos críticos (con stock bajo o negativo)
+        y sus platos afectados.
+        """
+        criticos = obtener_insumos_criticos()
+        return Response({
+            'total': len(criticos),
+            'insumos': criticos
+        })
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, EsAdmin])
     def agregar_insumo(self, request, pk=None):
