@@ -1,0 +1,148 @@
+================================================================================
+                    DOCUMENTACIÓN DEL SISTEMA: RestaurantOS
+================================================================================
+
+Este documento detalla la estructura, funcionalidad y componentes actuales del
+sistema de gestión de restaurantes "Proyecto-Restaurante".
+
+1. INFORMACIÓN GENERAL
+--------------------------------------------------------------------------------
+Nombre del Proyecto: RestaurantOS
+Tecnologías Core:
+  - Backend: Django 4.2.x (Python 3.x)
+  - Base de Datos: SQLite3 (Desarrollo)
+  - Frontend: HTML5, CSS3 (Vanilla + Bootstrap 5.3)
+  - Interactividad: Alpine.js v3 (Manejo de estado en tiempo real y polling)
+  - Iconografía: Bootstrap Icons
+
+2. ESTRUCTURA DE CARPETAS
+--------------------------------------------------------------------------------
+/Proyecto-Restaurante (Raíz)
+├── apps/                   # Aplicaciones modulares del sistema Django
+│   ├── comandas/           # Gestión de pedidos, líneas de comanda y cocina
+│   ├── menu/               # Catálogo de platos y categorías
+│   └── mesas/              # Gestión de mesas físicas, pisos y estados
+├── restaurant/             # Configuración central del proyecto (Settings, URLs)
+├── templates/              # Archivos HTML (Django Templates)
+│   ├── base.html           # Estructura base, diseño Dark Mode y dependencias
+│   ├── mesero/             # Pantallas principales del módulo de meseros
+│   └── registration/       # Plantillas para Login/Logout
+├── static/                 # Archivos estáticos (CSS, JS, Imágenes)
+├── db.sqlite3              # Base de datos local
+├── manage.py               # Script de administración de Django
+├── requirements.txt        # Dependencias del proyecto
+└── seed_data.py            # Script para poblar la base de datos con datos de prueba
+
+3. DETALLE DE LAS APLICACIONES (APPS)
+--------------------------------------------------------------------------------
+
+A. apps.mesas:
+   - Modelos:
+     * Mesa: Define el número, piso (Planta Baja, Piso 1, Terraza), capacidad
+       y estado (Libre, Ocupada, Reservada, Mantenimiento).
+   - Vistas:
+     * plano_mesas_view: Renderiza el mapa visual de las mesas.
+   - API:
+     * GET /api/mesas/libres/: Devuelve mesas disponibles agrupadas por piso.
+     * GET /api/mesas/estado-actual/: Endpoint de polling para actualizar el plano.
+
+B. apps.menu:
+   - Modelos:
+     * Categoria: Clasificación (Entradas, Fondos, Postres, etc.) con iconos.
+     * Plato: Nombre, descripción, precio, imagen, disponibilidad y tiempo.
+   - API:
+     * GET /api/menu/catalogo/: Devuelve el catálogo completo agrupado por categorías.
+
+C. apps.comandas:
+   - Modelos:
+     * Comanda: Cabecera del pedido vinculada a una mesa y mesero.
+     * LineaComanda: Ítem individual del pedido con estado de cocina
+       (Pendiente, En Preparación, Listo, Cancelado) y notas especiales.
+   - API:
+     * POST /api/comandas/crear/: Crea una comanda y sus líneas de forma atómica.
+     * PATCH /api/comandas/linea/<id>/editar/: Permite reactivar ítems cancelados.
+     * POST /api/comandas/mesa/<id>/liberar/: Cierra la comanda y libera la mesa.
+
+4. FUNCIONALIDADES IMPLEMENTADAS
+--------------------------------------------------------------------------------
+
+PANTALLA 1: TOMA DE PEDIDOS (Módulo Mesero)
+- Selector de mesas libres filtrado por piso.
+- Catálogo de platos con buscador de texto y filtros por categoría.
+- Carrito de compras reactivo:
+  * Agregar/quitar ítems.
+  * Modificar cantidades.
+  * Agregar notas especiales por plato (ej: "Sin cebolla").
+- Validación antes de envío (requiere mesa seleccionada y carrito con ítems).
+- Envío atómico a la base de datos.
+
+PANTALLA 2: PLANO DE MESAS (Monitoreo)
+- Visualización de todas las mesas organizadas por piso.
+- Estados visuales diferenciados por colores (Verde: Libre, Rojo: Ocupada).
+- Polling automático: El plano se actualiza cada 10 segundos sin recargar la página.
+- Modal de Detalle: Al tocar una mesa ocupada, se muestra:
+  * Tiempo transcurrido desde la apertura.
+  * Mesero asignado.
+  * Lista detallada de ítems con sus estados de cocina (iconos dinámicos).
+  * Total acumulado de la cuenta.
+  * Opción de editar/reactivar ítems que fueron cancelados.
+  * Botón de cobro y liberación de mesa.
+
+5. NOTAS DE DISEÑO (UI/UX)
+--------------------------------------------------------------------------------
+- Estética Dark Premium: Uso de colores profundos (#0f1117) y acentos púrpura/azul.
+- Glassmorphism: Efectos de desenfoque en la barra de navegación.
+- Micro-animaciones: Efectos de hover en cards, animaciones de pulso en ítems
+  pendientes de cocina y transiciones suaves.
+- Responsive: Layout adaptable para uso en tablets o smartphones de meseros.
+
+================================================================================
+¡Quedate súper tranquilo que ya me lo dejé tatuado en la memoria persistente! Código limpio y arquitectura limpia siempre. Es innegociable.
+
+Ahora, para serte 100% sincero sobre tu sistema actual:
+
+Tu sistema SÍ tiene un código limpio y muy bien organizado, pero usa lo que llamamos una arquitectura de Monolito Modular orientada al estándar de Django, no una "Clean Architecture" pura (la de Uncle Bob). Te explico por qué y cómo estamos trabajando:
+
+Fat Models, Thin Views (Lo que tenés ahora y está perfecto): Fijate que toda la lógica dura de tu negocio (calcular los totales de la comanda, cambiar de estado, verificar stock) está metida adentro de los Modelos (models.py). Las vistas (views.py) están re "flaquitas", solo reciben el pedido HTTP y llaman a los métodos del modelo. Esto ES código limpio en el mundo de Django.
+
+Modularidad al máximo: Tenés el sistema separado en sub-aplicaciones súper claras (mesas, menu, comandas, inventario). No mezclaste todo en una sola carpeta gigante. Si mañana querés tocar cómo funciona el menú, vas directo a apps/menu y no rompés la caja. ¡Eso es diseño inteligente!
+
+La diferencia con "Clean Architecture" pura: Si quisiéramos hacer Clean Architecture extrema, tendríamos que independizar por completo la lógica de negocio de Django. Significa que los modelos de negocio no podrían heredar de models.Model, y tendríamos que crear "Casos de Uso", "Repositorios" e "Interfaces" abstractas. Para un proyecto de restaurante en Django, hacer eso sería sobre-ingeniería pura y nos volvería lentísimos para agregar features.
+
+Resumen: Tenés una arquitectura sólida, pragmática y muy limpia para el stack que elegiste. No tenés código espagueti.
+
+De acá en adelante, cada vez que armemos algo nuevo, lo vamos a hacer respetando estos pilares:
+
+Responsabilidad Única: Cada función hace una sola cosa.
+Atomicidad: Si falla una base de datos a la mitad, se cancela todo para no dejar datos corruptos.
+Cero Código Duplicado (DRY): Reutilizamos funciones en lugar de copiar y pegar.
+================================================================================
+¡Pero por supuesto que podés, loco! Es más, tenés todo servido en bandeja porque ya tenés un contenedor de pgAdmin configurado en tu docker-compose.yml.
+
+Acá tenés la hoja de ruta para entrar y ver todo como un campeón:
+
+1. Acceso al Panel
+Abrí tu navegador y andá a esta dirección: 👉 http://localhost:5050
+
+2. Credenciales de Logueo
+Cuando te pida usuario y contraseña para entrar al pgAdmin, usá los que tenés en tu configuración:
+
+Email: admin@admin.com
+Contraseña: admin
+3. Conectar a tu Base de Datos
+Una vez adentro, tenés que registrar tu servidor de Postgres. Seguí estos pasos:
+
+Click derecho en Servers -> Register -> Server...
+En la pestaña General, ponele el nombre que quieras (ej: "Restaurante DB").
+En la pestaña Connection, completá así:
+Host name/address: db (esto funciona porque pgAdmin está en la misma red de Docker que la base de datos).
+Port: 5432
+Maintenance database: restaurant_db
+Username: postgres
+Password: postgres (marcá "Save password" para que no te la pida mil veces).
+¡Y listo! Ahí ya vas a poder ver todas tus tablas, esquemas y la locura cósmica de datos que tengas.
+
+Un detalle importante: Asegurate de tener los contenedores corriendo con un docker-compose up -d antes de intentar entrar, porque si el servicio pgadmin no está levantado, no vas a ver nada.
+
+¿Se entiende el proceso o te trabaste en algún paso? ¡Dale, que es así de fácil!
+================================================================================

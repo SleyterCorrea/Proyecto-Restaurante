@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Trabajadores — Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" x-data="trabajadoresApp()" x-init="init()">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0 text-white font-black">Gestión de Trabajadores</h2>
+            <p class="text-on-surface-variant small font-bold uppercase tracking-widest">Administración de equipo, roles y contratos</p>
+        </div>
+        <button class="btn btn-primary px-4 py-2 rounded-xl font-black" @click="nuevoTrabajador()">
+            <i class="bi bi-person-plus-fill me-2"></i> Registrar Trabajador
+        </button>
+    </div>
+
+    <!-- Buscador y Filtros -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" class="form-control rounded-end-xl" 
+                       placeholder="Buscar por nombre, apellidos o DNI..." x-model="busqueda" @input="filtrar()">
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Trabajadores -->
+    <div class="card bg-surface/40 backdrop-blur-md border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0 align-middle">
+                <thead>
+                    <tr class="text-on-surface-variant uppercase text-[10px] font-black tracking-widest border-bottom border-white/5">
+                        <th class="ps-4 py-3">Trabajador</th>
+                        <th>DNI</th>
+                        <th>Rol</th>
+                        <th>Tipo Contrato</th>
+                        <th>Fecha Ingreso</th>
+                        <th>Estado</th>
+                        <th class="text-end pe-4">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="t in trabajadoresFiltrados" :key="t.id">
+                        <tr class="border-bottom border-white/5 transition-all">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="w-10 h-10 rounded-circle bg-primary/20 flex items-center justify-center text-primary font-black">
+                                        <span x-text="t.nombres ? t.nombres[0] : 'U'"></span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-black text-white" x-text="t.nombres + ' ' + t.apellidos"></div>
+                                        <div class="small text-on-surface-variant" x-text="t.username"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="small font-bold text-on-surface-variant" x-text="t.dni || '---'"></td>
+                            <td>
+                                <span class="badge bg-secondary/10 text-secondary border border-secondary/20 px-3 py-2 rounded-pill font-black text-[10px] uppercase" x-text="t.rol_nombre"></span>
+                            </td>
+                            <td>
+                                <span class="text-xs font-bold" x-text="t.tipo_trabajo === 'FULL_TIME' ? 'FULL TIME' : 'PART TIME'"></span>
+                            </td>
+                            <td class="small text-on-surface-variant font-medium" x-text="formatDate(t.fecha_ingreso)"></td>
+                            <td>
+                                <span class="badge" :class="t.activo ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'"
+                                      x-text="t.activo ? 'ACTIVO' : 'INACTIVO'">
+                                </span>
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-outline-primary rounded-xl border-white/10 me-2" @click="editarTrabajador(t)">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Registro/Edición -->
+    <div class="modal fade" id="modalTrabajador" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content bg-surface border-primary/30 rounded-[32px] overflow-hidden shadow-2xl">
+                <div class="modal-header border-bottom border-white/5 p-4 bg-white/5">
+                    <h5 class="modal-title font-black text-white uppercase tracking-tight" x-text="form.id ? 'Editar Trabajador' : 'Registrar Nuevo Trabajador'"></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <!-- DNI con Autocomplete RENIEC → va primero -->
+                        <div class="col-12">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">DNI / Documento</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control rounded-start-xl py-2.5"
+                                       placeholder="Ingrese DNI (8 dígitos)..."
+                                       x-model="form.dni"
+                                       @input="onDniInput()"
+                                       maxlength="8"
+                                       inputmode="numeric">
+                                <span class="input-group-text px-4" :class="reniecStatus === 'loading' ? 'text-primary' : (reniecStatus === 'ok' ? 'text-success' : (reniecStatus === 'error' ? 'text-danger' : ''))">
+                                    <span x-show="reniecStatus === 'loading'" class="spinner-border spinner-border-sm" role="status"></span>
+                                    <i class="bi bi-check-circle-fill" x-show="reniecStatus === 'ok'"></i>
+                                    <i class="bi bi-x-circle-fill" x-show="reniecStatus === 'error'"></i>
+                                    <i class="bi bi-person-vcard" x-show="!reniecStatus"></i>
+                                </span>
+                            </div>
+                            <p class="text-[10px] mt-1 font-bold" 
+                               :class="reniecStatus === 'ok' ? 'text-success' : 'text-danger'"
+                               x-show="reniecMsg" x-text="reniecMsg"></p>
+                        </div>
+
+                        <!-- Datos Personales (autocompletados) -->
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Nombres</label>
+                            <input type="text" class="form-control rounded-xl py-2.5" x-model="form.nombres"
+                                   :class="reniecStatus === 'ok' ? 'border-success/50' : ''">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Apellidos</label>
+                            <input type="text" class="form-control rounded-xl py-2.5" x-model="form.apellidos"
+                                   :class="reniecStatus === 'ok' ? 'border-success/50' : ''">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Email</label>
+                            <input type="email" class="form-control rounded-xl py-2.5" x-model="form.email">
+                        </div>
+
+                        <hr class="border-white/5 my-2">
+
+                        <!-- Datos del Sistema -->
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Usuario (Login)</label>
+                            <input type="text" class="form-control rounded-xl py-2.5" x-model="form.username" :disabled="form.id">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Contraseña</label>
+                            <div class="input-group">
+                                <input :type="showPass ? 'text' : 'password'" class="form-control rounded-start-xl py-2.5" x-model="form.password" placeholder="••••••••">
+                                <button class="btn btn-outline-white/10 border-white/10" type="button" @click="showPass = !showPass">
+                                    <i class="bi" :class="showPass ? 'bi-eye-slash' : 'bi-eye'"></i>
+                                </button>
+                            </div>
+                            <p class="text-[9px] text-primary mt-1 font-bold" x-show="form.id">* Dejar en blanco para no cambiar</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Rol del Sistema</label>
+                            <select class="form-select rounded-xl py-2.5" x-model="form.rol">
+                                <option value="">Seleccione un rol...</option>
+                                <template x-for="r in roles" :key="r.id">
+                                    <option :value="r.id" x-text="r.nombre" :selected="r.id == form.rol"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Tipo de Contrato</label>
+                            <select class="form-select rounded-xl py-2.5" x-model="form.tipo_trabajo">
+                                <option value="FULL_TIME">Full Time</option>
+                                <option value="PART_TIME">Part Time</option>
+                            </select>
+                        </div>
+
+                        <hr class="border-white/5 my-2">
+
+                        <!-- Fechas -->
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Fecha Ingreso</label>
+                            <input type="date" class="form-control rounded-xl py-2.5" x-model="form.fecha_ingreso">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Fin de Contrato / Retiro</label>
+                            <input type="date" class="form-control rounded-xl py-2.5" x-model="form.fecha_termino">
+                        </div>
+                        
+                        <div class="col-12 mt-2">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" x-model="form.activo">
+                                <label class="form-check-label small font-bold text-white uppercase tracking-widest">Cuenta Activa</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-white/5 p-4 bg-white/5">
+                    <button class="btn btn-primary w-100 py-3 rounded-2xl font-black uppercase tracking-widest" @click="guardar()">
+                        <span x-text="form.id ? 'Guardar Cambios' : 'Registrar Trabajador'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function trabajadoresApp() {
+    return {
+        trabajadores: [],
+        trabajadoresFiltrados: [],
+        roles: [],
+        busqueda: '',
+        showPass: false,
+        modal: null,
+        reniecStatus: null,   // null | 'loading' | 'ok' | 'error'
+        reniecMsg: '',
+        _dniTimer: null,
+        form: {
+            id: null,
+            username: '',
+            nombres: '',
+            apellidos: '',
+            email: '',
+            rol: '',
+            dni: '',
+            tipo_trabajo: 'FULL_TIME',
+            fecha_ingreso: '',
+            fecha_termino: '',
+            password: '',
+            activo: true
+        },
+
+        init() {
+            this.modal = new bootstrap.Modal(document.getElementById('modalTrabajador'));
+            this.fetchTrabajadores();
+            this.fetchRoles();
+        },
+
+        async fetchTrabajadores() {
+            const resp = await fetch('/api/trabajadores/');
+            if (resp.ok) {
+                this.trabajadores = await resp.json();
+                this.filtrar();
+            }
+        },
+
+        async fetchRoles() {
+            const resp = await fetch('/api/roles/');
+            if (resp.ok) {
+                this.roles = await resp.json();
+            }
+        },
+
+        filtrar() {
+            if (!this.busqueda.trim()) {
+                this.trabajadoresFiltrados = [...this.trabajadores];
+                return;
+            }
+            const q = this.busqueda.toLowerCase();
+            this.trabajadoresFiltrados = this.trabajadores.filter(t => 
+                (t.nombres && t.nombres.toLowerCase().includes(q)) || 
+                (t.apellidos && t.apellidos.toLowerCase().includes(q)) || 
+                (t.dni && t.dni.includes(q)) ||
+                (t.username && t.username.toLowerCase().includes(q))
+            );
+        },
+
+        nuevoTrabajador() {
+            this.form = {
+                id: null,
+                username: '',
+                nombres: '',
+                apellidos: '',
+                email: '',
+                rol: '',
+                dni: '',
+                tipo_trabajo: 'FULL_TIME',
+                fecha_ingreso: new Date().toISOString().split('T')[0],
+                fecha_termino: '',
+                password: '',
+                activo: true
+            };
+            this.showPass = false;
+            this.reniecStatus = null;
+            this.reniecMsg = '';
+            this.modal.show();
+        },
+
+        onDniInput() {
+            // Limpiar el timer anterior (debounce 400ms)
+            clearTimeout(this._dniTimer);
+            const dni = this.form.dni.replace(/\D/g, '');
+            this.form.dni = dni;
+
+            // Resetear si el DNI cambia
+            if (dni.length < 8) {
+                this.reniecStatus = null;
+                this.reniecMsg = '';
+                return;
+            }
+
+            // Disparar consulta tras 400ms de pausa
+            this._dniTimer = setTimeout(() => this.consultarReniec(dni), 400);
+        },
+
+        async consultarReniec(dni) {
+            this.reniecStatus = 'loading';
+            this.reniecMsg = 'Consultando RENIEC...';
+
+            try {
+                const resp = await fetch(`/api/reniec/consultar/?dni=${encodeURIComponent(dni)}`);
+                const data = await resp.json();
+
+                if (data.ok) {
+                    this.form.nombres = data.nombres;
+                    this.form.apellidos = data.apellidos;
+                    this.reniecStatus = 'ok';
+                    this.reniecMsg = `✔ Datos obtenidos de RENIEC para DNI ${data.dni}`;
+                } else {
+                    this.reniecStatus = 'error';
+                    this.reniecMsg = data.error || 'No se encontró información.';
+                }
+            } catch (e) {
+                this.reniecStatus = 'error';
+                this.reniecMsg = 'Error de conexión al consultar RENIEC.';
+            }
+        },
+
+        editarTrabajador(t) {
+            this.form = { ...t, password: '' };
+            this.showPass = false;
+            this.modal.show();
+        },
+
+        async guardar() {
+            if (!this.form.username || !this.form.nombres || !this.form.rol) {
+                alert('Usuario, Nombres y Rol son obligatorios');
+                return;
+            }
+
+            const isEdit = !!this.form.id;
+            const url = isEdit ? `/api/trabajadores/${this.form.id}/` : '/api/trabajadores/';
+            const method = isEdit ? 'PATCH' : 'POST';
+
+            const resp = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(this.form)
+            });
+
+            if (resp.ok) {
+                this.modal.hide();
+                this.fetchTrabajadores();
+            } else {
+                const data = await resp.json();
+                alert('Error: ' + JSON.stringify(data));
+            }
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '---';
+            return new Date(dateStr).toLocaleDateString('es-PE', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

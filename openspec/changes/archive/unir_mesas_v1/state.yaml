@@ -1,0 +1,36 @@
+name: unir_mesas
+status: tasks_complete
+current_phase: sdd-apply
+history:
+  - phase: sdd-explore
+    status: success
+    timestamp: "2026-05-08T01:54:30"
+    summary: "Se identificaron los modelos y vistas afectados. Se recomienda usar un ManyToManyField adicional para mantener compatibilidad."
+  - phase: sdd-propose
+    status: success
+    timestamp: "2026-05-08T02:01:30"
+    summary: "Propuesta formal creada. Se definió el alcance (máximo 3 mesas) y el plan de rollback."
+  - phase: sdd-spec
+    status: success
+    timestamp: "2026-05-08T02:06:30"
+    summary: "Especificaciones detalladas creadas. Se definieron los escenarios de unión, límites y liberación grupal."
+  - phase: sdd-design
+    status: success
+    timestamp: "2026-05-08T02:11:00"
+    summary: "Diseño técnico finalizado. Se decidió usar un modelo híbrido (FK + M2M) y validación atómica en el backend."
+  - phase: sdd-tasks
+    status: success
+    timestamp: "2026-05-08T02:16:00"
+    summary: "Lista de tareas accionables creada, organizada por fases de infraestructura, backend, frontend y testing."
+dag:
+  explore: success
+  proposal: success
+  specs: success
+  design: success
+  tasks: success
+  apply: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  archive: pending

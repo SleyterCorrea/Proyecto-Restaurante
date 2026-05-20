@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="mb-0">Panel de Administración</h2>
+        <p class="text-muted small">Resumen general del sistema</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <a href="{% url 'admin_inventario' %}" class="text-decoration-none">
+                <div class="card card-dark p-4 text-center h-100">
+                    <i class="bi bi-box-seam display-4 text-accent mb-3"></i>
+                    <h4>Inventario</h4>
+                    <p class="text-muted small">Gestionar stock e insumos</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'admin_recetas' %}" class="text-decoration-none">
+                <div class="card card-dark p-4 text-center h-100">
+                    <i class="bi bi-journal-text display-4 text-accent mb-3"></i>
+                    <h4>Recetas</h4>
+                    <p class="text-muted small">Vincular platos con insumos</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-dark p-4 text-center h-100 opacity-50">
+                <i class="bi bi-bar-chart display-4 text-muted mb-3"></i>
+                <h4>Reportes</h4>
+                <p class="text-muted small">Próximamente en Fase 6</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

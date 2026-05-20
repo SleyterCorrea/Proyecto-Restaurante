@@ -1,171 +1,442 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="{% if not config_global.tema_oscuro %}light{% else %}dark{% endif %}">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}RestaurantOS — Módulo Mesero{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Sistema de gestión para restaurantes{% endblock %}" />
 
-  <!-- Bootstrap 5 CSS -->
+  <!-- Tailwind CSS & Google Fonts -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+
+  <!-- Bootstrap 5 CSS (Fallback for legacy components) -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
-  <!-- Google Fonts: Inter -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
   <style>
-    /* ─── Variables & reset ──────────────────────────────────────────────── */
     :root {
-      --color-bg:        #0f1117;
-      --color-surface:   #1a1d27;
-      --color-surface2:  #22263a;
-      --color-border:    #2e3250;
-      --color-accent:    #7c6ef5;
-      --color-accent2:   #5b9cf6;
-      --color-text:      #e2e8f0;
-      --color-muted:     #8892b0;
-      --color-libre:     #10b981;
-      --color-ocupada:   #ef4444;
-      --color-reservada: #f59e0b;
-      --sidebar-w:       340px;
-      --navbar-h:        60px;
+      color-scheme: dark;
+      /* Colores RGB para compatibilidad total con Tailwind y Opacidades */
+      --primary: 198 191 255; /* #c6bfff */
+      --secondary: 78 222 163; /* #4edea3 */
+      --bg: 12 14 20; /* #0c0e14 */
+      --surface: 26 29 39; /* #1a1d27 */
+      --border: 255 255 255; /* Usado con opacidad */
+      --on-surface: 255 255 255;
+      --on-surface-variant: 165 165 177;
     }
 
-    *, *::before, *::after { box-sizing: border-box; }
+    html.light {
+      color-scheme: light;
+      --primary: 67 56 202; /* #4338ca Indigo */
+      --secondary: 16 185 129; /* #10b981 Emerald */
+      --bg: 243 244 246; /* #f3f4f6 */
+      --surface: 255 255 255; /* #ffffff */
+      --border: 0 0 0; 
+      --on-surface: 17 24 39; /* #111827 */
+      --on-surface-variant: 75 85 99; /* #4b5563 */
+    }
 
     body {
       font-family: 'Inter', sans-serif;
-      background: var(--color-bg);
-      color: var(--color-text);
+      background: rgb(var(--bg));
+      color: rgb(var(--on-surface));
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ─── Navbar ─────────────────────────────────────────────────────────── */
-    .navbar-restaurant {
-      height: var(--navbar-h);
-      background: var(--color-surface);
-      border-bottom: 1px solid var(--color-border);
-      backdrop-filter: blur(12px);
+    .glass-nav {
+      background: rgb(var(--surface) / 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgb(var(--border) / 0.08);
     }
-    .navbar-brand-text {
-      font-weight: 700;
-      font-size: 1.15rem;
-      background: linear-gradient(135deg, var(--color-accent), var(--color-accent2));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+
+    /* Sobrescribir glass-card en todas las vistas para que respete el tema */
+    .glass-card {
+      background: rgb(var(--surface) / 0.85) !important;
+      border: 1px solid rgb(var(--border) / 0.1) !important;
     }
-    .nav-pill-link {
-      color: var(--color-muted);
-      text-decoration: none;
-      padding: .35rem .85rem;
-      border-radius: 8px;
-      font-size: .9rem;
+
+    .nav-link-custom {
+      @apply flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all duration-200;
+      color: rgb(var(--on-surface-variant));
+    }
+
+    .nav-link-custom:hover,
+    .nav-link-custom.active {
+      background: rgb(var(--on-surface) / 0.05);
+      color: rgb(var(--on-surface));
+    }
+
+    .nav-link-custom.active {
+      @apply shadow-lg shadow-white/5;
+      background: rgb(var(--primary) / 0.1);
+      color: rgb(var(--primary));
+    }
+
+    /* Override Bootstrap defaults for legibility */
+    .text-muted {
+      color: rgb(var(--on-surface-variant)) !important;
       font-weight: 500;
-      transition: all .2s;
     }
-    .nav-pill-link:hover, .nav-pill-link.active {
-      background: var(--color-surface2);
-      color: var(--color-text);
-    }
-    .nav-pill-link i { margin-right: .3rem; }
 
-    /* ─── Cards genéricas ────────────────────────────────────────────────── */
     .card-dark {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: 14px;
-      transition: border-color .2s, transform .15s;
-    }
-    .card-dark:hover {
-      border-color: var(--color-accent);
-      transform: translateY(-1px);
+      background: rgb(var(--surface));
+      border: 1px solid rgb(var(--border) / 0.1);
+      border-radius: 24px;
     }
 
-    /* ─── Scrollbar personalizado ─────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--color-surface); }
-    ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 6px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
-
-    /* ─── Badges de estado mesa ──────────────────────────────────────────── */
-    .badge-libre     { background: rgba(16,185,129,.15); color: var(--color-libre); border: 1px solid rgba(16,185,129,.3); }
-    .badge-ocupada   { background: rgba(239,68,68,.15);  color: var(--color-ocupada); border: 1px solid rgba(239,68,68,.3); }
-    .badge-reservada { background: rgba(245,158,11,.15); color: var(--color-reservada); border: 1px solid rgba(245,158,11,.3); }
-
-    /* ─── Botón primary custom ───────────────────────────────────────────── */
-    .btn-accent {
-      background: linear-gradient(135deg, var(--color-accent), var(--color-accent2));
-      border: none;
-      color: #fff;
-      font-weight: 600;
-      letter-spacing: .02em;
-      transition: opacity .2s, transform .15s;
-    }
-    .btn-accent:hover { opacity: .88; color: #fff; transform: translateY(-1px); }
-    .btn-accent:active { transform: translateY(0); }
-
-    /* ─── Modales oscuros ────────────────────────────────────────────────── */
-    .modal-content {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      color: var(--color-text);
-    }
-    .modal-header, .modal-footer {
-      border-color: var(--color-border);
+    [x-cloak] {
+      display: none !important;
     }
 
-    /* ─── Inputs / Selects ───────────────────────────────────────────────── */
-    .form-control-dark, .form-select-dark {
-      background: var(--color-surface2);
-      border: 1px solid var(--color-border);
-      color: var(--color-text);
-      border-radius: 10px;
+    /* Better contrast for table text */
+    .table-dark {
+      --bs-table-bg: transparent;
+      color: rgb(var(--on-surface));
     }
-    .form-control-dark:focus, .form-select-dark:focus {
-      background: var(--color-surface2);
-      border-color: var(--color-accent);
-      color: var(--color-text);
-      box-shadow: 0 0 0 3px rgba(124,110,245,.2);
+
+    .table td,
+    .table th {
+      border-color: rgb(var(--border) / 0.1);
+      vertical-align: middle;
     }
-    .form-control-dark::placeholder { color: var(--color-muted); }
 
-    /* ─── [x-cloak] ocultar antes de Alpine ─────────────────────────────── */
-    [x-cloak] { display: none !important; }
+    /* ── Lógica Inversa: Modo Claro cubre TODOS los utilitarios oscuros ── */
+    html.light .bg-white\/5  { background-color: rgba(0,0,0,0.04) !important; }
+    html.light .bg-white\/10 { background-color: rgba(0,0,0,0.08) !important; }
+    html.light .bg-white\/20 { background-color: rgba(0,0,0,0.12) !important; }
+    html.light .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
+    html.light .bg-black\/40 { background-color: rgba(0,0,0,0.06) !important; }
+    html.light .text-white   { color: rgb(var(--on-surface)) !important; }
+    html.light .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
+    html.light .border-white\/10 { border-color: rgba(0,0,0,0.1) !important; }
+    html.light .border-white\/20 { border-color: rgba(0,0,0,0.15) !important; }
+    html.light .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.06) !important; }
+    html.light .btn-close-white  { filter: invert(1); }
+    /* Corrige tablas Bootstrap que heredan color blanco */
+    html.light .table         { color: rgb(var(--on-surface)) !important; }
+    html.light .table-dark    {
+      /* Bootstrap `.table-dark` define texto blanco por variables; en claro lo invertimos */
+      --bs-table-color: rgb(var(--on-surface));
+      --bs-table-bg: transparent;
+      --bs-table-border-color: rgb(var(--border) / 0.12);
+      --bs-table-striped-color: rgb(var(--on-surface));
+      --bs-table-striped-bg: rgb(var(--border) / 0.035);
+      --bs-table-active-color: rgb(var(--on-surface));
+      --bs-table-active-bg: rgb(var(--border) / 0.06);
+      --bs-table-hover-color: rgb(var(--on-surface));
+      --bs-table-hover-bg: rgb(var(--border) / 0.05);
+      color: rgb(var(--on-surface)) !important;
+      background: transparent !important;
+    }
+    /* Fondo de hover en filas de tabla */
+    html.light .hover\:bg-white\/5:hover { background-color: rgba(0,0,0,0.04) !important; }
 
-    {% block extra_css %}{% endblock %}
+    /* ── Mejoras de Contraste para Inputs y Formularios ── */
+    .form-control, .form-select {
+      background-color: rgb(var(--surface) / 0.5) !important;
+      border: 1px solid rgb(var(--border) / 0.1) !important;
+      color: rgb(var(--on-surface)) !important;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus, .form-select:focus {
+      background-color: rgb(var(--surface) / 0.8) !important;
+      border-color: rgb(var(--primary)) !important;
+      color: rgb(var(--on-surface)) !important;
+      box-shadow: 0 0 0 4px rgb(var(--primary) / 0.15) !important;
+    }
+
+    .form-control::placeholder {
+      color: rgb(var(--on-surface-variant)) !important;
+      opacity: 0.8;
+    }
+
+    .input-group-text {
+      background-color: rgb(var(--surface) / 0.5) !important;
+      border: 1px solid rgb(var(--border) / 0.1) !important;
+      color: rgb(var(--on-surface-variant)) !important;
+    }
+
+    /* Estilos específicos para inputs de fecha */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: {% if config_global.tema_oscuro %}invert(1){% else %}none{% endif %};
+      opacity: 0.7;
+      cursor: pointer;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
   </style>
+
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "rgb(var(--primary) / <alpha-value>)",
+            secondary: "rgb(var(--secondary) / <alpha-value>)",
+            background: "rgb(var(--bg) / <alpha-value>)",
+            surface: "rgb(var(--surface) / <alpha-value>)",
+            "surface-container": "rgb(var(--surface) / <alpha-value>)",
+            "on-surface": "rgb(var(--on-surface) / <alpha-value>)",
+            "on-surface-variant": "rgb(var(--on-surface-variant) / <alpha-value>)",
+          }
+        },
+      },
+    }
+  </script>
+  {% block extra_css %}{% endblock %}
 </head>
-<body>
 
-<!-- ═══════════════════════════  NAVBAR  ════════════════════════════════════ -->
-<nav class="navbar navbar-restaurant px-4 d-flex align-items-center justify-content-between sticky-top">
-  <a class="navbar-brand-text text-decoration-none" href="/mesero/mesas/">
-    <i class="bi bi-fork-knife me-2"></i>RestaurantOS
-  </a>
-  <div class="d-flex gap-2">
-    <a href="/mesero/mesas/"          class="nav-pill-link {% block nav_mesas %}{% endblock %}">
-      <i class="bi bi-grid-3x3-gap"></i> Plano
-    </a>
-    <a href="/mesero/nueva-comanda/"  class="nav-pill-link {% block nav_comanda %}{% endblock %}">
-      <i class="bi bi-plus-circle"></i> Nueva Comanda
-    </a>
-    {% if user.is_authenticated %}
-    <span class="nav-pill-link"><i class="bi bi-person-circle"></i> {{ user.get_short_name|default:user.username }}</span>
-    {% endif %}
+<body class="antialiased">
+
+  <!-- Navbar -->
+  <nav class="glass-nav sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-10">
+      <a href="{% url 'index' %}" class="flex items-center gap-3 no-underline">
+        <div class="bg-gradient-to-br from-primary to-secondary p-2 rounded-xl">
+          <span class="material-symbols-outlined text-background font-bold text-xl">restaurant</span>
+        </div>
+        <span class="text-xl font-black tracking-tight text-white">RestaurantOS</span>
+      </a>
+
+      {% if user.is_authenticated %}
+      <div class="hidden xl:flex items-center gap-2">
+        {% if user.rol.nombre == 'MOZO' or user.rol.nombre == 'ADMIN' %}
+        <a href="/mesero/mesas/" class="nav-link-custom {% block nav_mesas %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">grid_view</span> Plano
+        </a>
+        <a href="/mesero/nueva-comanda/" class="nav-link-custom {% block nav_comanda %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">add_circle</span> Nueva Comanda
+        </a>
+        {% endif %}
+
+        {% if user.rol.nombre == 'COCINERO' or user.rol.nombre == 'ADMIN' %}
+        <a href="/cocina/kds/" class="nav-link-custom {% block nav_cocina %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">oven_gen</span> Cocina
+        </a>
+        {% endif %}
+
+        {% if user.rol.nombre == 'CAJERO' or user.rol.nombre == 'ADMIN' %}
+        <a href="{% url 'caja_apertura' %}" class="nav-link-custom">
+          <span class="material-symbols-outlined text-lg">key</span> Apertura
+        </a>
+        <a href="{% url 'caja_cobrar' %}" class="nav-link-custom {% block nav_caja %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">payments</span> Caja
+        </a>
+        <a href="{% url 'caja_cierre' %}" class="nav-link-custom">
+          <span class="material-symbols-outlined text-lg">lock_clock</span> Cierre
+        </a>
+        {% endif %}
+
+        {% if user.rol.nombre == 'ADMIN' %}
+        <a href="{% url 'admin_reportes' %}" class="nav-link-custom {% block nav_admin %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">dashboard</span> Dashboard
+        </a>
+        <a href="{% url 'admin_menu' %}" class="nav-link-custom {% block nav_menu %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">restaurant_menu</span> Menú
+        </a>
+        <a href="/admin-panel/inventario/" class="nav-link-custom {% block nav_inventario %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">inventory_2</span> Stock
+        </a>
+        <a href="/admin-panel/trabajadores/" class="nav-link-custom {% block nav_trabajadores %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">badge</span> Personal
+        </a>
+        <a href="/admin-panel/auditoria/" class="nav-link-custom {% block nav_auditoria %}{% endblock %}">
+          <span class="material-symbols-outlined text-lg">policy</span> Auditoría
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="flex items-center gap-6">
+      {% if user.is_authenticated %}
+      {% if user.rol.nombre == 'ADMIN' %}
+      <button onclick="toggleTemaGlobal()" 
+              class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all shadow-lg"
+              title="Cambiar Tema Global del Sistema">
+        <span class="material-symbols-outlined" id="theme-icon">
+          {% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}
+        </span>
+      </button>
+      {% endif %}
+
+      <div class="hidden md:flex items-center gap-4 px-4 py-2 bg-white/5 rounded-2xl border border-white/5">
+        <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/20">
+          <span class="material-symbols-outlined text-primary text-sm font-bold">person</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-xs font-black text-white leading-tight">{{ user.username }}</span>
+          <span class="text-[9px] font-bold text-primary uppercase tracking-widest">{{ user.rol.nombre }}</span>
+        </div>
+      </div>
+
+      <a href="{% url 'documentacion' %}" 
+         class="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary/10 hover:bg-secondary/20 text-secondary transition-all shadow-lg"
+         title="Documentación y Ayuda">
+        <span class="material-symbols-outlined">help</span>
+      </a>
+
+      <form action="{% url 'logout' %}" method="post" class="m-0">
+        {% csrf_token %}
+        <button type="submit"
+          class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-500/10 text-on-surface-variant hover:text-red-400 transition-all"
+          title="Cerrar Sesión">
+          <span class="material-symbols-outlined">logout</span>
+        </button>
+      </form>
+      {% else %}
+      <a href="{% url 'login' %}" class="nav-pill-link active">
+        <i class="bi bi-box-arrow-in-right"></i> Ingresar
+      </a>
+      {% endif %}
+    </div>
+  </nav>
+  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+  <main class="{% block main_class %}container-fluid py-4{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Bootstrap 5 JS (Bundle con Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Contenedor de Notificaciones (Toasts) -->
+  <div x-data="notificacionesGlobal()" 
+       class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+    <template x-for="notif in toasts" :key="notif.id">
+      <div x-show="notif.show"
+           x-transition:enter="transition ease-out duration-300"
+           x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+           x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+           x-transition:leave="transition ease-in duration-200"
+           x-transition:leave-start="opacity-100 translate-y-0"
+           x-transition:leave-end="opacity-0 translate-x-12"
+           class="glass-card pointer-events-auto p-4 rounded-3xl border border-primary/20 shadow-2xl flex items-center gap-4 relative overflow-hidden group">
+        
+        <!-- Icon -->
+        <div class="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary">
+          <span class="material-symbols-outlined font-bold text-2xl">restaurant</span>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1">
+            <h6 class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">¡Pedido Listo!</h6>
+            <p class="text-xs text-white font-bold mb-0">
+                Mesa <span x-text="notif.mesa"></span>: 
+                <span class="text-on-surface-variant font-medium" x-text="notif.plato"></span>
+            </p>
+            <p class="text-[9px] text-on-surface-variant mt-1" x-text="'Cliente: ' + notif.cliente"></p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="absolute bottom-0 left-0 h-1 bg-secondary transition-all duration-[5000ms] ease-linear"
+             :style="'width: ' + (notif.show ? '0%' : '100%')"></div>
+        
+        <button @click="notif.show = false" class="text-on-surface-variant/40 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-base">close</span>
+        </button>
+      </div>
+    </template>
   </div>
-</nav>
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
 
-<main class="{% block main_class %}container-fluid py-4{% endblock %}">
-  {% block content %}{% endblock %}
-</main>
+  <!-- Alpine.js v3 (defer) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-<!-- Bootstrap 5 JS (Bundle con Popper) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<!-- Alpine.js v3 (defer) -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script>
+    function notificacionesGlobal() {
+      return {
+        toasts: [],
+        init() {
+          // Normalizar el rol a mayúsculas para evitar problemas de case
+          const rolNombre = "{{ user.rol.nombre|upper }}";
+          const esMozo = rolNombre === "MOZO" || rolNombre === "MESERO";
+          const esAdmin = rolNombre === "ADMIN";
+          
+          if ("{{ user.is_authenticated }}" === "True" && (esMozo || esAdmin)) {
+            this.conectarWebSocket();
+          }
+        },
+        conectarWebSocket() {
+          const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+          const socketUrl = protocol + window.location.host + '/ws/notificaciones/';
+          
+          const socket = new WebSocket(socketUrl);
 
-{% block extra_js %}{% endblock %}
+          socket.onmessage = (e) => {
+            console.log("WebSocket mensaje recibido:", e.data);
+            const data = JSON.parse(e.data);
+            if (data.type === 'comida_lista') {
+              this.agregarToast(data);
+            }
+          };
+
+          socket.onclose = () => {
+            console.log('WebSocket cerrado. Reconectando en 5s...');
+            setTimeout(() => this.conectarWebSocket(), 5000);
+          };
+        },
+        agregarToast(data) {
+          const id = Date.now();
+          const nuevoToast = {
+            id: id,
+            show: true,
+            mesa: data.mesa,
+            cliente: data.cliente,
+            plato: data.plato
+          };
+          
+          this.toasts.push(nuevoToast);
+          
+          // Audio de notificación (opcional - requiere interacción previa del usuario)
+          try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.4;
+            audio.play();
+          } catch(e) {}
+
+          setTimeout(() => {
+            const index = this.toasts.findIndex(t => t.id === id);
+            if (index !== -1) this.toasts[index].show = false;
+            // Limpiar del array después de la animación
+            setTimeout(() => {
+              this.toasts = this.toasts.filter(t => t.id !== id);
+            }, 500);
+          }, 5000);
+        }
+      }
+    }
+
+    function toggleTemaGlobal() {
+      // CSRF token extraído de las cookies
+      const csrfToken = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+      
+      fetch('/api/configuracion/toggle-tema/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if(data.ok) {
+          window.location.reload(); // Recarga la página para aplicar el cambio global
+        } else {
+          alert('Error: ' + data.error);
+        }
+      })
+      .catch(e => console.error('Error cambiando tema:', e));
+    }
+  </script>
+
+  {% block extra_js %}{% endblock %}
 </body>
+
 </html>

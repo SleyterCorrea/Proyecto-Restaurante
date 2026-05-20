@@ -2,8 +2,11 @@
 Vistas y API endpoints para la app mesas.
 
 Endpoints API:
-  GET /api/mesas/libres/         → Mesas con estado LIBRE agrupadas por piso
-  GET /api/mesas/estado-actual/  → Estado de todas las mesas + detalle de comanda activa
+  GET  /api/mesas/libres/              → Mesas con estado LIBRE agrupadas por piso (incluye grupos unidos)
+  GET  /api/mesas/estado-actual/       → Estado de todas las mesas + detalle de comanda activa + uniones
+  GET  /api/mesas/uniones/             → Lista de uniones activas
+  POST /api/mesas/union/crear/         → Crea unión entre 2-3 mesas LIBRES (solo ADMIN)
+  DELETE /api/mesas/union/<id>/disolver/ → Disuelve una unión (solo ADMIN)
 
 Vistas HTML:
   GET /mesero/mesas/             → Plano de Mesas (Pantalla 2)
@@ -14,9 +17,47 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
-from .models import Mesa
+from apps.usuarios.decorators import rol_requerido
+from apps.usuarios.utils import log_auditoria
+
+from .models import Mesa, Zona, UnionMesas
 from apps.comandas.models import Comanda, LineaComanda
+
+
+def _estado_visual_mesa(mesa, comanda_data):
+    """
+    Estado visual para el plano:
+    - OCUPADA (rojo): aún hay ítems pendientes, en preparación o listos sin entregar.
+    - ENTREGADO (amarillo): todos los ítems activos ya fueron entregados.
+    """
+    if mesa.estado != Mesa.Estado.OCUPADA or not comanda_data:
+        return mesa.estado, mesa.get_estado_display()
+
+    lineas = comanda_data.get('lineas', [])
+    estados_activos = [l['estado'] for l in lineas if l['estado'] != LineaComanda.Estado.ANULADO]
+
+    if estados_activos and all(e == LineaComanda.Estado.ENTREGADO for e in estados_activos):
+        return 'ENTREGADO', 'Pedido Entregado'
+
+    return mesa.estado, mesa.get_estado_display()
+
+
+def _serializar_union(union):
+    """Serializa una UnionMesas al dict que el frontend necesita."""
+    if union is None:
+        return None
+    secundarias = list(union.mesas_secundarias.all())
+    return {
+        'id': union.pk,
+        'capacidad_total': union.capacidad_total,
+        'mesa_principal_id': union.mesa_principal_id,
+        'mesa_ids': [union.mesa_principal_id] + [m.id for m in secundarias],
+        'mesa_numeros': [union.mesa_principal.numero] + [m.numero for m in secundarias],
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -24,105 +65,474 @@ from apps.comandas.models import Comanda, LineaComanda
 # ─────────────────────────────────────────────────────────────────────────────
 
 @login_required
+@rol_requerido('MOZO', 'ADMIN')
 def plano_mesas_view(request):
     """Pantalla 2: Plano visual de mesas con polling Alpine.js."""
-    pisos = Mesa.Piso.choices   # Pasar los choices al template para los filtros
-    return render(request, 'mesero/plano_mesas.html', {'pisos': pisos})
+    zonas = [(z.id, z.nombre) for z in Zona.objects.filter(activo=True)]
+    return render(request, 'mesero/plano_mesas.html', {'pisos': zonas})
 
 
 @login_required
+@rol_requerido('MOZO', 'ADMIN')
 def toma_pedidos_view(request):
     """Pantalla 1: Toma de pedidos / nueva comanda."""
-    pisos = Mesa.Piso.choices
-    return render(request, 'mesero/toma_pedidos.html', {'pisos': pisos})
+    zonas = [(z.id, z.nombre) for z in Zona.objects.filter(activo=True)]
+    return render(request, 'mesero/toma_pedidos.html', {'pisos': zonas})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# API ENDPOINTS
+# API ENDPOINTS — MESAS
 # ─────────────────────────────────────────────────────────────────────────────
 
-@require_GET
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def api_mesas_libres(request):
     """
     GET /api/mesas/libres/
-    Devuelve las mesas con estado=LIBRE, opcionalmente filtradas por piso.
-    Query params: ?piso=PB
+    Devuelve las mesas con estado=LIBRE, opcionalmente filtradas por zona.
+    Incluye grupos de mesas unidas como unidades seleccionables.
+    Query params: ?piso=ID
     """
-    qs = Mesa.objects.filter(estado=Mesa.Estado.LIBRE)
+    qs = Mesa.objects.filter(estado=Mesa.Estado.LIBRE, activo=True).select_related('zona')
     piso = request.GET.get('piso')
     if piso:
-        qs = qs.filter(piso=piso)
+        qs = qs.filter(zona_id=piso)
 
-    # Agrupar por piso para que Alpine pueda renderizar secciones
+    # Cargar uniones activas
+    uniones = UnionMesas.objects.filter(activa=True).prefetch_related('mesas_secundarias')
+    # Mapear mesa_id → union
+    mesa_a_union = {}
+    for u in uniones:
+        mesa_a_union[u.mesa_principal_id] = u
+        for sec in u.mesas_secundarias.all():
+            mesa_a_union[sec.id] = u
+
+    # Agrupar por piso. Las mesas secundarias de un grupo no aparecen solas.
     pisos_dict: dict = {}
+    grupos_ya_agregados = set()  # evitar duplicar grupos
+
     for mesa in qs:
-        label = mesa.get_piso_display()
-        pisos_dict.setdefault(label, []).append({
-            'id':        mesa.pk,
-            'numero':    mesa.numero,
-            'capacidad': mesa.capacidad,
-            'piso':      mesa.piso,
-            'piso_label': label,
-        })
+        label = mesa.zona.nombre if mesa.zona else 'Sin Zona'
+        union = mesa_a_union.get(mesa.id)
+
+        if union:
+            # Si esta mesa pertenece a un grupo, representar el grupo una sola vez
+            if union.pk in grupos_ya_agregados:
+                continue
+            # Solo mostrar el grupo si TODAS las mesas del grupo están LIBRES
+            todas_libres = all(
+                m.estado == Mesa.Estado.LIBRE
+                for m in union.todas_las_mesas
+            )
+            if not todas_libres:
+                continue
+            grupos_ya_agregados.add(union.pk)
+            secundarias = list(union.mesas_secundarias.all())
+            pisos_dict.setdefault(label, []).append({
+                'id':             union.mesa_principal.pk,
+                'numero':         union.mesa_principal.numero,
+                'capacidad':      union.capacidad_total,
+                'piso':           union.mesa_principal.zona_id,
+                'piso_label':     label,
+                'es_grupo':       True,
+                'union_id':       union.pk,
+                'mesa_ids':       [union.mesa_principal.pk] + [m.pk for m in secundarias],
+                'mesa_numeros':   [union.mesa_principal.numero] + [m.numero for m in secundarias],
+                'label':          ' + '.join(
+                    [f'Mesa {union.mesa_principal.numero}'] + [f'Mesa {m.numero}' for m in secundarias]
+                ),
+            })
+        else:
+            pisos_dict.setdefault(label, []).append({
+                'id':        mesa.pk,
+                'numero':    mesa.numero,
+                'capacidad': mesa.capacidad,
+                'piso':      mesa.zona_id,
+                'piso_label': label,
+                'es_grupo':  False,
+                'union_id':  None,
+                'mesa_ids':  [mesa.pk],
+                'mesa_numeros': [mesa.numero],
+                'label':     f'Mesa {mesa.numero}',
+            })
 
     return JsonResponse({'pisos': pisos_dict, 'total': qs.count()})
 
 
-@require_GET
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def api_estado_actual(request):
     """
     GET /api/mesas/estado-actual/
     Endpoint de polling (Alpine.js Pantalla 2).
-    Devuelve el estado de TODAS las mesas.
-    Si la mesa tiene una comanda abierta, incluye su detalle completo.
+    Devuelve el estado de TODAS las mesas + datos de unión.
     """
     mesas_data = []
 
-    for mesa in Mesa.objects.all():
-        mesa_dict = {
-            'id':         mesa.pk,
-            'numero':     mesa.numero,
-            'capacidad':  mesa.capacidad,
-            'piso':       mesa.piso,
-            'piso_label': mesa.get_piso_display(),
-            'estado':     mesa.estado,
-            'estado_label': mesa.get_estado_display(),
-            'comanda':    None,
+    # 1. Obtener todas las comandas abiertas con sus mesas adicionales y líneas
+    comandas_activas = (
+        Comanda.objects.filter(estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.LISTA])
+        .select_related('mesa', 'mozo')
+        .prefetch_related('mesas_adicionales', 'lineas__plato')
+    )
+
+    # 2. Mapear cada mesa (principal o adicional) a su comanda
+    mesa_id_to_comanda = {}
+    for c in comandas_activas:
+        lineas = []
+        for linea in c.lineas.all():
+            lineas.append({
+                'id':             linea.pk,
+                'plato_id':       linea.plato.pk,
+                'plato_nombre':   linea.plato.nombre,
+                'cantidad':       linea.cantidad,
+                'precio_unitario': str(linea.precio_unitario),
+                'subtotal':       str(linea.subtotal),
+                'estado':         linea.estado,
+                'estado_label':   linea.get_estado_display(),
+                'notas_cocina':   linea.notas_cocina,
+            })
+
+        comanda_data = {
+            'id':              c.pk,
+            'fecha_apertura':  c.fecha_apertura.strftime('%H:%M'),
+            'mesero':          str(c.mesero) if c.mesero else 'N/A',
+            'nombre_cliente':  c.nombre_cliente or '',
+            'notas':           c.notas,
+            'total':           str(c.total),
+            'lineas':          lineas,
         }
 
-        # Si la mesa está ocupada, adjuntar el detalle de la comanda activa
-        if mesa.estado == Mesa.Estado.OCUPADA:
-            comanda = (
-                mesa.comandas
-                .filter(estado=Comanda.Estado.ABIERTA)
-                .prefetch_related('lineas__plato')
-                .order_by('-fecha_apertura')
-                .first()
-            )
-            if comanda:
-                lineas = []
-                for linea in comanda.lineas.all():
-                    lineas.append({
-                        'id':             linea.pk,
-                        'plato_id':       linea.plato.pk,
-                        'plato_nombre':   linea.plato.nombre,
-                        'cantidad':       linea.cantidad,
-                        'precio_unitario': str(linea.precio_unitario),
-                        'subtotal':       str(linea.subtotal),
-                        'estado':         linea.estado,
-                        'estado_label':   linea.get_estado_display(),
-                        'notas_cocina':   linea.notas_cocina,
-                    })
+        mesa_id_to_comanda[c.mesa_id] = comanda_data
+        for ma in c.mesas_adicionales.all():
+            mesa_id_to_comanda[ma.id] = comanda_data
 
-                mesa_dict['comanda'] = {
-                    'id':              comanda.pk,
-                    'fecha_apertura':  comanda.fecha_apertura.strftime('%H:%M'),
-                    'mesero':          str(comanda.mesero) if comanda.mesero else 'N/A',
-                    'notas':           comanda.notas,
-                    'total':           str(comanda.total),
-                    'lineas':          lineas,
-                }
+    # 3. Cargar todas las uniones activas
+    uniones = UnionMesas.objects.filter(activa=True).prefetch_related('mesas_secundarias', 'mesa_principal')
+    mesa_a_union = {}
+    for u in uniones:
+        mesa_a_union[u.mesa_principal_id] = u
+        for sec in u.mesas_secundarias.all():
+            mesa_a_union[sec.id] = u
 
+    # 4. Construir la respuesta para todas las mesas
+    for mesa in Mesa.objects.filter(activo=True).select_related('zona').all():
+        comanda_data = mesa_id_to_comanda.get(mesa.id)
+        estado_visual, estado_label = _estado_visual_mesa(mesa, comanda_data)
+
+        # Info de unión para esta mesa
+        union = mesa_a_union.get(mesa.id)
+        union_data = None
+        if union:
+            secundarias = list(union.mesas_secundarias.all())
+            es_principal = (union.mesa_principal_id == mesa.id)
+            union_data = {
+                'id':               union.pk,
+                'es_principal':     es_principal,
+                'capacidad_total':  union.capacidad_total,
+                'mesa_principal_id': union.mesa_principal_id,
+                'mesa_principal_numero': union.mesa_principal.numero,
+                'mesa_ids':         [union.mesa_principal_id] + [m.id for m in secundarias],
+                'mesa_numeros':     [union.mesa_principal.numero] + [m.numero for m in secundarias],
+            }
+
+        mesa_dict = {
+            'id':           mesa.pk,
+            'numero':       mesa.numero,
+            'capacidad':    union.capacidad_total if union else mesa.capacidad,
+            'piso':         mesa.zona_id,
+            'piso_label':   mesa.zona.nombre if mesa.zona else 'Sin Zona',
+            'estado':       estado_visual,
+            'estado_label': estado_label,
+            'comanda':      comanda_data,
+            'union':        union_data,
+        }
         mesas_data.append(mesa_dict)
 
-    return JsonResponse({'mesas': mesas_data})
+    # 5. Obtener IDs de platos inactivos o sin disponibilidad
+    from apps.menu.models import Plato
+    platos_inactivos = list(Plato.objects.filter(disponible=False).values_list('id', flat=True))
+
+    return JsonResponse({
+        'mesas': mesas_data,
+        'platos_inactivos': platos_inactivos
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_mesas_list(request):
+    """
+    GET /api/mesas/lista/
+    Retorna una lista simple de todas las mesas activas.
+    """
+    mesas = Mesa.objects.filter(activo=True).order_by('numero')
+    data = [{
+        'id': m.id,
+        'numero': m.numero,
+        'piso': m.zona.nombre if m.zona else '—'
+    } for m in mesas]
+    return JsonResponse(data, safe=False)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_mesa_crear(request):
+    """
+    POST /api/mesas/crear/
+    Crea una nueva mesa. Solo ADMIN.
+    """
+    if request.user.rol.nombre != 'ADMIN':
+        return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
+
+    try:
+        data = request.data
+        numero = data.get('numero')
+        capacidad = data.get('capacidad', 4)
+        zona_id = data.get('zona_id')
+
+        if not numero or not zona_id:
+            return JsonResponse({'ok': False, 'error': 'Número y Zona son requeridos.'}, status=400)
+
+        if Mesa.objects.filter(numero=numero, zona_id=zona_id, activo=True).exists():
+            return JsonResponse({'ok': False, 'error': f'La mesa {numero} ya existe en esa zona.'}, status=400)
+
+        mesa = Mesa.objects.create(
+            numero=numero,
+            capacidad=capacidad,
+            zona_id=zona_id,
+            estado=Mesa.Estado.LIBRE,
+            activo=True
+        )
+
+        log_auditoria(
+            usuario=request.user,
+            accion='CREACION',
+            entidad='MESA',
+            entidad_id=mesa.id,
+            detalle_nuevo={"mensaje": f"Mesa {mesa.numero} creada en {mesa.zona.nombre}", "numero": mesa.numero, "capacidad": mesa.capacidad},
+            request=request
+        )
+
+        return JsonResponse({
+            'ok': True,
+            'mesa': {
+                'id': mesa.id,
+                'numero': mesa.numero,
+                'piso_label': mesa.zona.nombre
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def api_mesa_eliminar(request, pk):
+    """
+    DELETE /api/mesas/eliminar/<pk>/
+    Elimina una mesa o la desactiva si tiene historial. Solo ADMIN.
+    """
+    if request.user.rol.nombre != 'ADMIN':
+        return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
+
+    try:
+        mesa = Mesa.objects.get(pk=pk)
+
+        if mesa.estado != Mesa.Estado.LIBRE:
+            return JsonResponse({'ok': False, 'error': 'No podés eliminar una mesa que no esté libre.'}, status=400)
+
+        accion_auditoria = 'ELIMINAR_FISICO'
+        try:
+            mesa_id = mesa.id
+            mesa_num = mesa.numero
+            mesa_zona = mesa.zona.nombre
+            mesa.delete()
+            detalle_auditoria = f"Mesa {mesa_num} ({mesa_zona}) eliminada físicamente."
+        except Exception:
+            mesa.activo = False
+            mesa.save()
+            mesa_id = mesa.id
+            mesa_num = mesa.numero
+            mesa_zona = mesa.zona.nombre
+            detalle_auditoria = f"Mesa {mesa_num} ({mesa_zona}) desactivada lógicamente (historial conservado)."
+
+        log_auditoria(
+            usuario=request.user,
+            accion='ELIMINACION',
+            entidad='MESA',
+            entidad_id=mesa_id,
+            detalle_anterior={"mensaje": detalle_auditoria, "numero": mesa_num, "zona": mesa_zona},
+            request=request
+        )
+
+        return JsonResponse({'ok': True, 'mensaje': 'Mesa eliminada correctamente.'})
+    except Mesa.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'La mesa no existe.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API ENDPOINTS — UNIONES DE MESAS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_uniones_list(request):
+    """
+    GET /api/mesas/uniones/
+    Lista todas las uniones de mesas activas.
+    """
+    uniones = UnionMesas.objects.filter(activa=True).prefetch_related('mesas_secundarias', 'mesa_principal')
+    data = []
+    for u in uniones:
+        data.append(_serializar_union(u))
+    return JsonResponse({'uniones': data})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_union_crear(request):
+    """
+    POST /api/mesas/union/crear/
+    Crea una unión entre mesas. Solo ADMIN.
+    Body: { "mesa_principal_id": 3, "mesa_secundaria_ids": [5] }
+
+    Reglas:
+    - Solo ADMIN puede crear uniones.
+    - Todas las mesas deben estar LIBRES.
+    - Máximo 3 mesas por unión (1 principal + 2 secundarias).
+    - Una mesa no puede pertenecer a más de una unión activa.
+    """
+    if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede unir mesas.'}, status=403)
+
+    data = request.data
+    mesa_principal_id = data.get('mesa_principal_id')
+    mesa_secundaria_ids = data.get('mesa_secundaria_ids', [])
+
+    if not mesa_principal_id:
+        return JsonResponse({'ok': False, 'error': 'Falta mesa_principal_id.'}, status=400)
+    if not mesa_secundaria_ids:
+        return JsonResponse({'ok': False, 'error': 'Debes indicar al menos una mesa secundaria.'}, status=400)
+    if len(mesa_secundaria_ids) > 2:
+        return JsonResponse({'ok': False, 'error': 'Máximo 2 mesas secundarias (3 en total).'}, status=400)
+    if mesa_principal_id in mesa_secundaria_ids:
+        return JsonResponse({'ok': False, 'error': 'La mesa principal no puede estar en las secundarias.'}, status=400)
+
+    todos_ids = [mesa_principal_id] + mesa_secundaria_ids
+
+    try:
+        with transaction.atomic():
+            # Obtener todas las mesas
+            mesas = {m.id: m for m in Mesa.objects.filter(pk__in=todos_ids)}
+            if len(mesas) != len(todos_ids):
+                return JsonResponse({'ok': False, 'error': 'Una o más mesas no existen.'}, status=404)
+
+            # Verificar que todas estén LIBRES
+            for mesa in mesas.values():
+                if mesa.estado != Mesa.Estado.LIBRE:
+                    return JsonResponse(
+                        {'ok': False, 'error': f'La mesa {mesa.numero} no está libre (estado: {mesa.get_estado_display()}).'},
+                        status=400
+                    )
+
+            # Verificar que ninguna mesa ya esté en una unión activa
+            for mesa_id in todos_ids:
+                mesa = mesas[mesa_id]
+                if hasattr(mesa, 'union_como_principal') and mesa.union_como_principal.activa:
+                    return JsonResponse(
+                        {'ok': False, 'error': f'La mesa {mesa.numero} ya es principal de otra unión.'},
+                        status=400
+                    )
+                if mesa.uniones_como_secundaria.filter(activa=True).exists():
+                    return JsonResponse(
+                        {'ok': False, 'error': f'La mesa {mesa.numero} ya pertenece a otra unión activa.'},
+                        status=400
+                    )
+
+            capacidad_personalizada = data.get('capacidad_personalizada')
+            try:
+                capacidad_personalizada = int(capacidad_personalizada) if capacidad_personalizada else None
+            except ValueError:
+                capacidad_personalizada = None
+
+            mesa_principal = mesas[mesa_principal_id]
+            union = UnionMesas.objects.create(
+                mesa_principal=mesa_principal,
+                activa=True,
+                capacidad_personalizada=capacidad_personalizada
+            )
+            union.mesas_secundarias.set([mesas[sid] for sid in mesa_secundaria_ids])
+
+            log_auditoria(
+                usuario=request.user,
+                accion='CREACION',
+                entidad='UNION_MESAS',
+                entidad_id=union.id,
+                detalle_nuevo={'mesa_principal': mesa_principal.numero, 'secundarias': mesa_secundaria_ids},
+                request=request
+            )
+
+            return JsonResponse({'ok': True, 'union': _serializar_union(union)})
+
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def api_union_disolver(request, pk):
+    """
+    DELETE /api/mesas/union/<pk>/disolver/
+    Disuelve una unión de mesas. Solo ADMIN.
+    """
+    if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede disolver uniones.'}, status=403)
+
+    try:
+        union = UnionMesas.objects.get(pk=pk, activa=True)
+    except UnionMesas.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Unión no encontrada o ya disuelta.'}, status=404)
+
+    numeros = [m.numero for m in union.todas_las_mesas]
+    union_id = union.pk
+    union.delete()
+
+    log_auditoria(
+        usuario=request.user,
+        accion='ELIMINACION',
+        entidad='UNION_MESAS',
+        entidad_id=union_id,
+        detalle_anterior={'mesas': numeros},
+        request=request
+    )
+
+    return JsonResponse({'ok': True, 'mensaje': f'Unión de mesas {numeros} disuelta correctamente.'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_mesa_limpiada(request, pk):
+    """
+    POST /api/mesas/<pk>/limpiada/
+    Cambia el estado de una mesa de LIMPIEZA a LIBRE.
+    """
+    if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        return JsonResponse({'ok': False, 'error': 'Permiso denegado.'}, status=403)
+
+    try:
+        mesa = Mesa.objects.get(pk=pk)
+        if mesa.estado != Mesa.Estado.LIMPIEZA:
+            return JsonResponse({'ok': False, 'error': 'La mesa no está en limpieza.'}, status=400)
+            
+        mesa.estado = Mesa.Estado.LIBRE
+        mesa.save(update_fields=['estado'])
+        
+        log_auditoria(request.user, 'ACCION', 'MESAS', mesa.id, 
+                      detalle_nuevo={'accion': 'Limpieza terminada'}, request=request)
+                      
+        return JsonResponse({'ok': True})
+    except Mesa.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'Mesa no encontrada.'}, status=404)

@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Recetas — Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" x-data="recetasApp()" x-init="init()">
+    <div class="mb-4">
+        <h2 class="mb-0">Gestión de Recetas</h2>
+        <p class="text-muted small">Vínculo entre platos del menú e insumos de inventario</p>
+    </div>
+
+    <div class="row">
+        <!-- Lista de Platos -->
+        <div class="col-lg-4">
+            <div class="card card-dark shadow-sm overflow-hidden">
+                <div class="list-group list-group-flush">
+                    <template x-for="plato in platos" :key="plato.id">
+                        <button class="list-group-item list-group-item-action border-0 py-3"
+                                :class="selectedPlato?.id === plato.id ? 'bg-accent text-white' : 'bg-transparent text-white'"
+                                @click="seleccionarPlato(plato)">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span x-text="plato.nombre"></span>
+                                <i class="bi bi-chevron-right small opacity-50"></i>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle de Receta -->
+        <div class="col-lg-8">
+            <template x-if="selectedPlato">
+                <div class="card card-dark shadow-sm p-4 h-100 border-accent" style="border-width: 2px;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h3 class="h4 mb-0" x-text="'Receta: ' + selectedPlato.nombre"></h3>
+                            <span class="badge bg-info mt-1" x-text="recetaItems.length + ' insumos'"></span>
+                        </div>
+                        <button class="btn btn-sm btn-accent" @click="abrirModalAgregar()">
+                            <i class="bi bi-plus-circle me-2"></i> Agregar Insumo
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Insumo</th>
+                                    <th class="text-center">Cant. por Porción</th>
+                                    <th>Unidad</th>
+                                    <th class="text-end">Costo Est.</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="item in recetaItems" :key="item.id">
+                                    <tr>
+                                        <td x-text="item.insumo_nombre"></td>
+                                        <td class="text-center fw-bold text-accent" x-text="parseFloat(item.cantidad_por_porcion).toFixed(3)"></td>
+                                        <td class="small text-muted" x-text="item.unidad_abreviatura"></td>
+                                        <td class="text-end" x-text="'$' + (item.cantidad_por_porcion * 1.5).toFixed(2)"></td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm text-danger border-0" @click="quitarInsumo(item.id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-if="recetaItems.length === 0">
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted small">
+                                            Este plato aún no tiene insumos configurados.
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </template>
+            <template x-if="!selectedPlato">
+                <div class="card card-dark shadow-sm d-flex align-items-center justify-content-center text-muted" style="height: 400px;">
+                    <div class="text-center">
+                        <i class="bi bi-egg-fried display-4 mb-3 d-block opacity-25"></i>
+                        Seleccioná un plato para ver su receta
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Modal Agregar Insumo a Receta -->
+    <div class="modal fade" id="modalAddInsumo" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-dark border-accent">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title">Vincular Insumo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Seleccionar Insumo</label>
+                        <select class="form-select border-0" style="background: var(--color-surface2);" x-model="nuevoItem.insumo">
+                            <option value="">Elegir...</option>
+                            <template x-for="insumo in allInsumos" :key="insumo.id">
+                                <option :value="insumo.id" x-text="insumo.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Cantidad por Porción</label>
+                        <input type="number" step="0.001" class="form-control border-0" style="background: var(--color-surface2);" x-model="nuevoItem.cantidad_por_porcion">
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-accent w-100" @click="guardarInsumo()">Guardar en Receta</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function recetasApp() {
+    return {
+        platos: [],
+        allInsumos: [],
+        selectedPlato: null,
+        recetaItems: [],
+        nuevoItem: { insumo: '', cantidad_por_porcion: 0 },
+        modalAdd: null,
+
+        init() {
+            this.modalAdd = new bootstrap.Modal(document.getElementById('modalAddInsumo'));
+            this.fetchPlatos();
+            this.fetchInsumos();
+        },
+
+        async fetchPlatos() {
+            const resp = await fetch('/api/menu/platos/');
+            this.platos = await resp.json();
+        },
+
+        async fetchInsumos() {
+            const resp = await fetch('/api/inventario/insumos/');
+            this.allInsumos = await resp.json();
+        },
+
+        async seleccionarPlato(plato) {
+            this.selectedPlato = plato;
+            const resp = await fetch(`/api/inventario/recetas/?plato=${plato.id}`);
+            this.recetaItems = await resp.json();
+        },
+
+        abrirModalAgregar() {
+            this.nuevoItem = { insumo: '', cantidad_por_porcion: 0 };
+            this.modalAdd.show();
+        },
+
+        async guardarInsumo() {
+            const data = {
+                plato: this.selectedPlato.id,
+                insumo: this.nuevoItem.insumo,
+                cantidad_por_porcion: this.nuevoItem.cantidad_por_porcion
+            };
+            const resp = await fetch('/api/inventario/recetas/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify(data)
+            });
+            if (resp.ok) {
+                this.modalAdd.hide();
+                this.seleccionarPlato(this.selectedPlato);
+            }
+        },
+
+        async quitarInsumo(id) {
+            if (!confirm('¿Quitar este insumo de la receta?')) return;
+            const resp = await fetch(`/api/inventario/recetas/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            });
+            if (resp.ok) {
+                this.seleccionarPlato(this.selectedPlato);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

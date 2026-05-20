@@ -1,0 +1,656 @@
+{% extends 'base.html' %}
+{% block title %}Reportes — RestaurantOS{% endblock %}
+{% block nav_admin %}active{% endblock %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<style>
+  /* ── Tokens locales heredados de las variables globales del tema ── */
+  :root {
+    --r-primary: rgb(var(--primary));
+    --r-primary-glow: rgb(var(--primary) / 0.15);
+    --r-green: #22c55e;
+    --r-green-dim: rgba(34,197,94,0.12);
+    --r-red: #ef4444;
+    --r-red-dim: rgba(239,68,68,0.12);
+    --r-yellow: #eab308;
+    --r-radius: 16px;
+    --r-radius-lg: 24px;
+  }
+
+  /* Usamos las variables globales del sistema de tema */
+  body { background: rgb(var(--bg)) !important; font-family: 'Inter', sans-serif !important; color: rgb(var(--on-surface)) !important; }
+
+  /* ── Glass Card ── */
+  .r-card {
+    background: rgb(var(--surface));
+    border: 1px solid rgb(var(--border) / 0.1);
+    border-radius: var(--r-radius-lg);
+    transition: border-color 0.2s;
+    color: rgb(var(--on-surface));
+  }
+  .r-card:hover { border-color: rgb(var(--border) / 0.2); }
+
+  /* ── KPI ── */
+  .kpi-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .trend-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .trend-up   { color: var(--r-green); background: var(--r-green-dim); }
+  .trend-down { color: var(--r-red);   background: var(--r-red-dim); }
+  .trend-flat { color: rgb(var(--on-surface-variant)); background: rgb(var(--border) / 0.05); }
+
+  /* ── Top Selling Progress Bar ── */
+  .top-bar-track {
+    height: 6px; border-radius: 999px;
+    background: rgb(var(--border) / 0.1);
+    overflow: hidden;
+  }
+  .top-bar-fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, rgb(var(--primary)), #c084fc);
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* ── History Table ── */
+  .r-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .r-table thead th {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: rgb(var(--on-surface-variant));
+    padding: 10px 16px; border-bottom: 1px solid rgb(var(--border) / 0.1);
+    white-space: nowrap;
+  }
+  .r-table tbody tr {
+    border-bottom: 1px solid rgb(var(--border) / 0.07);
+    transition: background 0.15s;
+  }
+  .r-table tbody tr:hover { background: rgb(var(--on-surface) / 0.03); }
+  .r-table tbody tr:last-child { border-bottom: none; }
+  .r-table tbody td {
+    padding: 14px 16px;
+    font-size: 13px;
+    color: rgb(var(--on-surface));
+    vertical-align: middle;
+  }
+
+  /* ── Search & Inputs ── */
+  .r-search {
+    background: rgb(var(--surface)) !important; 
+    border: 1px solid rgb(var(--border) / 0.1);
+    border-radius: 10px; 
+    padding: 8px 12px 8px 36px;
+    color: rgb(var(--on-surface)) !important; 
+    font-size: 13px; 
+    outline: none;
+    transition: border-color 0.2s;
+    color-scheme: dark; /* Forzar widgets nativos oscuros */
+  }
+
+  /* Específico para el input de fecha */
+  input[type="date"].r-search {
+    position: relative;
+    background-image: none; /* Quitar posibles iconos de background de Tailwind forms */
+  }
+
+  /* Asegurar que el icono del calendario sea blanco en modo oscuro */
+  input[type="date"].r-search::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.6;
+    cursor: pointer;
+  }
+
+  html.light .r-search {
+    color-scheme: light;
+  }
+  html.light input[type="date"].r-search::-webkit-calendar-picker-indicator {
+    filter: none;
+    opacity: 0.5;
+  }
+
+  /* ── Status Badge ── */
+  .badge-pagado  { color: var(--r-green); background: var(--r-green-dim); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-anulado { color: var(--r-red);   background: var(--r-red-dim);   border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-otro    { color: rgb(var(--on-surface-variant)); background: rgb(var(--border) / 0.05); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+
+  /* ── Section Title ── */
+  .r-section-title { font-size: 15px; font-weight: 700; color: rgb(var(--on-surface)); }
+  .r-section-sub   { font-size: 12px; color: rgb(var(--on-surface-variant)); margin-top: 2px; }
+
+  /* ── Chart container ──
+     Chart.js + maintainAspectRatio:false necesita altura real en el canvas;
+     reglas globales (p. ej. height:auto en responsive) pueden dejar el canvas en 0px. */
+  .chart-wrap {
+    position: relative;
+    height: 220px;
+    width: 100%;
+  }
+  .chart-wrap > canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+  }
+
+  /* ── Empty State ── */
+  .empty-state { text-align: center; padding: 48px 0; color: rgb(var(--on-surface-variant)); }
+  .empty-state .material-symbols-outlined { font-size: 40px; opacity: 0.3; display: block; margin-bottom: 12px; }
+
+  /* ── Loading Skeleton ── */
+  @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+  .skeleton { background: rgb(var(--border) / 0.15); border-radius: 8px; animation: skeleton-pulse 1.6s ease-in-out infinite; }
+
+  [x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="px-4 py-5 px-lg-6" x-data="analyticsApp()" x-init="init()" x-cloak>
+
+  <!-- ─── Header ─── -->
+  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+    <div>
+      <h1 class="mb-1" style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:22px;color:rgb(var(--on-surface));">
+        Dashboard de reportes
+      </h1>
+      <p style="font-size:13px;color:rgb(var(--on-surface-variant));margin:0">
+        Métricas en tiempo real &bull; Turno: <span class="fw-bold" style="color:rgb(var(--primary));" x-text="turnoCodigo"></span>
+      </p>
+    </div>
+    <a href="{% url 'api_exportar_csv' %}"
+       class="d-flex align-items-center gap-2 px-3 py-2"
+       style="background:rgb(var(--surface));border:1px solid rgb(var(--border)/0.1);border-radius:10px;color:rgb(var(--on-surface));text-decoration:none;font-size:12px;font-weight:700;letter-spacing:0.05em;">
+      <span class="material-symbols-outlined" style="font-size:17px;">download</span>
+      Exportar CSV
+    </a>
+  </div>
+
+  <!-- ─── KPIs ─── -->
+  <div class="row g-3 mb-4">
+
+    <!-- Ventas totales -->
+    <div class="col-6 col-lg-3">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div class="kpi-icon" style="background:rgba(139,124,248,0.12);">
+            <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:20px;">payments</span>
+          </div>
+          <span class="trend-badge"
+            :class="kpis.tendencia_ventas === null ? 'trend-flat' : kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
+            x-show="kpis.tendencia_ventas !== undefined">
+            <span x-text="kpis.tendencia_ventas !== null
+              ? (kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'
+              : '—'"></span>
+          </span>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Ventas totales</div>
+        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_ventas"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
+      </div>
+    </div>
+
+    <!-- Cantidad de comandas -->
+    <div class="col-6 col-lg-3">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div class="kpi-icon" style="background:rgba(34,197,94,0.12);">
+            <span class="material-symbols-outlined" style="color:#22c55e;font-size:20px;">receipt_long</span>
+          </div>
+          <span class="trend-badge"
+            :class="kpis.tendencia_comandas === null ? 'trend-flat' : kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
+            x-show="kpis.tendencia_comandas !== undefined">
+            <span x-text="kpis.tendencia_comandas !== null
+              ? (kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'
+              : '—'"></span>
+          </span>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Comandas cobradas</div>
+        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.cant_comandas"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
+      </div>
+    </div>
+
+    <!-- Ticket promedio -->
+    <div class="col-6 col-lg-3">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div class="kpi-icon" style="background:rgba(234,179,8,0.12);">
+            <span class="material-symbols-outlined" style="color:#eab308;font-size:20px;">avg_pace</span>
+          </div>
+          <span class="trend-badge"
+            :class="kpis.tendencia_ticket === null ? 'trend-flat' : kpis.tendencia_ticket >= 0 ? 'trend-up' : 'trend-down'"
+            x-show="kpis.tendencia_ticket !== undefined">
+            <span x-text="kpis.tendencia_ticket !== null
+              ? (kpis.tendencia_ticket >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ticket) + '%'
+              : '—'"></span>
+          </span>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Ticket promedio</div>
+        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.ticket_promedio"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
+      </div>
+    </div>
+
+    <!-- Tiempo de cocina -->
+    <div class="col-6 col-lg-3">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div class="kpi-icon" style="background:rgba(20,184,166,0.12);">
+            <span class="material-symbols-outlined" style="color:#14b8a6;font-size:20px;">timer</span>
+          </div>
+          <span class="trend-badge"
+            :class="kpis.tendencia_tiempo === null ? 'trend-flat' : kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
+            x-show="kpis.tendencia_tiempo !== undefined">
+            <span x-text="kpis.tendencia_tiempo !== null
+              ? (kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%')
+              : '—'"></span>
+          </span>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Tiempo promedio de preparación</div>
+        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.tiempo_promedio_prep + ' m'"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">promedio por plato</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Charts Row ─── -->
+  <div class="row g-3 mb-4">
+
+    <!-- Top platos (barras) -->
+    <div class="col-lg-8">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:18px;">bar_chart</span>
+          <div>
+            <div class="r-section-title">Platos más vendidos</div>
+            <div class="r-section-sub">Ranking del turno (incluye hora y día pico por plato)</div>
+          </div>
+          <span class="ms-auto" style="background:rgba(139,124,248,0.1);color:#8b7cf8;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">● PLATOS</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartVentasHora"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top de platos -->
+    <div class="col-lg-4">
+      <div class="r-card p-4 h-100">
+        <div class="d-flex align-items-center gap-2 mb-4">
+          <span class="material-symbols-outlined" style="color:#f97316;font-size:18px;">local_fire_department</span>
+          <div>
+            <div class="r-section-title">Platos más vendidos</div>
+            <div class="r-section-sub">Platos más pedidos</div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <template x-if="topPlatos.length === 0">
+          <div class="empty-state">
+            <span class="material-symbols-outlined">restaurant_menu</span>
+            <p style="font-size:13px;">Sin datos aún</p>
+          </div>
+        </template>
+
+        <!-- List -->
+        <div class="d-flex flex-column gap-3">
+          <template x-for="(item, idx) in topPlatos" :key="idx">
+            <div>
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span style="font-size:13px;font-weight:600;color:rgb(var(--on-surface));" x-text="item.plato__nombre"></span>
+                <span style="font-size:12px;font-weight:700;color:rgb(var(--on-surface-variant));" x-text="item.cantidad + ' vendidos'"></span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center" style="margin-bottom:6px;">
+                <span style="font-size:11px;color:rgb(var(--on-surface-variant));">
+                  Hora pico:
+                  <strong style="color:rgb(var(--on-surface));" x-text="item.hora_pico !== null && item.hora_pico !== undefined ? (String(item.hora_pico).padStart(2,'0') + ':00') : '—'"></strong>
+                </span>
+                <span style="font-size:11px;color:rgb(var(--on-surface-variant));">
+                  Día pico:
+                  <strong style="color:rgb(var(--on-surface));" x-text="item.dia_pico || '—'"></strong>
+                </span>
+              </div>
+              <div class="top-bar-track">
+                <div class="top-bar-fill" :style="`width: ${item.porcentaje}%`"></div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Historial de ventas del turno ─── -->
+  <div class="r-card p-4">
+    <div class="d-flex align-items-center flex-wrap gap-3 mb-4">
+      <div>
+        <div class="r-section-title">Historial de ventas</div>
+        <div class="r-section-sub">Historial detallado de todas las ventas del turno</div>
+      </div>
+
+      <!-- Filters -->
+      <div class="ms-auto d-flex align-items-center flex-wrap gap-2">
+        <div class="position-relative">
+          <span class="material-symbols-outlined position-absolute"
+                style="left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#64748b;pointer-events:none;">table_restaurant</span>
+          <select class="r-search"
+                  x-model="filterMesa"
+                  @change="cargarTodo()"
+                  style="width:160px;padding-left:36px;appearance:none;cursor:pointer;">
+            <option value="">Todas las mesas</option>
+            <template x-for="m in mesas" :key="m.id">
+              <option :value="m.numero" x-text="'Mesa ' + m.numero + ' (' + m.piso + ')'"></option>
+            </template>
+          </select>
+        </div>
+
+        <input type="date"
+               class="r-search"
+               x-model="filterFecha"
+               @change="cargarHistorial()"
+               style="width:170px;padding-left:12px;">
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div style="overflow-x:auto;">
+      <table class="r-table">
+        <thead>
+          <tr>
+            <th>Fecha / Hora</th>
+            <th>Código</th>
+            <th>Mesa</th>
+            <th>Detalle</th>
+            <th>Bruto</th>
+            <th>IGV (10%)</th>
+            <th>Neto</th>
+            <th>Método</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- Loading rows -->
+          <template x-if="loadingHistorial">
+            <template x-for="n in 5" :key="n">
+              <tr>
+                <td colspan="9">
+                  <div class="skeleton" style="height:18px;width:100%;border-radius:6px;"></div>
+                </td>
+              </tr>
+            </template>
+          </template>
+
+          <!-- Empty -->
+          <template x-if="!loadingHistorial && historial.length === 0">
+            <tr>
+              <td colspan="9">
+                <div class="empty-state" style="padding:36px 0;">
+                  <span class="material-symbols-outlined">receipt_long</span>
+                  <p style="font-size:13px;">No hay ventas registradas aún en este turno</p>
+                </div>
+              </td>
+            </tr>
+          </template>
+
+          <!-- Rows -->
+          <template x-if="!loadingHistorial && historial.length > 0">
+            <template x-for="venta in historial" :key="venta.id">
+              <tr>
+                <td style="color:rgb(var(--on-surface-variant));font-size:12px;font-variant-numeric:tabular-nums;" x-text="venta.fecha"></td>
+                <td>
+                  <span style="font-family:monospace;font-size:12px;font-weight:600;color:#8b7cf8;" x-text="venta.codigo"></span>
+                </td>
+                <td>
+                  <span style="background:rgba(255,255,255,0.06);border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;" x-text="'Mesa ' + venta.mesa"></span>
+                </td>
+                <td style="max-width:220px;">
+                  <span style="font-size:12px;color:rgb(var(--on-surface-variant));display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" :title="venta.detalle" x-text="venta.detalle"></span>
+                </td>
+                <td style="font-weight:700;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.bruto.toFixed(2)"></td>
+                <td style="color:rgb(var(--on-surface-variant));font-size:12px;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.impuesto.toFixed(2)"></td>
+                <td style="font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.neto.toFixed(2)"></td>
+                <td style="font-size:12px;color:rgb(var(--on-surface-variant));" x-text="venta.metodo"></td>
+                <td>
+                  <span :class="venta.estado === 'COBRADA' ? 'badge-pagado' : venta.estado === 'ANULADA' ? 'badge-anulado' : 'badge-otro'"
+                        x-text="venta.estado === 'COBRADA' ? 'COBRADA' : venta.estado"></span>
+                </td>
+              </tr>
+            </template>
+          </template>
+
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer: count -->
+    <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2"
+         x-show="!loadingHistorial && historial.length > 0">
+      <span style="font-size:12px;color:#64748b;">
+        <span x-text="historial.length"></span> ventas registradas
+      </span>
+      <span style="font-size:12px;color:#64748b;">
+        Total neto: <strong style="color:#22c55e;" x-text="'S/. ' + historial.reduce((a,v)=>a+v.neto,0).toFixed(2)"></strong>
+      </span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Chart.js (UMD explícito; el entry "module" no expone Chart en window) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+
+<script>
+function analyticsApp() {
+  return {
+    turnoCodigo: '—',
+    kpis: {
+      total_ventas: 0,
+      cant_comandas: 0,
+      ticket_promedio: 0,
+      tiempo_promedio_prep: 0,
+      tendencia_ventas: null,
+      tendencia_comandas: null,
+      tendencia_ticket: null,
+      tendencia_tiempo: null,
+    },
+    topPlatos: [],
+    mesas: [],
+    historial: [],
+    filterMesa: '',
+    filterFecha: '',
+    loadingHistorial: true,
+    lineChart: null,
+
+    async init() {
+      try {
+        const res = await fetch('{% url "api_caja_turno_activo" %}');
+        const data = await res.json();
+        if (data.activo) {
+          this.turnoCodigo = data.codigo;
+          await this.cargarTodo();
+        } else {
+          this.turnoCodigo = 'Sin turno activo';
+          this.loadingHistorial = false;
+        }
+      } catch (e) {
+        this.turnoCodigo = 'Error de conexión';
+        this.loadingHistorial = false;
+      }
+    },
+
+    async cargarTodo() {
+      await Promise.all([
+        this.cargarKPIs(),
+        this.cargarTopPlatos(),
+        this.cargarTopPlatosChart(),
+        this.cargarMesas(),
+        this.cargarHistorial(),
+      ]);
+    },
+
+    async cargarMesas() {
+      try {
+        const res = await fetch('{% url "api_mesas_lista" %}');
+        if (res.ok) this.mesas = await res.json();
+      } catch(e) { console.error('Error cargando mesas', e); }
+    },
+
+    async cargarKPIs() {
+      try {
+        const url = '{% url "api_ventas_turno" %}' + (this.filterMesa ? `?mesa=${this.filterMesa}` : '');
+        const res = await fetch(url);
+        if (res.ok) this.kpis = await res.json();
+      } catch(e) { console.error('KPI error', e); }
+    },
+
+    async cargarTopPlatos() {
+      try {
+        const url = '{% url "api_top_platos" %}' + (this.filterMesa ? `?mesa=${this.filterMesa}` : '');
+        const res = await fetch(url);
+        if (res.ok) this.topPlatos = await res.json();
+      } catch(e) { console.error('Top platos error', e); }
+    },
+
+    async cargarTopPlatosChart() {
+      try {
+        const params = new URLSearchParams();
+        params.set('limite', '10');
+        if (this.filterMesa) params.set('mesa', this.filterMesa);
+        const url = '{% url "api_top_platos" %}?' + params.toString();
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const data = await res.json();
+        requestAnimationFrame(() => this.renderBarChart(data || []));
+      } catch(e) { console.error('Ventas hora error', e); }
+    },
+
+    async cargarHistorial() {
+      this.loadingHistorial = true;
+      try {
+        const params = new URLSearchParams();
+        if (this.filterMesa) params.set('mesa', this.filterMesa);
+        if (this.filterFecha) params.set('fecha', this.filterFecha);
+        const url = '{% url "api_ventas_historial" %}' + (params.toString() ? `?${params.toString()}` : '');
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          this.historial = data.results || [];
+        }
+      } catch(e) {
+        console.error('Historial error', e);
+      } finally {
+        this.loadingHistorial = false;
+      }
+    },
+
+    _cssVar(name, fallback) {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    },
+
+    _rgbCsv(rgbSpaceSeparated) {
+      // Espera "r g b" y devuelve "r, g, b" (compatible con canvas/Chart.js)
+      return (rgbSpaceSeparated || '').trim().split(/\s+/).slice(0,3).join(', ');
+    },
+
+    renderBarChart(data) {
+      if (typeof Chart === 'undefined') {
+        console.error('Chart.js no está cargado');
+        return;
+      }
+      const canvas = document.getElementById('chartVentasHora');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      if (this.lineChart) {
+        this.lineChart.destroy();
+        this.lineChart = null;
+      }
+
+      const colorPrimary = this._rgbCsv(this._cssVar('--primary', '139 124 248'));
+      const colorOnSurface = this._rgbCsv(this._cssVar('--on-surface', '241 245 249'));
+      const colorOnVariant = this._rgbCsv(this._cssVar('--on-surface-variant', '100 116 139'));
+      const colorBorder = this._rgbCsv(this._cssVar('--border', '255 255 255'));
+
+      const labels = (data || []).map(i => i.plato__nombre || '—');
+      const values = (data || []).map(i => Number(i.cantidad || 0));
+
+      if (!labels.length) {
+        return;
+      }
+
+      this.lineChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Cantidad vendida',
+            data: values,
+            backgroundColor: `rgba(${colorPrimary}, 0.4)`,
+            borderColor: `rgba(${colorPrimary}, 0.8)`,
+            borderWidth: 1,
+            borderRadius: 10,
+            maxBarThickness: 28,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: `rgba(${colorOnSurface}, 0.06)`,
+              borderColor: `rgba(${colorBorder}, 0.18)`,
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 10,
+              titleColor: `rgb(${colorOnSurface})`,
+              bodyColor: `rgb(${colorOnVariant})`,
+              callbacks: {
+                label: c => ` ${Number(c.parsed.y || 0)} vendidos`,
+                afterLabel: c => {
+                  const item = (data || [])[c.dataIndex] || {};
+                  const hp = (item.hora_pico !== null && item.hora_pico !== undefined) ? String(item.hora_pico).padStart(2,'0') + ':00' : '—';
+                  const dp = item.dia_pico || '—';
+                  return [`Hora pico: ${hp}`, `Día pico: ${dp}`];
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: `rgba(${colorBorder}, 0.08)`, drawBorder: false },
+              ticks: {
+                color: `rgb(${colorOnVariant})`,
+                font: { size: 10 },
+                callback: v => v
+              }
+            },
+            x: {
+              grid: { display: false, drawBorder: false },
+              ticks: { color: `rgb(${colorOnVariant})`, font: { size: 10 }, maxRotation: 0, minRotation: 0 }
+            }
+          }
+        }
+      });
+      requestAnimationFrame(() => {
+        if (this.lineChart) this.lineChart.resize();
+      });
+    }
+  };
+}
+</script>
+{% endblock %}

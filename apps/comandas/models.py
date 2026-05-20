@@ -1,72 +1,153 @@
-"""
-Modelos para la gestión de comandas y líneas de pedido.
-"""
 from django.db import models
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from apps.mesas.models import Mesa
 from apps.menu.models import Plato
 
-User = get_user_model()
-
-
 class Comanda(models.Model):
-    """Orden de servicio asociada a una mesa y un mesero."""
+    """Orden de servicio según el esquema SQL."""
 
     class Estado(models.TextChoices):
-        ABIERTA    = 'ABIERTA',    'Abierta'
-        CERRADA    = 'CERRADA',    'Cerrada (Cobrada)'
-        CANCELADA  = 'CANCELADA',  'Cancelada'
+        ABIERTA         = 'ABIERTA',        'Abierta'
+        EN_PREPARACION  = 'EN_PREPARACION', 'En Preparación'
+        LISTA           = 'LISTA',          'Lista para cobrar'
+        COBRADA         = 'COBRADA',        'Cobrada'
+        ANULADA         = 'ANULADA',        'Anulada'
 
-    mesa           = models.ForeignKey(Mesa, on_delete=models.PROTECT, related_name='comandas')
-    mesero         = models.ForeignKey(User, on_delete=models.PROTECT, related_name='comandas',
-                                       null=True, blank=True)
-    estado         = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ABIERTA)
+    codigo_comanda = models.CharField(max_length=30, unique=True)
+    mesa = models.ForeignKey(Mesa, on_delete=models.PROTECT, related_name='comandas')
+    mesas_adicionales = models.ManyToManyField(Mesa, related_name='uniones_adicionales', blank=True)
+    mozo = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='comandas')
+    nombre_cliente = models.CharField(max_length=100, blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ABIERTA)
+    
     fecha_apertura = models.DateTimeField(auto_now_add=True)
-    fecha_cierre   = models.DateTimeField(null=True, blank=True)
-    notas          = models.TextField(blank=True, help_text='Notas generales de la mesa')
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    impuesto = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    descuento_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    observacion_general = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = 'comanda'
         ordering = ['-fecha_apertura']
         verbose_name = 'Comanda'
         verbose_name_plural = 'Comandas'
 
     def __str__(self):
-        return f'Comanda #{self.pk} — Mesa {self.mesa.numero} ({self.estado})'
+        return f'Comanda {self.codigo_comanda} — Mesa {self.mesa.numero}'
+
+    def calcular_totales(self):
+        """Calcula el total de la comanda basándose en sus líneas."""
+        from django.db.models import Sum
+        # Aseguramos que usamos los valores correctos de los choices
+        self.subtotal = self.lineas.exclude(estado=LineaComanda.Estado.ANULADO).aggregate(res=Sum('subtotal'))['res'] or 0
+        # El total incluye impuestos si se requiere, por ahora total = subtotal
+        self.total = self.subtotal
+        self.save(update_fields=['subtotal', 'total'])
+
+    def marcar_como_lista(self):
+        """Cambia el estado de la comanda a LISTA si todas las líneas están listas."""
+        lineas_pendientes = self.lineas.exclude(estado__in=[LineaComanda.Estado.LISTO, LineaComanda.Estado.ENTREGADO, LineaComanda.Estado.ANULADO]).exists()
+        if not lineas_pendientes and self.estado != Comanda.Estado.LISTA:
+            self.estado = Comanda.Estado.LISTA
+            self.save(update_fields=['estado'])
+            return True
+        return False
+
+    # Alias para compatibilidad
+    @property
+    def todas_las_mesas(self):
+        """Devuelve la mesa principal más las adicionales."""
+        return [self.mesa] + list(self.mesas_adicionales.all())
 
     @property
-    def total(self):
-        """Suma del total de todas las líneas no canceladas."""
-        return sum(
-            linea.subtotal
-            for linea in self.lineas.exclude(estado=LineaComanda.Estado.CANCELADO)
-        )
+    def mesero(self):
+        return self.mozo
 
+    @property
+    def notas(self):
+        return self.observacion_general
+
+    @property
+    def lineas_json(self):
+        """Devuelve las líneas de la comanda en formato JSON para el frontend."""
+        import json
+        items = []
+        # Solo incluir líneas no anuladas
+        for l in self.lineas.exclude(estado=LineaComanda.Estado.ANULADO).select_related('plato'):
+            items.append({
+                'id': l.id,
+                'plato_nombre': l.plato.nombre,
+                'cantidad': l.cantidad,
+                'subtotal': str(l.subtotal)
+            })
+        return json.dumps(items)
 
 class LineaComanda(models.Model):
-    """Ítem individual dentro de una comanda (un plato con cantidad y estado de cocina)."""
+    """Ítem individual dentro de una comanda según el esquema SQL."""
 
     class Estado(models.TextChoices):
-        PENDIENTE       = 'PENDIENTE',       'Pendiente'
-        EN_PREPARACION  = 'EN_PREPARACION',  'En Preparación'
-        LISTO           = 'LISTO',           'Listo para servir'
-        CANCELADO       = 'CANCELADO',       'Cancelado'
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        EN_PREP   = 'EN_PREP',    'En Preparación'
+        LISTO     = 'LISTO',      'Listo'
+        ENTREGADO = 'ENTREGADO',  'Entregado'
+        ANULADO   = 'ANULADO',    'Anulado'
 
-    comanda         = models.ForeignKey(Comanda, on_delete=models.CASCADE, related_name='lineas')
-    plato           = models.ForeignKey(Plato,   on_delete=models.PROTECT, related_name='lineas')
-    cantidad        = models.PositiveSmallIntegerField(default=1)
-    # Snapshot del precio al momento de ordenar (importante para historial)
-    precio_unitario = models.DecimalField(max_digits=8, decimal_places=2)
-    estado          = models.CharField(max_length=15, choices=Estado.choices, default=Estado.PENDIENTE)
-    notas_cocina    = models.CharField(max_length=255, blank=True,
-                                       help_text='Ej: Sin cebolla, término medio')
+    comanda = models.ForeignKey(Comanda, on_delete=models.CASCADE, related_name='lineas')
+    plato = models.ForeignKey(Plato, on_delete=models.PROTECT, related_name='lineas')
+    cantidad = models.IntegerField(default=1)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    observacion = models.CharField(max_length=255, blank=True, null=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PENDIENTE)
+    
+    tiempo_estimado_min = models.PositiveSmallIntegerField(default=0)
+    fecha_envio_cocina = models.DateTimeField(null=True, blank=True)
+    fecha_inicio_prep = models.DateTimeField(null=True, blank=True)
+    fecha_listo = models.DateTimeField(null=True, blank=True)
+    fecha_entregado = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = 'linea_comanda'
         verbose_name = 'Línea de Comanda'
         verbose_name_plural = 'Líneas de Comanda'
 
     def __str__(self):
         return f'{self.cantidad}x {self.plato.nombre} [{self.get_estado_display()}]'
 
+    # Alias para compatibilidad
     @property
-    def subtotal(self):
-        return self.precio_unitario * self.cantidad
+    def notas_cocina(self):
+        return self.observacion
+
+class ComandaHistorialEstado(models.Model):
+    """Historial de cambios de estado para auditoría."""
+    
+    class Origen(models.TextChoices):
+        WEB = 'WEB', 'Web'
+        API = 'API', 'API'
+        KDS = 'KDS', 'KDS'
+
+    comanda = models.ForeignKey(Comanda, on_delete=models.CASCADE, related_name='historial')
+    estado_anterior = models.CharField(max_length=20)
+    estado_nuevo = models.CharField(max_length=20)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    fecha_cambio = models.DateTimeField(auto_now_add=True)
+    motivo = models.CharField(max_length=255, blank=True, null=True)
+    origen = models.CharField(max_length=20, choices=Origen.choices)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'comanda_historial_estado'
+        verbose_name = 'Historial de Estado'
+        verbose_name_plural = 'Historial de Estados'

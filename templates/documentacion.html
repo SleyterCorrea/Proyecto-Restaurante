@@ -1,0 +1,282 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Documentación — RestaurantOS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .doc-card {
+        background: rgb(var(--surface) / 0.85);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgb(var(--border) / 0.1);
+        transition: all 0.3s ease;
+    }
+    .doc-card:hover {
+        border-color: rgb(var(--primary) / 0.3);
+        transform: translateY(-4px);
+    }
+    .step-number {
+        background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--secondary)));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .active-role-highlight {
+        border: 2px solid rgb(var(--primary));
+        position: relative;
+    }
+    .active-role-highlight::before {
+        content: 'TU ROL ACTUAL';
+        position: absolute;
+        top: -12px;
+        left: 20px;
+        background: rgb(var(--primary));
+        color: #160066;
+        font-size: 10px;
+        font-weight: 900;
+        padding: 2px 8px;
+        border-radius: 4px;
+        letter-spacing: 0.1em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-6 max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col gap-2 mb-10">
+        <h1 class="text-4xl font-black text-white tracking-tight flex items-center gap-4">
+            <span class="material-symbols-outlined text-primary text-5xl">auto_stories</span>
+            Centro de Aprendizaje
+        </h1>
+        <p class="text-on-surface-variant font-medium text-lg max-w-2xl">
+            Bienvenido, <span class="text-primary font-bold">{{ user.nombres }}</span>. 
+            Aquí encontrarás todo lo necesario para dominar el sistema según tu rol de <span class="text-secondary font-bold">{{ user.rol.nombre }}</span>.
+        </p>
+    </div>
+
+    <!-- Main Documentation Grid -->
+    <div class="grid grid-cols-1 {% if user.rol.nombre == 'ADMIN' %}md:grid-cols-2{% endif %} gap-8">
+        
+        <!-- MÓDULO: MOZO -->
+        {% if user.rol.nombre == 'MOZO' or user.rol.nombre == 'ADMIN' %}
+        <div class="doc-card rounded-[32px] p-8 flex flex-col gap-6 {% if user.rol.nombre == 'MOZO' %}active-role-highlight shadow-2xl shadow-primary/10{% endif %}">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined text-3xl font-bold">restaurant</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-white">Manual del Mozo</h2>
+                    <p class="text-on-surface-variant text-sm font-bold uppercase tracking-widest">Servicio y Comandas</p>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">01.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Recepción y Ubicación</span>
+                        <p class="text-on-surface-variant text-sm">Entra al <b>Plano de Mesas</b>. Las mesas en <b>verde</b> están libres. Al sentar a un cliente, la mesa cambiará de estado automáticamente cuando inicies la comanda.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">02.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Apertura de Comanda</span>
+                        <p class="text-on-surface-variant text-sm">Haz clic en <b>Nueva Comanda</b>. Selecciona la mesa y el nombre del cliente. Esto es vital para que la cocina sepa a quién le cocina.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">03.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Selección de Platos</span>
+                        <p class="text-on-surface-variant text-sm">Navega por las categorías (Entradas, Fondos, Bebidas). Toca el plato para añadirlo. Si te equivocas, puedes quitarlo con el botón de basura en el carrito.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">04.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Personalización (Notas)</span>
+                        <p class="text-on-surface-variant text-sm">Antes de enviar, toca el ícono de lápiz en el plato para agregar notas: <i>"sin cebolla"</i>, <i>"bien cocido"</i>, etc.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">05.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Envío a Cocina</span>
+                        <p class="text-on-surface-variant text-sm">Presiona <b>Confirmar Pedido</b>. Recibirás un mensaje de éxito y los tickets se imprimirán/aparecerán en la cocina al instante.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">06.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Atención a Notificaciones</span>
+                        <p class="text-on-surface-variant text-sm">Cuando la cocina termine, verás un aviso flotante (Toast) indicando que el plato de la mesa X está listo. ¡Corre por él!</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">07.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Solicitud de Cuenta</span>
+                        <p class="text-on-surface-variant text-sm">Cuando el cliente termine, busca la mesa en el plano y dale a <b>Solicitar Cuenta</b>. La mesa pasará a color celeste avisando a Caja.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- MÓDULO: COCINA -->
+        {% if user.rol.nombre == 'COCINERO' or user.rol.nombre == 'ADMIN' %}
+        <div class="doc-card rounded-[32px] p-8 flex flex-col gap-6 {% if user.rol.nombre == 'COCINERO' %}active-role-highlight shadow-2xl shadow-secondary/10{% endif %}">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary">
+                    <span class="material-symbols-outlined text-3xl font-bold">oven_gen</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-white">Manual de Cocina</h2>
+                    <p class="text-on-surface-variant text-sm font-bold uppercase tracking-widest">Producción KDS</p>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">01.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Lectura de Tickets (KDS)</span>
+                        <p class="text-on-surface-variant text-sm">Los pedidos entran de izquierda a derecha. Los más antiguos se vuelven rojos si pasan más de 15 minutos sin atención.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">02.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Inicio de Preparación</span>
+                        <p class="text-on-surface-variant text-sm">Haz clic en el botón <b>Cocinar</b> del ticket. El mozo podrá ver que su pedido ya está en el fuego.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">03.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Gestión de Notas</span>
+                        <p class="text-on-surface-variant text-sm">Lee siempre la parte inferior del plato en el ticket. Si hay notas especiales, aparecerán resaltadas en amarillo.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">04.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Plato Terminado</span>
+                        <p class="text-on-surface-variant text-sm">Al terminar el plato, dale a <b>Listo</b>. Se notificará automáticamente al mozo correspondiente para que lo retire.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">05.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Historial de Turno</span>
+                        <p class="text-on-surface-variant text-sm">Usa la pestaña <b>Terminados</b> para recuperar un ticket si lo marcaste por error o necesitas revisar algo.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- MÓDULO: CAJA -->
+        {% if user.rol.nombre == 'CAJERO' or user.rol.nombre == 'ADMIN' %}
+        <div class="doc-card rounded-[32px] p-8 flex flex-col gap-6 {% if user.rol.nombre == 'CAJERO' %}active-role-highlight shadow-2xl shadow-white/10{% endif %}">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white">
+                    <span class="material-symbols-outlined text-3xl font-bold">payments</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-white">Manual de Caja</h2>
+                    <p class="text-on-surface-variant text-sm font-bold uppercase tracking-widest">Pagos y Cierres</p>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">01.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Apertura de Caja</span>
+                        <p class="text-on-surface-variant text-sm">Al iniciar el turno, ve a <b>Apertura</b> e ingresa el monto base (sencillo). Sin esto, no podrás realizar cobros.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">02.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Monitoreo de Cuentas</span>
+                        <p class="text-on-surface-variant text-sm">En el panel de <b>Caja</b>, verás las mesas que están consumiendo. Las que tienen el borde <b>celeste brillante</b> están listas para pagar.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">03.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Proceso de Cobro</span>
+                        <p class="text-on-surface-variant text-sm">Selecciona la mesa. Verifica los platos con el cliente. Selecciona el medio de pago (Efectivo, Visa, Master, Yape/Plin).</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">04.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Emisión de Comprobante</span>
+                        <p class="text-on-surface-variant text-sm">Al confirmar el pago, la mesa se libera automáticamente en el plano de los mozos y se genera el registro de venta.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">05.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Cierre de Caja</span>
+                        <p class="text-on-surface-variant text-sm">Al final del día, ve a <b>Cierre</b>. El sistema hará el arqueo automático comparando las ventas registradas con tu efectivo físico.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- MÓDULO: ADMINISTRACIÓN -->
+        {% if user.rol.nombre == 'ADMIN' %}
+        <div class="doc-card rounded-[32px] p-8 flex flex-col gap-6 active-role-highlight shadow-2xl shadow-primary/10">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined text-3xl font-bold">admin_panel_settings</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-white">Manual de Admin</h2>
+                    <p class="text-on-surface-variant text-sm font-bold uppercase tracking-widest">Gestión Total</p>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">01.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Gestión de Menú</span>
+                        <p class="text-on-surface-variant text-sm">Sube fotos de platos, cambia precios y activa/desactiva productos según disponibilidad de cocina.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">02.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Control de Personal</span>
+                        <p class="text-on-surface-variant text-sm">Crea usuarios para tus trabajadores. Usa la integración con RENIEC para validar sus datos automáticamente con el DNI.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">03.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Análisis de Ventas</span>
+                        <p class="text-on-surface-variant text-sm">Usa el <b>Dashboard</b> para ver gráficos de ingresos, platos estrella y rendimiento por mesero.</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <span class="step-number text-2xl font-black italic">04.</span>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-white font-bold">Auditoría del Sistema</span>
+                        <p class="text-on-surface-variant text-sm">¿Alguien borró un pedido o cambió un precio? Revisa el módulo de <b>Auditoría</b> para ver quién, cuándo y qué cambió exactamente.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+
+    </div>
+</div>
+{% endblock %}

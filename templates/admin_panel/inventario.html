@@ -1,0 +1,1738 @@
+{% extends "base.html" %}
+{% block title %}Inventario — Admin Panel{% endblock %}
+{% block nav_inventario_sidebar %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Inventario: Obsidian Metric design system ── */
+.inv-page        { background: rgb(var(--bg)); border-radius: 1.25rem; padding: 1.5rem; min-height: 80vh; }
+.inv-text-muted  { color: rgb(var(--on-surface-variant)); }
+.inv-text-label  { color: rgb(var(--on-surface-variant)); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
+.inv-text-main   { color: rgb(var(--on-surface)); }
+
+/* Títulos con Hanken Grotesk + valores numéricos con JetBrains Mono */
+.inv-page h2, .inv-page .display-6 { font-family: 'Hanken Grotesk', 'Inter', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; }
+.inv-num, .inv-table .num, [data-inv-num] {
+    font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    font-weight: 600;
+}
+/* KPI values: usar JetBrains Mono — destaca jerarquía técnica */
+.inv-metric .fw-black { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-variant-numeric: tabular-nums; }
+.inv-bg-subtle   { background: rgb(var(--on-surface) / 0.05); border-radius: .75rem; }
+.inv-input       { background: rgb(var(--surface)) !important; border: 1.5px solid rgb(var(--border) / 0.2) !important; color: rgb(var(--on-surface)) !important; border-radius: .6rem !important; }
+.inv-input:focus { border-color: rgb(var(--primary) / 0.6) !important; box-shadow: 0 0 0 3px rgb(var(--primary) / 0.12) !important; }
+.inv-badge-unit  { background: rgb(var(--on-surface) / 0.1); color: rgb(var(--on-surface-variant)); font-size: .7rem; font-weight: 600; border-radius: .4rem; }
+.inv-progress-bg { height: 6px; background: rgb(var(--on-surface) / 0.1); border-radius: 99px; overflow: hidden; }
+.inv-thead       { font-size: .76rem; color: rgb(var(--on-surface-variant)); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.inv-thead tr    { border-bottom: 2px solid rgb(var(--border) / 0.12); }
+.inv-card        { background: rgb(var(--surface)); border: 1px solid rgb(var(--border) / 0.12); border-radius: 1rem; }
+html:not(.light) .inv-card { box-shadow: 0 2px 12px rgba(0,0,0,.35); }
+html.light       .inv-card { box-shadow: 0 1px 8px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04); }
+.inv-empty       { color: rgb(var(--on-surface-variant)); }
+
+/* Tabla: filas con separadores sutiles */
+html.light .inv-table tbody tr { border-bottom: 1px solid rgba(0,0,0,.055); }
+html.light .inv-table tbody tr:hover { background: rgba(var(--primary), .035) !important; }
+html:not(.light) .inv-table tbody tr { border-bottom: 1px solid rgba(255,255,255,.06); }
+html:not(.light) .inv-table tbody tr:hover { background: rgba(255,255,255,.03) !important; }
+
+/* Card métricas hover */
+.inv-metric { transition: transform .18s ease, box-shadow .18s ease; }
+.inv-metric:hover { transform: translateY(-2px); }
+html.light  .inv-metric:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1) !important; }
+html:not(.light) .inv-metric:hover { box-shadow: 0 4px 20px rgba(0,0,0,.5) !important; }
+
+/* ─── Visibilidad de texto adaptativa (oscuro y claro) ─── */
+/* Texto muted más legible en ambos modos */
+html:not(.light) .inv-text-muted { color: rgb(220 222 235 / 0.78) !important; }
+html.light       .inv-text-muted { color: rgb(55 65 81 / 0.85) !important; }
+html:not(.light) .inv-text-label { color: rgb(220 222 235 / 0.85) !important; }
+html.light       .inv-text-label { color: rgb(55 65 81 / 0.9)  !important; }
+.inv-text-main { color: rgb(var(--on-surface)) !important; }
+
+/* Títulos y headers de tabla */
+.inv-page h2, .inv-page h3, .inv-page h4, .inv-page h5 { color: rgb(var(--on-surface)) !important; }
+/* Encabezados de tabla — contraste fuerte y barra de fondo */
+.inv-thead { font-weight: 800 !important; letter-spacing: .08em !important; }
+.inv-thead th { padding-top: .85rem !important; padding-bottom: .85rem !important; }
+html:not(.light) .inv-thead,
+html:not(.light) .inv-thead th { color: #f1f3f9 !important; background: rgb(255 255 255 / 0.06) !important; }
+html.light .inv-thead,
+html.light .inv-thead th       { color: rgb(17 24 39) !important; background: rgb(0 0 0 / 0.05) !important; }
+html:not(.light) .inv-thead tr { border-bottom: 2px solid rgb(255 255 255 / 0.18) !important; }
+html.light       .inv-thead tr { border-bottom: 2px solid rgb(0 0 0 / 0.15) !important; }
+/* Iconos de orden (chevrons) heredan el color del header */
+.inv-thead th .material-symbols-outlined,
+.inv-thead .bi,
+.inv-thead svg { color: inherit !important; opacity: .85; }
+
+/* Celdas de tabla con buen contraste */
+.inv-table tbody td { color: rgb(var(--on-surface)); }
+
+/* Inputs: placeholder visible en ambos modos */
+.inv-input::placeholder { opacity: 1 !important; }
+html:not(.light) .inv-input::placeholder { color: rgb(220 222 235 / 0.55) !important; }
+html.light       .inv-input::placeholder { color: rgb(55 65 81 / 0.55) !important; }
+
+/* Botón "+ Nuevo Insumo" (btn-accent) — contraste fuerte */
+.btn-accent {
+    background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary) / 0.85) 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 10px rgb(var(--primary) / 0.35);
+}
+.btn-accent:hover { filter: brightness(1.08); color: #fff !important; }
+
+/* Filtros: btn-outline-secondary visibles en oscuro y claro */
+html:not(.light) .inv-page .btn-outline-secondary,
+html:not(.light) .modal .btn-outline-secondary {
+    color: rgb(230 232 245 / 0.92) !important;
+    border-color: rgb(255 255 255 / 0.22) !important;
+    background: rgb(255 255 255 / 0.04) !important;
+}
+html:not(.light) .inv-page .btn-outline-secondary:hover,
+html:not(.light) .modal .btn-outline-secondary:hover {
+    background: rgb(255 255 255 / 0.10) !important;
+    color: #fff !important;
+    border-color: rgb(255 255 255 / 0.35) !important;
+}
+html.light .inv-page .btn-outline-secondary,
+html.light .modal .btn-outline-secondary {
+    color: rgb(31 41 55) !important;
+    border-color: rgb(0 0 0 / 0.18) !important;
+    background: #fff !important;
+}
+html.light .inv-page .btn-outline-secondary:hover,
+html.light .modal .btn-outline-secondary:hover {
+    background: rgb(0 0 0 / 0.05) !important;
+    color: rgb(17 24 39) !important;
+}
+
+/* Iconos material symbols dentro de muted: mismo color que texto */
+.inv-text-muted .material-symbols-outlined,
+.material-symbols-outlined.inv-text-muted { color: inherit !important; }
+
+/* Badge de unidad */
+html:not(.light) .inv-badge-unit { background: rgb(255 255 255 / 0.10) !important; color: rgb(230 232 245 / 0.9) !important; }
+html.light       .inv-badge-unit { background: rgb(0 0 0 / 0.06) !important; color: rgb(31 41 55) !important; }
+
+/* ═══ MEJORAS DE UX/UI ═══ */
+
+/* Sticky header de tabla (se queda al scrollear) */
+.inv-table { border-collapse: separate; border-spacing: 0; }
+.inv-thead th { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
+
+/* Zebra striping sutil para escaneo rápido */
+html:not(.light) .inv-table tbody tr:nth-child(even) { background: rgb(255 255 255 / 0.015); }
+html.light       .inv-table tbody tr:nth-child(even) { background: rgb(0 0 0 / 0.015); }
+
+/* Filas con transición y leve hover lift */
+.inv-table tbody tr { transition: background .15s ease, transform .15s ease; }
+.inv-table tbody td { padding-top: .9rem !important; padding-bottom: .9rem !important; vertical-align: middle; }
+
+/* Resaltar filas con bajo stock / agotadas */
+html:not(.light) .inv-row-warning { background: linear-gradient(90deg, rgb(245 158 11 / 0.08) 0%, transparent 60%) !important; }
+html:not(.light) .inv-row-danger  { background: linear-gradient(90deg, rgb(239 68 68  / 0.10) 0%, transparent 60%) !important; }
+html.light .inv-row-warning { background: linear-gradient(90deg, rgb(245 158 11 / 0.12) 0%, transparent 60%) !important; }
+html.light .inv-row-danger  { background: linear-gradient(90deg, rgb(239 68 68  / 0.14) 0%, transparent 60%) !important; }
+
+/* Barra de progreso con altura mayor y borde sutil */
+.inv-progress-bg { height: 8px !important; box-shadow: inset 0 0 0 1px rgb(var(--on-surface) / 0.06); }
+.inv-progress-bg .progress-bar { box-shadow: 0 0 8px currentColor; opacity: .85; }
+
+/* Atenuar el botón "+ Nuevo Insumo" — menos brillo, igual de visible */
+.btn-accent {
+    box-shadow: 0 1px 4px rgb(var(--primary) / 0.18) !important;
+}
+
+/* Estado: badges más consistentes (Obsidian Metric: mono uppercase) */
+.badge.rounded-pill {
+    font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    min-width: 72px;
+    padding: .4rem .7rem !important;
+    font-size: .68rem;
+}
+
+/* KPI cards: tipografía jerarquizada */
+.inv-metric .display-6 { font-weight: 800 !important; line-height: 1; }
+
+/* Botones de acción más compactos */
+.inv-page td:last-child .btn-sm { padding: .28rem .45rem !important; border-radius: .5rem !important; }
+.inv-page td:last-child .btn-sm:hover { transform: translateY(-1px); }
+
+/* Scrollbar discreto en la tabla */
+.inv-table-wrapper { max-height: 65vh; overflow-y: auto; border-radius: .75rem; }
+.inv-table-wrapper::-webkit-scrollbar { width: 8px; }
+.inv-table-wrapper::-webkit-scrollbar-thumb {
+    background: rgb(var(--on-surface) / 0.15); border-radius: 4px;
+}
+.inv-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--on-surface) / 0.25);
+}
+
+/* ═══ FIX MODO CLARO ═══ */
+
+/* Botón Editar — adaptativo (antes btn-outline-light era invisible en claro) */
+.inv-btn-edit {
+    border: 1px solid rgb(var(--on-surface) / 0.25) !important;
+    color: rgb(var(--on-surface)) !important;
+    background: transparent !important;
+}
+.inv-btn-edit:hover {
+    background: rgb(var(--on-surface) / 0.08) !important;
+    border-color: rgb(var(--on-surface) / 0.4) !important;
+    color: rgb(var(--on-surface)) !important;
+}
+
+/* Bordes y contornos de botones outline en modo claro: más visibles */
+html.light .inv-page .btn-outline-secondary,
+html.light .inv-page .btn-outline-info,
+html.light .inv-page .btn-outline-danger,
+html.light .inv-page .btn-outline-warning {
+    background: #fff !important;
+    border-width: 1.5px !important;
+}
+html.light .inv-page .btn-outline-info    { border-color: #0dcaf0 !important; color: #0aa3c2 !important; }
+html.light .inv-page .btn-outline-info:hover { background: #cff4fc !important; color: #0aa3c2 !important; }
+html.light .inv-page .btn-outline-danger  { border-color: #dc3545 !important; color: #b02a37 !important; }
+html.light .inv-page .btn-outline-danger:hover { background: #f8d7da !important; color: #b02a37 !important; }
+html.light .inv-page .btn-outline-warning { border-color: #ffc107 !important; color: #997404 !important; }
+
+/* Buscador y filtros: contorno más nítido en claro */
+html.light .inv-input {
+    background: #fff !important;
+    border: 1.5px solid rgb(0 0 0 / 0.18) !important;
+    color: rgb(17 24 39) !important;
+}
+html.light .inv-input:focus {
+    border-color: rgb(var(--primary)) !important;
+    box-shadow: 0 0 0 3px rgb(var(--primary) / 0.18) !important;
+}
+
+/* Cards KPI en claro: borde sutil + sombra suave */
+html.light .inv-card,
+html.light .inv-metric {
+    background: #fff !important;
+    border: 1px solid rgb(0 0 0 / 0.08) !important;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.06) !important;
+}
+
+/* Zebra stripes apenas perceptibles en claro */
+html.light .inv-table tbody tr:nth-child(even) { background: rgb(0 0 0 / 0.022) !important; }
+html.light .inv-table tbody tr:hover { background: rgb(var(--primary) / 0.06) !important; }
+html.light .inv-table tbody tr { border-bottom: 1px solid rgb(0 0 0 / 0.06) !important; }
+
+/* Header sticky: en claro con fondo sólido para que no se transparente al scrollear */
+html.light .inv-thead th {
+    background: #f3f4f6 !important;
+    color: rgb(17 24 39) !important;
+    border-bottom: 2px solid rgb(0 0 0 / 0.12) !important;
+}
+
+/* Stock real text-info: el cyan claro casi no se ve en fondo blanco — usar tono más oscuro */
+html.light .inv-table .text-info { color: #0aa3c2 !important; }
+
+/* Badge OK / Bajo / Agotado mejor contraste en claro */
+html.light .badge.bg-success { background: #198754 !important; color: #fff !important; }
+html.light .badge.bg-warning { background: #ffc107 !important; color: #1f2937 !important; }
+html.light .badge.bg-danger  { background: #dc3545 !important; color: #fff !important; }
+
+/* "10x+", "6.3x mín" — etiqueta del nivel: legible en claro */
+html.light .inv-text-muted { color: rgb(55 65 81 / 0.95) !important; }
+
+/* Botón "+ Nuevo Insumo" en claro: borde implícito por el color primary */
+html.light .btn-accent {
+    color: #fff !important;
+    box-shadow: 0 1px 6px rgb(var(--primary) / 0.35) !important;
+}
+
+/* Resaltado de filas warning/danger en claro: más contraste */
+html.light .inv-row-warning {
+    background: linear-gradient(90deg, rgb(245 158 11 / 0.18) 0%, rgb(245 158 11 / 0.03) 70%) !important;
+}
+html.light .inv-row-danger {
+    background: linear-gradient(90deg, rgb(239 68 68 / 0.18) 0%, rgb(239 68 68 / 0.03) 70%) !important;
+}
+
+/* ═══ Modal Nuevo / Editar Insumo ═══ */
+.inv-modal-insumo .modal-header { padding-top: 1.25rem; padding-left: 1.5rem; padding-right: 1.5rem; }
+.inv-modal-insumo .modal-body   { padding-left: 1.5rem; padding-right: 1.5rem; }
+.inv-modal-insumo .modal-footer { padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 1.25rem; }
+
+.inv-modal-icon {
+    width: 44px; height: 44px;
+    border-radius: .75rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.inv-modal-icon-new {
+    background: rgb(var(--primary) / 0.15);
+    color: rgb(var(--primary));
+}
+.inv-modal-icon-edit {
+    background: rgb(34 197 94 / 0.15);
+    color: #22c55e;
+}
+
+/* Addons del input-group */
+.inv-input-addon {
+    background: rgb(var(--on-surface) / 0.08) !important;
+    border: 1.5px solid rgb(var(--border) / 0.2) !important;
+    color: rgb(var(--on-surface) / 0.85) !important;
+    font-weight: 700;
+    font-size: .9rem;
+    min-width: 56px;
+    justify-content: center;
+}
+html.light .inv-input-addon {
+    background: rgb(243 244 246) !important;
+    border-color: rgb(0 0 0 / 0.18) !important;
+    color: rgb(55 65 81) !important;
+}
+/* Border-radius correcto dentro de input-group (override del global) */
+.input-group > .inv-input:not(:first-child),
+.input-group > .inv-input-addon:not(:first-child) {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+.input-group > .inv-input:not(:last-child),
+.input-group > .inv-input-addon:not(:last-child) {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+.input-group > .inv-input:focus { z-index: 3; }
+
+/* Estado inválido (bloqueante) */
+.inv-input.is-invalid {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgb(239 68 68 / 0.15) !important;
+}
+.invalid-feedback {
+    color: #ef4444 !important;
+    font-size: .8rem;
+    display: block;
+}
+/* Estado de advertencia (no bloqueante) */
+.inv-input.is-warning {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgb(245 158 11 / 0.15) !important;
+    background-image: none !important;
+}
+.inv-warning-feedback {
+    color: #f59e0b !important;
+    font-size: .8rem;
+    font-weight: 600;
+    display: block;
+    margin-top: .25rem;
+}
+
+/* Preview dentro del modal */
+.inv-form-preview {
+    border-radius: .75rem;
+    border: 1.5px dashed rgb(var(--on-surface) / 0.15);
+    background: rgb(var(--on-surface) / 0.03);
+}
+
+/* Botón disabled con mejor visibilidad */
+.btn-accent:disabled {
+    opacity: .45 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+}
+
+/* ═══ Dropdown "Acciones" ═══ */
+.inv-dropdown {
+    background: rgb(var(--surface)) !important;
+    border: 1px solid rgb(var(--on-surface) / 0.12) !important;
+    border-radius: .75rem !important;
+    padding: .35rem !important;
+    min-width: 260px;
+}
+.inv-dropdown .dropdown-item {
+    color: rgb(var(--on-surface)) !important;
+    border-radius: .5rem !important;
+    padding: .55rem .75rem !important;
+    font-size: .9rem;
+    transition: background .12s ease;
+}
+.inv-dropdown .dropdown-item:hover:not(:disabled) {
+    background: rgb(var(--on-surface) / 0.08) !important;
+}
+.inv-dropdown .dropdown-item:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+.inv-dropdown .dropdown-item .material-symbols-outlined {
+    color: rgb(var(--on-surface) / 0.7);
+}
+.inv-dropdown .dropdown-divider {
+    border-color: rgb(var(--on-surface) / 0.1) !important;
+    margin: .35rem 0 !important;
+}
+
+/* Badge flotante en el botón Acciones */
+.inv-badge-floating {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    font-size: .65rem;
+    padding: .15rem .4rem !important;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px rgb(var(--surface));
+}
+
+/* ═══ Filtros sticky ═══ */
+.inv-filters-sticky {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 20;
+    backdrop-filter: blur(10px);
+}
+html:not(.light) .inv-filters-sticky { background: rgb(var(--surface) / 0.96) !important; }
+html.light       .inv-filters-sticky { background: rgb(255 255 255 / 0.96) !important; }
+
+/* ═══ Bulk actions toolbar ═══ */
+.inv-bulk-bar {
+    border: 1.5px solid rgb(var(--primary) / 0.5) !important;
+    background: rgb(var(--primary) / 0.08) !important;
+    animation: invBulkIn .25s ease;
+}
+@keyframes invBulkIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.inv-row-selected { background: rgb(var(--primary) / 0.10) !important; }
+.inv-row-selected:hover { background: rgb(var(--primary) / 0.14) !important; }
+
+/* Atajo visual: kbd styles */
+kbd.inv-kbd {
+    background: rgb(var(--on-surface) / 0.12);
+    color: rgb(var(--on-surface));
+    border: 1px solid rgb(var(--on-surface) / 0.18);
+    border-radius: .35rem;
+    padding: .1rem .45rem;
+    font-size: .78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+}
+
+/* ═══ Banner de alerta de stock crítico ═══ */
+.inv-alert-banner {
+    border-radius: 1rem;
+    border: 1.5px solid transparent;
+    backdrop-filter: blur(6px);
+    animation: invAlertIn .35s ease;
+}
+@keyframes invAlertIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.inv-alert-warning {
+    background: rgb(245 158 11 / 0.10) !important;
+    border-color: rgb(245 158 11 / 0.45) !important;
+    color: #fbbf24;
+}
+.inv-alert-warning .material-symbols-outlined { color: #fbbf24; }
+.inv-alert-danger {
+    background: rgb(239 68 68 / 0.12) !important;
+    border-color: rgb(239 68 68 / 0.5) !important;
+    color: #f87171;
+}
+.inv-alert-danger .material-symbols-outlined { color: #f87171; }
+html.light .inv-alert-warning { background: rgb(255 251 235) !important; border-color: rgb(245 158 11 / 0.7) !important; }
+html.light .inv-alert-warning .material-symbols-outlined { color: #b45309; }
+html.light .inv-alert-danger  { background: rgb(254 242 242) !important; border-color: rgb(239 68 68  / 0.7) !important; }
+html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="container-fluid py-4 inv-page" x-data="inventarioApp()">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h2 class="mb-0 fw-black inv-text-main" style="font-size:1.5rem">Gestión de Inventario</h2>
+            <p class="mb-0 small inv-text-muted">Control de insumos, stock y movimientos</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Dropdown único de acciones (consolida Exportar / Orden de compra / Movimientos) -->
+            <div class="dropdown">
+                <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1 px-3 position-relative"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="material-symbols-outlined" style="font-size:17px">more_horiz</span>
+                    Acciones
+                    <span class="badge bg-warning text-dark inv-badge-floating"
+                          x-show="insumosBajos + insumosAgotados > 0"
+                          x-text="insumosBajos + insumosAgotados"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end inv-dropdown shadow">
+                    <li>
+                        <button class="dropdown-item d-flex align-items-center gap-2" @click="exportarCSV()">
+                            <span class="material-symbols-outlined" style="font-size:18px">download</span>
+                            Exportar inventario (CSV)
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item d-flex align-items-center gap-2"
+                                :disabled="insumosBajos === 0 && insumosAgotados === 0"
+                                @click="generarOrdenCompra()">
+                            <span class="material-symbols-outlined" style="font-size:18px">shopping_cart</span>
+                            <span>Generar orden de compra</span>
+                            <span class="badge bg-warning text-dark ms-auto"
+                                  x-show="insumosBajos + insumosAgotados > 0"
+                                  x-text="insumosBajos + insumosAgotados"></span>
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <button class="dropdown-item d-flex align-items-center gap-2" @click="verMovimientosGlobales()">
+                            <span class="material-symbols-outlined" style="font-size:18px">history</span>
+                            Ver movimientos globales
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item d-flex align-items-center gap-2" @click="mostrarAtajos()">
+                            <span class="material-symbols-outlined" style="font-size:18px">keyboard</span>
+                            Atajos de teclado
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1 px-3" @click="fetchInsumos()" title="Recargar datos (F5)">
+                <span class="material-symbols-outlined" style="font-size:17px">refresh</span>
+                Refrescar
+            </button>
+            <button class="btn btn-accent d-flex align-items-center gap-2 px-3" @click="nuevoInsumo()" title="Crear insumo (Ctrl+N)">
+                <span class="material-symbols-outlined" style="font-size:18px">add</span>
+                Nuevo Insumo
+            </button>
+        </div>
+    </div>
+
+    <!-- Banner de alerta cuando hay stock crítico -->
+    <div x-show="insumosBajos > 0 || insumosAgotados > 0"
+         x-transition
+         class="inv-alert-banner mb-4 p-3 d-flex align-items-center gap-3"
+         :class="insumosAgotados > 0 ? 'inv-alert-danger' : 'inv-alert-warning'">
+        <div class="d-flex align-items-center gap-2">
+            <span class="pulse-dot"
+                  :class="insumosAgotados > 0 ? '' : 'pulse-warning'"></span>
+            <span class="material-symbols-outlined" style="font-size:28px"
+                  x-text="insumosAgotados > 0 ? 'error' : 'warning'"></span>
+        </div>
+        <div class="flex-grow-1">
+            <div class="fw-bold inv-text-main" x-show="insumosAgotados > 0">
+                <span x-text="insumosAgotados"></span> insumo<span x-show="insumosAgotados !== 1">s</span> sin stock
+                <span x-show="insumosBajos > 0">y <span x-text="insumosBajos"></span> con stock bajo</span>
+            </div>
+            <div class="fw-bold inv-text-main" x-show="insumosAgotados === 0 && insumosBajos > 0">
+                <span x-text="insumosBajos"></span> insumo<span x-show="insumosBajos !== 1">s</span> requiere<span x-show="insumosBajos !== 1">n</span> reposición
+            </div>
+            <div class="small inv-text-muted">Filtra por "Bajo" o "Agotado" para reabastecer.</div>
+        </div>
+        <button class="btn btn-sm inv-btn-edit"
+                @click="filtroEstado = insumosAgotados > 0 ? 'agotado' : 'bajo'">
+            Ver afectados →
+        </button>
+    </div>
+
+    <!-- Cards métricas -->
+    <div class="row g-3 mb-4">
+        <!-- Total -->
+        <div class="col-6 col-md col-lg">
+            <div class="inv-card inv-metric p-3 h-100">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined inv-text-muted" style="font-size:18px">inventory_2</span>
+                    <span class="inv-text-label">Total</span>
+                </div>
+                <div class="fw-black inv-text-main" style="font-size:1.8rem;line-height:1" x-text="insumos.length">—</div>
+                <div class="small mt-1 inv-text-muted">insumos registrados</div>
+            </div>
+        </div>
+        <!-- OK -->
+        <div class="col-6 col-md col-lg">
+            <div class="inv-card p-3 h-100" style="border-color:rgba(34,197,94,0.35);background:rgba(34,197,94,0.06)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-success" style="font-size:18px">check_circle</span>
+                    <span class="inv-text-label text-success">Stock OK</span>
+                </div>
+                <div class="fw-black text-success" style="font-size:1.8rem;line-height:1" x-text="insumos.filter(i=>pf(i.stock_real)>pf(i.stock_minimo)).length">—</div>
+                <div class="small mt-1 text-success" style="opacity:.6">en nivel correcto</div>
+            </div>
+        </div>
+        <!-- Bajo -->
+        <div class="col-6 col-md col-lg" @click="filtroEstado='bajo'" style="cursor:pointer">
+            <div class="inv-card p-3 h-100" style="border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.06)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-warning" style="font-size:18px">warning</span>
+                    <span class="inv-text-label text-warning">Bajo Stock</span>
+                </div>
+                <div class="fw-black text-warning" style="font-size:1.8rem;line-height:1" x-text="insumosBajos">—</div>
+                <div class="small mt-1 text-warning" style="opacity:.6"
+                     x-text="insumosBajos === 1 ? 'requiere reposición' : 'requieren reposición'"></div>
+            </div>
+        </div>
+        <!-- Sin stock -->
+        <div class="col-6 col-md col-lg" @click="filtroEstado='agotado'" style="cursor:pointer">
+            <div class="inv-card p-3 h-100" style="border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.06)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-danger" style="font-size:18px">remove_shopping_cart</span>
+                    <span class="inv-text-label text-danger">Sin Stock</span>
+                </div>
+                <div class="fw-black text-danger" style="font-size:1.8rem;line-height:1" x-text="insumosAgotados">—</div>
+                <div class="small mt-1 text-danger" style="opacity:.6"
+                     x-text="insumosAgotados === 1 ? 'agotado' : 'agotados'"></div>
+            </div>
+        </div>
+        <!-- Valor total -->
+        <div class="col-12 col-md col-lg">
+            <div class="inv-card p-3 h-100" style="border-color:rgba(139,92,246,0.35);background:rgba(139,92,246,0.06)">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined" style="font-size:18px;color:#8b5cf6">monetization_on</span>
+                    <span class="inv-text-label" style="color:#8b5cf6">Valor en Stock</span>
+                </div>
+                <div class="fw-black inv-num" style="font-size:1.4rem;line-height:1;color:#8b5cf6"
+                    x-text="'S/. ' + insumosFiltrados.reduce((s,i)=>s+pf(i.stock_real)*pf(i.costo_unitario),0).toFixed(2)">—</div>
+                <div class="small mt-1 inv-text-muted"
+                    x-text="filtroEstado==='todos' ? 'stock real × costo unit.' : 'del filtro actual'"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buscador y filtros (sticky al scrollear) -->
+    <div class="inv-card mb-3 px-3 py-2 inv-filters-sticky">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <div class="position-relative" style="min-width:220px;max-width:320px;flex:1">
+                <span class="material-symbols-outlined position-absolute inv-text-muted" style="left:10px;top:50%;transform:translateY(-50%);font-size:17px;pointer-events:none">search</span>
+                <input type="text" class="form-control inv-input ps-5" placeholder="Buscar insumo…" x-model="busqueda" style="height:36px">
+            </div>
+            <div class="d-flex gap-1 flex-wrap">
+                <button class="btn btn-sm px-3" style="height:36px"
+                    :class="filtroEstado==='todos'?'btn-accent':'btn-outline-secondary'"
+                    @click="filtroEstado='todos'">Todos</button>
+                <button class="btn btn-sm px-3" style="height:36px"
+                    :class="filtroEstado==='ok'?'btn-success':'btn-outline-secondary'"
+                    @click="filtroEstado='ok'">OK</button>
+                <button class="btn btn-sm px-3" style="height:36px"
+                    :class="filtroEstado==='bajo'?'btn-warning text-dark':'btn-outline-secondary'"
+                    @click="filtroEstado='bajo'">
+                    <span class="material-symbols-outlined me-1" style="font-size:14px;vertical-align:middle">warning</span>Bajo
+                </button>
+                <button class="btn btn-sm px-3" style="height:36px"
+                    :class="filtroEstado==='agotado'?'btn-danger':'btn-outline-secondary'"
+                    @click="filtroEstado='agotado'">Agotado</button>
+            </div>
+            <span class="ms-auto small inv-text-muted inv-num"
+                x-text="insumosFiltrados.length + ' de ' + insumos.length + (insumos.length === 1 ? ' insumo' : ' insumos')"></span>
+        </div>
+    </div>
+
+    <!-- Bulk actions toolbar (aparece cuando hay seleccionados) -->
+    <div x-show="seleccionados.length > 0"
+         x-transition
+         class="inv-bulk-bar inv-card p-3 mb-3 d-flex align-items-center gap-3 flex-wrap">
+        <span class="material-symbols-outlined" style="font-size:22px;color:rgb(var(--primary))">check_box</span>
+        <div class="flex-grow-1">
+            <div class="fw-bold inv-text-main">
+                <span x-text="seleccionados.length"></span>
+                <span x-text="seleccionados.length === 1 ? 'insumo seleccionado' : 'insumos seleccionados'"></span>
+            </div>
+            <div class="small inv-text-muted">Aplica una acción masiva o limpia la selección.</div>
+        </div>
+        <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1" @click="exportarSeleccionados()">
+            <span class="material-symbols-outlined" style="font-size:16px">download</span>
+            Exportar selección
+        </button>
+        <button class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1" @click="desactivarSeleccionados()">
+            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+            Desactivar todos
+        </button>
+        <button class="btn btn-sm inv-btn-edit" @click="seleccionados = []">
+            Cancelar
+        </button>
+    </div>
+
+    <!-- Tabla -->
+    <div class="inv-card shadow-sm overflow-hidden">
+        <div class="table-responsive inv-table-wrapper">
+            <table class="table table-hover mb-0 inv-table" style="--bs-table-bg:transparent">
+                <thead class="inv-thead">
+                    <tr>
+                        <th class="ps-3 text-center" style="width:40px">
+                            <input type="checkbox" class="form-check-input"
+                                   :checked="seleccionados.length > 0 && seleccionados.length === insumosFiltrados.length"
+                                   :indeterminate="seleccionados.length > 0 && seleccionados.length < insumosFiltrados.length"
+                                   @change="toggleSeleccionarTodos($event.target.checked)"
+                                   title="Seleccionar todos los visibles">
+                        </th>
+                        <th class="ps-2 fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('nombre')">
+                            <div class="d-flex align-items-center gap-1">
+                                Insumo
+                                <span class="material-symbols-outlined" style="font-size:14px"
+                                    x-text="sortCol==='nombre'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
+                            </div>
+                        </th>
+                        <th class="fw-semibold">Unidad</th>
+                        <th class="text-center fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('stock_real')">
+                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                Stock Real
+                                <span class="material-symbols-outlined" style="font-size:14px"
+                                    x-text="sortCol==='stock_real'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
+                            </div>
+                        </th>
+                        <th class="text-center fw-semibold" style="min-width:170px">Nivel de Stock</th>
+                        <th class="text-center fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('stock_minimo')">
+                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                Mínimo
+                                <span class="material-symbols-outlined" style="font-size:14px"
+                                    x-text="sortCol==='stock_minimo'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
+                            </div>
+                        </th>
+                        <th class="text-end fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('costo_unitario')">
+                            <div class="d-flex align-items-center justify-content-end gap-1">
+                                Costo unit.
+                                <span class="material-symbols-outlined" style="font-size:14px"
+                                    x-text="sortCol==='costo_unitario'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
+                            </div>
+                        </th>
+                        <th class="text-center fw-semibold">Estado</th>
+                        <th class="text-end pe-4 fw-semibold">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="insumosFiltrados.length === 0">
+                        <tr>
+                            <td colspan="9" class="text-center py-5 inv-empty">
+                                <span class="material-symbols-outlined d-block mb-2" style="font-size:40px;opacity:.3">inventory_2</span>
+                                No se encontraron insumos
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-for="insumo in insumosFiltrados" :key="insumo.id">
+                        <tr :class="(pf(insumo.stock_real)<=0
+                                ? 'inv-row-danger'
+                                : (pf(insumo.stock_real)<=pf(insumo.stock_minimo)
+                                    ? 'inv-row-warning'
+                                    : '')) + (seleccionados.includes(insumo.id) ? ' inv-row-selected' : '')"
+                            :style="pf(insumo.stock_real)<=0
+                                ? 'border-left:3px solid #ef4444'
+                                : (pf(insumo.stock_real)<=pf(insumo.stock_minimo)
+                                    ? 'border-left:3px solid #f59e0b'
+                                    : 'border-left:3px solid transparent')">
+                            <td class="ps-3 text-center">
+                                <input type="checkbox" class="form-check-input"
+                                       :checked="seleccionados.includes(insumo.id)"
+                                       @change="toggleSeleccion(insumo.id)">
+                            </td>
+                            <td class="ps-2">
+                                <span class="fw-semibold inv-text-main" x-text="insumo.nombre"></span>
+                            </td>
+                            <td>
+                                <span class="badge inv-badge-unit px-2 py-1"
+                                    x-text="insumo.unidad_abreviatura"></span>
+                            </td>
+                            <td class="text-center">
+                                <span class="fw-bold inv-num"
+                                    :class="pf(insumo.stock_real)<=0?'text-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'text-warning':'text-info')"
+                                    x-text="pf(insumo.stock_real).toFixed(2)"></span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2 px-2">
+                                    <div class="flex-grow-1 inv-progress-bg">
+                                        <div class="progress-bar"
+                                            :class="pf(insumo.stock_real)<=0?'bg-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'bg-warning':'bg-success')"
+                                            :style="'width:'+nivelStock(insumo)+'%;height:6px;border-radius:99px;transition:width .4s'">
+                                        </div>
+                                    </div>
+                                    <span class="inv-text-muted" style="font-size:.7rem;min-width:52px;text-align:right"
+                                        :class="pf(insumo.stock_real)<=0?'text-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'text-warning':'')"
+                                        x-text="etiquetaNivel(insumo)"></span>
+                                </div>
+                            </td>
+                            <td class="text-center fw-semibold inv-text-muted inv-num" x-text="pf(insumo.stock_minimo).toFixed(2)"></td>
+                            <td class="text-end fw-semibold inv-text-muted inv-num" x-text="'S/. '+pf(insumo.costo_unitario).toFixed(2)"></td>
+                            <td class="text-center">
+                                <span class="badge rounded-pill px-3"
+                                    :class="pf(insumo.stock_real)<=0?'bg-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'bg-warning text-dark':'bg-success')"
+                                    x-text="pf(insumo.stock_real)<=0?'Agotado':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'Bajo':'OK')">
+                                </span>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex justify-content-end gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary" title="Historial de movimientos" @click="verHistorial(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:15px">history</span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" title="Ajustar stock" @click="ajustarStock(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:15px">swap_vert</span>
+                                    </button>
+                                    <button class="btn btn-sm inv-btn-edit" title="Editar insumo" @click="editarInsumo(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:15px">edit</span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Desactivar insumo" @click="desactivarInsumo(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:15px">delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Atajos de teclado ── -->
+<div class="modal fade" id="modalAtajos" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content inv-card">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold inv-text-main d-flex align-items-center gap-2">
+                    <span class="material-symbols-outlined" style="font-size:22px">keyboard</span>
+                    Atajos de teclado
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:rgb(var(--on-surface)/0.1)!important">
+                        <span class="inv-text-main">Nuevo insumo</span>
+                        <div><kbd class="inv-kbd">Ctrl</kbd> + <kbd class="inv-kbd">N</kbd></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:rgb(var(--on-surface)/0.1)!important">
+                        <span class="inv-text-main">Enfocar búsqueda</span>
+                        <div>
+                            <kbd class="inv-kbd">/</kbd>
+                            <span class="inv-text-muted mx-1">o</span>
+                            <kbd class="inv-kbd">Ctrl</kbd> + <kbd class="inv-kbd">K</kbd>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:rgb(var(--on-surface)/0.1)!important">
+                        <span class="inv-text-main">Limpiar selección</span>
+                        <div><kbd class="inv-kbd">Esc</kbd></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center py-2">
+                        <span class="inv-text-main">Mostrar esta ayuda</span>
+                        <div><kbd class="inv-kbd">?</kbd></div>
+                    </div>
+                </div>
+                <p class="small inv-text-muted mt-3 mb-0">
+                    En macOS usa <kbd class="inv-kbd">⌘</kbd> en lugar de <kbd class="inv-kbd">Ctrl</kbd>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Movimientos Globales ── -->
+<div class="modal fade" id="modalMovimientosGlobales" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content inv-card">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold inv-text-main d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined" style="font-size:22px">history</span>
+                        Movimientos del Inventario
+                    </h5>
+                    <p class="small mb-0 mt-1 inv-text-muted">Últimos 100 movimientos de todos los insumos</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="cargandoHistorial" class="text-center py-4 inv-text-muted">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    Cargando movimientos…
+                </div>
+                <div x-show="!cargandoHistorial && movimientosGlobales.length === 0" class="text-center py-4 inv-empty">
+                    <span class="material-symbols-outlined d-block mb-2" style="font-size:40px;opacity:.3">inbox</span>
+                    No hay movimientos registrados
+                </div>
+                <div x-show="!cargandoHistorial && movimientosGlobales.length > 0" class="table-responsive" style="max-height:60vh">
+                    <table class="table table-sm inv-table mb-0" style="--bs-table-bg:transparent;font-size:.85rem">
+                        <thead class="inv-thead">
+                            <tr>
+                                <th class="ps-3">Fecha</th>
+                                <th>Insumo</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">Antes</th>
+                                <th class="text-end">Después</th>
+                                <th>Usuario</th>
+                                <th class="pe-3">Observación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="m in movimientosGlobales" :key="m.id">
+                                <tr>
+                                    <td class="ps-3 inv-text-muted" style="white-space:nowrap" x-text="m.fecha"></td>
+                                    <td class="fw-semibold inv-text-main" x-text="m.insumo_nombre"></td>
+                                    <td>
+                                        <span class="badge"
+                                              :class="m.tipo === 'CONSUMO' ? 'bg-info' :
+                                                      (m.tipo === 'ENTRADA' || m.tipo === 'AJUSTE_POSITIVO' ? 'bg-success' : 'bg-warning text-dark')"
+                                              x-text="m.tipo_label"></span>
+                                    </td>
+                                    <td class="text-end fw-semibold" x-text="m.cantidad.toFixed(2)"></td>
+                                    <td class="text-end inv-text-muted" x-text="m.stock_anterior.toFixed(2)"></td>
+                                    <td class="text-end fw-bold inv-text-main" x-text="m.stock_nuevo.toFixed(2)"></td>
+                                    <td class="inv-text-muted" x-text="m.usuario"></td>
+                                    <td class="pe-3 inv-text-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                        :title="m.observacion" x-text="m.observacion"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Historial ── -->
+<div class="modal fade" id="modalHistorial" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content inv-card">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold inv-text-main mb-0">Historial de Movimientos</h5>
+                    <p class="small mb-0 mt-1 inv-text-muted" x-text="selectedInsumo?.nombre"></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <div x-show="cargandoHistorial" class="text-center py-4 inv-text-muted">
+                    <div class="spinner-border spinner-border-sm me-2"></div>Cargando movimientos…
+                </div>
+                <div x-show="!cargandoHistorial && historial.length === 0" class="text-center py-4 inv-empty">
+                    <span class="material-symbols-outlined d-block mb-2" style="font-size:36px;opacity:.3">history</span>
+                    Sin movimientos registrados
+                </div>
+                <div x-show="!cargandoHistorial && historial.length > 0" class="table-responsive">
+                    <table class="table mb-0 inv-thead" style="--bs-table-bg:transparent;font-size:.82rem">
+                        <thead class="inv-thead">
+                            <tr>
+                                <th class="fw-semibold">Fecha</th>
+                                <th class="fw-semibold">Tipo</th>
+                                <th class="text-center fw-semibold">Cantidad</th>
+                                <th class="text-center fw-semibold">Antes</th>
+                                <th class="text-center fw-semibold">Después</th>
+                                <th class="fw-semibold">Usuario</th>
+                                <th class="fw-semibold">Observación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="m in historial" :key="m.id">
+                                <tr>
+                                    <td class="inv-text-muted" style="white-space:nowrap" x-text="m.fecha"></td>
+                                    <td>
+                                        <span class="badge"
+                                            :class="{
+                                                'bg-success':  m.tipo==='AJUSTE_POSITIVO'||m.tipo==='ENTRADA',
+                                                'bg-danger':   m.tipo==='AJUSTE_NEGATIVO'||m.tipo==='SALIDA',
+                                                'bg-secondary':m.tipo==='CONSUMO'
+                                            }"
+                                            x-text="m.tipo_label"></span>
+                                    </td>
+                                    <td class="text-center fw-semibold"
+                                        :class="m.tipo==='AJUSTE_POSITIVO'||m.tipo==='ENTRADA'?'text-success':'text-danger'"
+                                        x-text="(m.tipo==='AJUSTE_POSITIVO'||m.tipo==='ENTRADA'?'+':'-') + m.cantidad.toFixed(3)">
+                                    </td>
+                                    <td class="text-center inv-text-muted" x-text="m.stock_anterior.toFixed(2)"></td>
+                                    <td class="text-center text-info fw-semibold" x-text="m.stock_nuevo.toFixed(2)"></td>
+                                    <td class="inv-text-muted" x-text="m.usuario"></td>
+                                    <td class="inv-text-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                        :title="m.observacion" x-text="m.observacion || '—'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button class="btn btn-outline-info d-flex align-items-center gap-2" @click="ajustarStock(selectedInsumo); modalHistorial.hide()">
+                    <span class="material-symbols-outlined" style="font-size:16px">swap_vert</span> Ajustar Stock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Ajuste de Stock ── -->
+<div class="modal fade" id="modalAjuste" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content inv-card">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold inv-text-main mb-0">Ajuste de Stock</h5>
+                    <p class="small mb-0 mt-1 inv-text-muted" x-text="selectedInsumo?.nombre"></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <!-- Resumen actual -->
+                <div class="d-flex gap-3 mb-4 p-3 rounded-3 inv-bg-subtle">
+                    <div class="text-center" style="flex:1">
+                        <div class="small mb-1 inv-text-muted">Stock actual</div>
+                        <div class="fw-bold text-info" style="font-size:1.2rem" x-text="pf(selectedInsumo?.stock_real??0).toFixed(2)">—</div>
+                    </div>
+                    <div class="text-center" style="flex:1">
+                        <div class="small mb-1 inv-text-muted">Mínimo</div>
+                        <div class="fw-bold text-warning" style="font-size:1.2rem" x-text="pf(selectedInsumo?.stock_minimo??0).toFixed(2)">—</div>
+                    </div>
+                    <div class="text-center" style="flex:1">
+                        <div class="small mb-1 inv-text-muted">Unidad</div>
+                        <div class="fw-bold inv-text-main" style="font-size:1.2rem" x-text="selectedInsumo?.unidad_abreviatura">—</div>
+                    </div>
+                </div>
+                <!-- Tipo -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold inv-text-muted">Tipo de Ajuste</label>
+                    <div class="d-flex gap-2">
+                        <button class="btn flex-fill d-flex align-items-center justify-content-center gap-2"
+                            :class="ajuste.tipo==='AJUSTE_POSITIVO'?'btn-success':'btn-outline-secondary'"
+                            @click="ajuste.tipo='AJUSTE_POSITIVO'">
+                            <span class="material-symbols-outlined" style="font-size:17px">add_circle</span> Entrada
+                        </button>
+                        <button class="btn flex-fill d-flex align-items-center justify-content-center gap-2"
+                            :class="ajuste.tipo==='AJUSTE_NEGATIVO'?'btn-danger':'btn-outline-secondary'"
+                            @click="ajuste.tipo='AJUSTE_NEGATIVO'">
+                            <span class="material-symbols-outlined" style="font-size:17px">remove_circle</span> Salida
+                        </button>
+                    </div>
+                </div>
+                <!-- Cantidad -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold inv-text-muted">
+                        Cantidad (<span x-text="selectedInsumo?.unidad_abreviatura"></span>)
+                    </label>
+                    <input type="number" step="0.001" min="0.001" class="form-control inv-input" x-model="ajuste.cantidad">
+                    <div class="small mt-2 px-2 py-1 rounded inv-bg-subtle" x-show="pf(ajuste.cantidad)>0"
+                        :class="ajuste.tipo==='AJUSTE_POSITIVO'?'text-success':'text-danger'">
+                        Nuevo stock estimado:
+                        <strong x-text="(pf(selectedInsumo?.stock_real??0)+(ajuste.tipo==='AJUSTE_POSITIVO'?1:-1)*pf(ajuste.cantidad||0)).toFixed(2)+' '+(selectedInsumo?.unidad_abreviatura??'')"></strong>
+                    </div>
+                </div>
+                <!-- Motivo -->
+                <div class="mb-1">
+                    <label class="form-label small fw-semibold inv-text-muted">Motivo / Observación</label>
+                    <textarea class="form-control inv-input" rows="2" x-model="ajuste.motivo"
+                        placeholder="Ej: Compra de mercadería, merma, inventario físico…"
+                        style="resize:none"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-2">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-accent flex-fill d-flex align-items-center justify-content-center gap-2"
+                    @click="confirmarAjuste()" :disabled="guardando">
+                    <span class="spinner-border spinner-border-sm" x-show="guardando"></span>
+                    <span class="material-symbols-outlined" x-show="!guardando" style="font-size:17px">save</span>
+                    <span x-text="guardando?'Guardando…':'Guardar Ajuste'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Nuevo / Editar Insumo ── -->
+<div class="modal fade" id="modalInsumo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content inv-card inv-modal-insumo">
+            <!-- Header con ícono y subtítulo -->
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="inv-modal-icon"
+                         :class="formInsumo.id ? 'inv-modal-icon-edit' : 'inv-modal-icon-new'">
+                        <span class="material-symbols-outlined" style="font-size:24px"
+                              x-text="formInsumo.id ? 'edit' : 'add_box'"></span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold inv-text-main mb-0"
+                            x-text="formInsumo.id ? 'Editar Insumo' : 'Nuevo Insumo'"></h5>
+                        <p class="small inv-text-muted mb-0"
+                           x-text="formInsumo.id ? 'Actualiza los datos del insumo' : 'Agrega un insumo al catálogo de inventario'"></p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body pt-3">
+                <!-- Nombre -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold inv-text-muted">
+                        Nombre del insumo <span class="text-danger">*</span>
+                    </label>
+                    <input type="text"
+                           class="form-control inv-input"
+                           :class="{'is-invalid': formInsumoErrors.nombre, 'is-warning': !formInsumoErrors.nombre && formInsumoWarnings.nombre}"
+                           x-model="formInsumo.nombre"
+                           @input="validarFormInsumo()"
+                           placeholder="Ej: Lomo Fino"
+                           maxlength="120">
+                    <div class="invalid-feedback" x-show="formInsumoErrors.nombre" x-text="formInsumoErrors.nombre"></div>
+                    <div class="inv-warning-feedback" x-show="!formInsumoErrors.nombre && formInsumoWarnings.nombre" x-text="formInsumoWarnings.nombre"></div>
+                    <div class="form-text inv-text-muted d-flex justify-content-between">
+                        <span>Nombre único, máx 120 caracteres</span>
+                        <span x-text="(formInsumo.nombre || '').length + ' / 120'"></span>
+                    </div>
+                </div>
+
+                <!-- Unidad -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold inv-text-muted">
+                        Unidad de Medida <span class="text-danger">*</span>
+                    </label>
+                    <select class="form-select inv-input"
+                            :class="{'is-invalid': formInsumoErrors.unidad_medida}"
+                            x-model="formInsumo.unidad_medida"
+                            @change="validarFormInsumo()">
+                        <option value="">Seleccione una unidad…</option>
+                        {% for u in unidades %}
+                        <option value="{{ u.id }}">{{ u.nombre }} ({{ u.abreviatura }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback" x-show="formInsumoErrors.unidad_medida" x-text="formInsumoErrors.unidad_medida"></div>
+                </div>
+
+                <!-- Stock mínimo + Costo unitario -->
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold inv-text-muted">
+                            Stock Mínimo <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="number" step="0.001" min="0"
+                                   class="form-control inv-input"
+                                   :class="{'is-invalid': formInsumoErrors.stock_minimo}"
+                                   x-model.number="formInsumo.stock_minimo"
+                                   @input="validarFormInsumo()"
+                                   placeholder="0">
+                            <span class="input-group-text inv-input-addon" x-text="unidadAbrev || '—'"></span>
+                        </div>
+                        <div class="form-text inv-text-muted">Umbral para alertar reposición.</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold inv-text-muted">
+                            Costo Unitario <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text inv-input-addon">S/.</span>
+                            <input type="number" step="0.01" min="0"
+                                   class="form-control inv-input"
+                                   :class="{'is-invalid': formInsumoErrors.costo_unitario}"
+                                   x-model.number="formInsumo.costo_unitario"
+                                   @input="validarFormInsumo()"
+                                   placeholder="0.00">
+                        </div>
+                        <div class="form-text inv-text-muted">Costo de adquisición por unidad.</div>
+                    </div>
+
+                    <!-- Stock inicial — solo al crear -->
+                    <div class="col-12" x-show="!formInsumo.id">
+                        <label class="form-label small fw-semibold inv-text-muted">
+                            Stock Inicial
+                        </label>
+                        <div class="input-group">
+                            <input type="number" step="0.001" min="0"
+                                   class="form-control inv-input"
+                                   x-model.number="formInsumo.stock_inicial"
+                                   placeholder="0">
+                            <span class="input-group-text inv-input-addon" x-text="unidadAbrev || '—'"></span>
+                        </div>
+                        <div class="form-text inv-text-muted">Cantidad disponible al momento de crearlo (opcional).</div>
+                    </div>
+                </div>
+
+                <!-- Preview: estado estimado + valor en stock -->
+                <div class="inv-form-preview mt-4 p-3" x-show="formInsumo.nombre && formInsumo.unidad_medida">
+                    <div class="small fw-semibold inv-text-muted mb-2">Vista previa</div>
+                    <div class="row g-3 align-items-center">
+                        <div class="col-6">
+                            <div class="small inv-text-muted">Valor inicial en stock</div>
+                            <div class="fw-bold inv-text-main"
+                                 x-text="'S/. ' + (((formInsumo.stock_inicial || 0) * (formInsumo.costo_unitario || 0))).toFixed(2)"></div>
+                        </div>
+                        <div class="col-6 text-end">
+                            <div class="small inv-text-muted">Estado al crear</div>
+                            <span class="badge rounded-pill px-3"
+                                  :class="(formInsumo.stock_inicial || 0) <= 0 ? 'bg-danger' :
+                                          ((formInsumo.stock_inicial || 0) <= (formInsumo.stock_minimo || 0) ? 'bg-warning text-dark' : 'bg-success')"
+                                  x-text="(formInsumo.stock_inicial || 0) <= 0 ? 'Agotado' :
+                                          ((formInsumo.stock_inicial || 0) <= (formInsumo.stock_minimo || 0) ? 'Bajo' : 'OK')"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 pt-2 d-flex justify-content-between">
+                <button class="btn inv-btn-edit" data-bs-dismiss="modal">
+                    <span class="material-symbols-outlined align-middle" style="font-size:16px">close</span>
+                    Cancelar
+                </button>
+                <button type="button"
+                        class="btn btn-accent d-flex align-items-center gap-2 px-4"
+                        @click="guardarInsumo()"
+                        :disabled="guardando || !formInsumoValido">
+                    <span class="spinner-border spinner-border-sm" role="status" x-show="guardando" x-cloak></span>
+                    <span class="material-symbols-outlined" style="font-size:18px" x-show="!guardando" x-cloak>
+                        <span x-show="formInsumo.id">save</span>
+                        <span x-show="!formInsumo.id">add</span>
+                    </span>
+                    <span class="fw-semibold" x-show="!guardando" x-cloak>
+                        <span x-show="formInsumo.id">Guardar cambios</span>
+                        <span x-show="!formInsumo.id">Crear insumo</span>
+                    </span>
+                    <span class="fw-semibold" x-show="guardando" x-cloak>Guardando…</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toasts -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <template x-for="(t,i) in toasts" :key="t.id">
+        <div class="toast show d-flex align-items-center border-0 mb-2 rounded-3"
+            :class="t.tipo==='error'?'bg-danger text-white':'bg-success text-white'"
+            style="min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+            <div class="d-flex align-items-center gap-2 px-3 py-2 w-100">
+                <span class="material-symbols-outlined" style="font-size:20px"
+                    x-text="t.tipo==='error'?'error':'check_circle'"></span>
+                <span class="small fw-semibold flex-grow-1" x-text="t.mensaje"></span>
+                <button type="button" class="btn-close btn-close-white flex-shrink-0" @click="toasts.splice(i,1)"></button>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script>
+function inventarioApp() {
+    return {
+        insumos: {{ insumos_json|safe }},
+        unidades: {{ unidades_json|safe }},
+        historial: [],
+        cargandoHistorial: false,
+        selectedInsumo: null,
+        busqueda: '',
+        filtroEstado: 'todos',
+        sortCol: 'nombre',
+        sortDir: 'asc',
+        guardando: false,
+        toasts: [],
+        ajuste: { tipo: 'AJUSTE_POSITIVO', cantidad: 0, motivo: '' },
+        formInsumo: { id: null, nombre: '', unidad_medida: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 },
+        formInsumoErrors: {},
+        formInsumoWarnings: {},
+        modalAjuste: null,
+        modalInsumoForm: null,
+        modalHistorial: null,
+        modalMovimientosGlobales: null,
+        modalAtajos: null,
+        movimientosGlobales: [],
+        seleccionados: [],
+
+        // helper: parsea cualquier valor numérico de forma segura
+        pf: v => parseFloat(v) || 0,
+
+        nivelStock(insumo) {
+            const real = parseFloat(insumo.stock_real) || 0;
+            const min  = parseFloat(insumo.stock_minimo) || 0;
+            if (min === 0) return real > 0 ? 100 : 0;
+            // La barra llega al 100% cuando el stock duplica el mínimo
+            return Math.min(100, Math.round((real / (min * 2)) * 100));
+        },
+
+        etiquetaNivel(insumo) {
+            const real = parseFloat(insumo.stock_real) || 0;
+            const min  = parseFloat(insumo.stock_minimo) || 0;
+            if (real <= 0)  return 'Agotado';
+            if (min === 0)  return `${real.toFixed(1)} uds`;
+            const ratio = real / min;
+            // Muestra cuántas veces cubre el mínimo, capeado en "10x+"
+            if (ratio >= 10) return '10x+';
+            if (ratio >= 2)  return `${ratio.toFixed(1)}x mín`;
+            // Cerca o por debajo del mínimo → muestra el déficit
+            const deficit = min - real;
+            if (deficit > 0) return `-${deficit.toFixed(1)}`;
+            return `${ratio.toFixed(1)}x mín`;
+        },
+
+        get insumosBajos() {
+            return this.insumos.filter(i => {
+                const r = parseFloat(i.stock_real) || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                return r > 0 && r <= m;
+            }).length;
+        },
+
+        get insumosAgotados() {
+            return this.insumos.filter(i => (parseFloat(i.stock_real) || 0) <= 0).length;
+        },
+
+        // ─── Selección múltiple ──────────────────────────────────────
+        toggleSeleccion(id) {
+            const idx = this.seleccionados.indexOf(id);
+            if (idx === -1) this.seleccionados.push(id);
+            else this.seleccionados.splice(idx, 1);
+        },
+
+        toggleSeleccionarTodos(checked) {
+            if (checked) {
+                this.seleccionados = this.insumosFiltrados.map(i => i.id);
+            } else {
+                this.seleccionados = [];
+            }
+        },
+
+        exportarSeleccionados() {
+            const lista = this.insumos.filter(i => this.seleccionados.includes(i.id));
+            if (lista.length === 0) { this.toast('Nada seleccionado', 'error'); return; }
+            const headers = ['ID', 'Insumo', 'Unidad', 'Stock Real', 'Stock Minimo', 'Costo Unitario', 'Valor en Stock', 'Estado'];
+            const rows = lista.map(i => {
+                const r = parseFloat(i.stock_real) || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                const c = parseFloat(i.costo_unitario) || 0;
+                const estado = r <= 0 ? 'Agotado' : (r <= m ? 'Bajo' : 'OK');
+                return [
+                    i.id,
+                    `"${(i.nombre || '').replace(/"/g, '""')}"`,
+                    i.unidad_abreviatura || '',
+                    r.toFixed(3),
+                    m.toFixed(3),
+                    c.toFixed(4),
+                    (r * c).toFixed(2),
+                    estado,
+                ].join(',');
+            });
+            const csv = '﻿' + [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `inventario_seleccion_${ts}.csv`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.toast(`${lista.length} insumo${lista.length===1?'':'s'} exportado${lista.length===1?'':'s'}`);
+        },
+
+        async desactivarSeleccionados() {
+            const n = this.seleccionados.length;
+            if (n === 0) return;
+            if (!confirm(`¿Desactivar ${n} insumo${n===1?'':'s'}?\n\nSe ocultarán del catálogo y sus recetas quedarán inactivas. El historial de movimientos se conserva.`)) return;
+            let exitosos = 0, fallidos = 0;
+            for (const id of [...this.seleccionados]) {
+                try {
+                    const resp = await fetch(`/api/inventario/insumos/${id}/`, {
+                        method: 'DELETE', credentials: 'same-origin',
+                        headers: { 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                    });
+                    if (resp.ok || resp.status === 204) exitosos++; else fallidos++;
+                } catch { fallidos++; }
+            }
+            await this.fetchInsumos();
+            this.seleccionados = [];
+            if (fallidos === 0) this.toast(`${exitosos} insumo${exitosos===1?'':'s'} desactivado${exitosos===1?'':'s'}`);
+            else this.toast(`${exitosos} OK · ${fallidos} con error`, 'error');
+        },
+
+        // ─── Atajos de teclado ───────────────────────────────────────
+        _onKeyDown(e) {
+            // Ignorar si el foco está en un input/textarea/select
+            const tag = (e.target.tagName || '').toLowerCase();
+            const enInput = ['input', 'textarea', 'select'].includes(tag) || e.target.isContentEditable;
+
+            // "/" enfoca búsqueda (incluso si está en un input distinto al de búsqueda)
+            if (e.key === '/' && !enInput) {
+                e.preventDefault();
+                const el = document.querySelector('input[placeholder^="Buscar"]');
+                if (el) el.focus();
+                return;
+            }
+            // Cmd/Ctrl + N → nuevo insumo
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                this.nuevoInsumo();
+                return;
+            }
+            // Cmd/Ctrl + K → enfoca búsqueda
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                const el = document.querySelector('input[placeholder^="Buscar"]');
+                if (el) el.focus();
+                return;
+            }
+            // "?" abre ayuda de atajos
+            if (e.key === '?' && !enInput) {
+                e.preventDefault();
+                this.mostrarAtajos();
+                return;
+            }
+            // Esc limpia selección
+            if (e.key === 'Escape' && this.seleccionados.length > 0 && !enInput) {
+                this.seleccionados = [];
+            }
+        },
+
+        mostrarAtajos() {
+            if (!this.modalAtajos) {
+                this.modalAtajos = new bootstrap.Modal(document.getElementById('modalAtajos'));
+            }
+            this.modalAtajos.show();
+        },
+
+        generarOrdenCompra() {
+            const aReponer = this.insumos.filter(i => {
+                const r = parseFloat(i.stock_real) || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                return r <= m;
+            });
+            if (aReponer.length === 0) {
+                this.toast('No hay insumos por reponer', 'error');
+                return;
+            }
+            // Sugerencia: pedir hasta llegar al doble del stock_minimo (buffer de seguridad)
+            const headers = ['Insumo', 'Unidad', 'Stock Actual', 'Stock Minimo', 'Cantidad Sugerida', 'Costo Unitario', 'Subtotal Estimado', 'Estado'];
+            let totalEstimado = 0;
+            const rows = aReponer.map(i => {
+                const r = parseFloat(i.stock_real) || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                const c = parseFloat(i.costo_unitario) || 0;
+                const objetivo = m * 2;
+                const sugerida = Math.max(objetivo - r, m);
+                const subtotal = sugerida * c;
+                totalEstimado += subtotal;
+                const estado = r <= 0 ? 'Agotado' : 'Bajo';
+                return [
+                    `"${(i.nombre || '').replace(/"/g, '""')}"`,
+                    i.unidad_abreviatura || '',
+                    r.toFixed(3),
+                    m.toFixed(3),
+                    sugerida.toFixed(3),
+                    c.toFixed(4),
+                    subtotal.toFixed(2),
+                    estado,
+                ].join(',');
+            });
+            rows.push(['', '', '', '', '', 'TOTAL', totalEstimado.toFixed(2), ''].join(','));
+            const csv = '﻿' + [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `orden_compra_${ts}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.toast(`Orden generada: ${aReponer.length} ítem${aReponer.length===1?'':'s'} — Total estimado S/. ${totalEstimado.toFixed(2)}`);
+        },
+
+        async verMovimientosGlobales() {
+            // Carga los últimos movimientos de cada insumo y los combina
+            this.cargandoHistorial = true;
+            this.movimientosGlobales = [];
+            try {
+                const resp = await fetch('/api/inventario/insumos/?activo=true', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (!resp.ok) throw new Error('No se pudo cargar');
+                // Obtenemos historial de cada insumo en paralelo (limitado a los activos)
+                const lista = this.insumos.slice(0, 50);
+                const movs = await Promise.all(lista.map(i =>
+                    fetch(`/api/inventario/insumos/${i.id}/historial/`, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                        .then(r => r.ok ? r.json() : [])
+                        .then(arr => arr.map(m => ({ ...m, insumo_nombre: i.nombre })))
+                        .catch(() => [])
+                ));
+                this.movimientosGlobales = movs.flat()
+                    .sort((a, b) => (b.id || 0) - (a.id || 0))
+                    .slice(0, 100);
+                if (!this.modalMovimientosGlobales) {
+                    this.modalMovimientosGlobales = new bootstrap.Modal(document.getElementById('modalMovimientosGlobales'));
+                }
+                this.modalMovimientosGlobales.show();
+            } catch (e) {
+                this.toast('Error al cargar movimientos', 'error');
+            } finally {
+                this.cargandoHistorial = false;
+            }
+        },
+
+        exportarCSV() {
+            const headers = ['ID', 'Insumo', 'Unidad', 'Stock Real', 'Stock Minimo', 'Costo Unitario', 'Valor en Stock', 'Estado'];
+            const rows = this.insumos.map(i => {
+                const r = parseFloat(i.stock_real) || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                const c = parseFloat(i.costo_unitario) || 0;
+                const estado = r <= 0 ? 'Agotado' : (r <= m ? 'Bajo' : 'OK');
+                return [
+                    i.id,
+                    `"${(i.nombre || '').replace(/"/g, '""')}"`,
+                    i.unidad_abreviatura || '',
+                    r.toFixed(3),
+                    m.toFixed(3),
+                    c.toFixed(4),
+                    (r * c).toFixed(2),
+                    estado,
+                ].join(',');
+            });
+            const csv = '﻿' + [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `inventario_${ts}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.toast(`Inventario exportado (${this.insumos.length} insumos)`);
+        },
+
+        get insumosFiltrados() {
+            let lista = this.insumos.filter(i => {
+                const r = parseFloat(i.stock_real)   || 0;
+                const m = parseFloat(i.stock_minimo) || 0;
+                const ok     = r > m;
+                const bajo   = r <= m && r > 0;
+                const agot   = r <= 0;
+                const matchN = i.nombre.toLowerCase().includes(this.busqueda.toLowerCase());
+                const matchE = this.filtroEstado === 'todos'
+                    || (this.filtroEstado === 'ok'      && ok)
+                    || (this.filtroEstado === 'bajo'    && bajo)
+                    || (this.filtroEstado === 'agotado' && agot);
+                return matchN && matchE;
+            });
+            // ordenar
+            lista.sort((a, b) => {
+                let va = parseFloat(a[this.sortCol]) || a[this.sortCol] || '';
+                let vb = parseFloat(b[this.sortCol]) || b[this.sortCol] || '';
+                if (typeof va === 'string') va = va.toLowerCase();
+                if (typeof vb === 'string') vb = vb.toLowerCase();
+                if (va < vb) return this.sortDir === 'asc' ? -1 : 1;
+                if (va > vb) return this.sortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+            return lista;
+        },
+
+        ordenar(col) {
+            if (this.sortCol === col) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortCol = col;
+                this.sortDir = 'asc';
+            }
+        },
+
+        init() {
+            try { this.modalAjuste     = new bootstrap.Modal(document.getElementById('modalAjuste')); } catch(e) { console.error('Modal ajuste error:', e); }
+            try { this.modalInsumoForm = new bootstrap.Modal(document.getElementById('modalInsumo')); } catch(e) { console.error('Modal insumo error:', e); }
+            try { this.modalHistorial  = new bootstrap.Modal(document.getElementById('modalHistorial')); } catch(e) { console.error('Modal historial error:', e); }
+            // Atajos de teclado globales
+            this._keyHandler = (e) => this._onKeyDown(e);
+            window.addEventListener('keydown', this._keyHandler);
+        },
+
+        destroy() {
+            if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+        },
+
+        toast(mensaje, tipo = 'ok') {
+            const id = Date.now();
+            this.toasts.push({ id, mensaje, tipo });
+            setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
+        },
+
+        async fetchInsumos() {
+            const resp = await fetch('/api/inventario/insumos/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            if (!resp.ok) { this.toast(`Error al cargar insumos (HTTP ${resp.status})`, 'error'); this.insumos = []; return; }
+            try { this.insumos = await resp.json(); } catch { this.toast('Respuesta inesperada del servidor', 'error'); this.insumos = []; }
+        },
+
+        async fetchUnidades() {
+            try {
+                const resp = await fetch('/api/inventario/unidades-medida/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.unidades = Array.isArray(data) ? data : (data.results || []);
+                } else {
+                    this.toast(`Error al cargar unidades (HTTP ${resp.status})`, 'error');
+                }
+            } catch (e) { this.toast('Error de conexión al cargar unidades', 'error'); }
+        },
+
+        ajustarStock(insumo) {
+            this.selectedInsumo = insumo;
+            this.ajuste = { tipo: 'AJUSTE_POSITIVO', cantidad: 0, motivo: '' };
+            this.modalAjuste.show();
+        },
+
+        async verHistorial(insumo) {
+            this.selectedInsumo = insumo;
+            this.historial = [];
+            this.cargandoHistorial = true;
+            this.modalHistorial.show();
+            try {
+                const resp = await fetch(`/api/inventario/insumos/${insumo.id}/historial/`, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (resp.ok) this.historial = await resp.json();
+                else this.toast('No se pudo cargar el historial', 'error');
+            } catch { this.toast('Error de conexión', 'error'); }
+            finally { this.cargandoHistorial = false; }
+        },
+
+        async confirmarAjuste() {
+            if (!this.ajuste.cantidad || parseFloat(this.ajuste.cantidad) <= 0) { this.toast('Ingresa una cantidad mayor a 0', 'error'); return; }
+            if (!this.ajuste.motivo.trim()) { this.toast('El motivo es obligatorio', 'error'); return; }
+            this.guardando = true;
+            try {
+                const resp = await fetch(`/api/inventario/insumos/${this.selectedInsumo.id}/ajuste/`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                    body: JSON.stringify(this.ajuste)
+                });
+                if (resp.ok) {
+                    this.modalAjuste.hide();
+                    await this.fetchInsumos();
+                    this.toast(`Stock de "${this.selectedInsumo.nombre}" actualizado`);
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    this.toast(err.detail || err.error || 'Error al ajustar stock', 'error');
+                }
+            } catch { this.toast('Error de conexión', 'error'); }
+            finally { this.guardando = false; }
+        },
+
+        nuevoInsumo() {
+            this.formInsumo = { id: null, nombre: '', unidad_medida: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 };
+            this.formInsumoErrors = {};
+            this.formInsumoWarnings = {};
+            this.guardando = false;
+            this.modalInsumoForm.show();
+        },
+
+        editarInsumo(i) {
+            this.formInsumo = { id: i.id, nombre: i.nombre, unidad_medida: i.unidad_medida, stock_minimo: i.stock_minimo, costo_unitario: i.costo_unitario, stock_inicial: 0 };
+            this.formInsumoErrors = {};
+            this.formInsumoWarnings = {};
+            this.guardando = false;
+            this.modalInsumoForm.show();
+        },
+
+        validarFormInsumo() {
+            const errors = {};
+            const warnings = {};
+            const f = this.formInsumo;
+            const nombre = (f.nombre || '').trim();
+            // Errores DURO (bloquean guardar)
+            if (!nombre) errors.nombre = 'El nombre es obligatorio.';
+            else if (nombre.length > 120) errors.nombre = 'Máximo 120 caracteres.';
+            if (!f.unidad_medida) errors.unidad_medida = 'Selecciona una unidad de medida.';
+            const sm = parseFloat(f.stock_minimo);
+            if (f.stock_minimo === '' || f.stock_minimo === null || isNaN(sm) || sm < 0)
+                errors.stock_minimo = 'Debe ser un número ≥ 0.';
+            const cu = parseFloat(f.costo_unitario);
+            if (f.costo_unitario === '' || f.costo_unitario === null || isNaN(cu) || cu < 0)
+                errors.costo_unitario = 'Debe ser un número ≥ 0.';
+            // Advertencia: nombre potencialmente duplicado (NO bloquea — el backend tiene la verdad)
+            if (nombre && nombre.length <= 120) {
+                const dup = this.insumos.find(i =>
+                    i.id !== f.id &&
+                    (i.nombre || '').trim().toLowerCase() === nombre.toLowerCase()
+                );
+                if (dup) warnings.nombre = `Ya existe un insumo llamado "${dup.nombre}". El servidor lo rechazará si se repite exacto.`;
+            }
+            this.formInsumoErrors = errors;
+            this.formInsumoWarnings = warnings;
+            return Object.keys(errors).length === 0;
+        },
+
+        get formInsumoValido() {
+            // Solo errores duros bloquean; campos mínimos presentes
+            return Object.keys(this.formInsumoErrors).length === 0
+                && (this.formInsumo.nombre || '').trim() !== ''
+                && !!this.formInsumo.unidad_medida;
+        },
+
+        get unidadAbrev() {
+            const id = parseInt(this.formInsumo.unidad_medida);
+            if (!id) return '';
+            const u = this.unidades.find(x => x.id === id);
+            return u ? u.abreviatura : '';
+        },
+
+        async guardarInsumo() {
+            if (!this.validarFormInsumo()) {
+                this.toast('Revisa los campos marcados', 'error');
+                return;
+            }
+            this.guardando = true;
+            const isEdit = !!this.formInsumo.id;
+            const body = { nombre: this.formInsumo.nombre, unidad_medida: this.formInsumo.unidad_medida, stock_minimo: this.formInsumo.stock_minimo, costo_unitario: this.formInsumo.costo_unitario };
+            if (!isEdit) { body.stock_actual = this.formInsumo.stock_inicial || 0; body.stock_real = this.formInsumo.stock_inicial || 0; }
+            try {
+                const resp = await fetch(isEdit ? `/api/inventario/insumos/${this.formInsumo.id}/` : '/api/inventario/insumos/', {
+                    method: isEdit ? 'PUT' : 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (resp.ok) {
+                    this.modalInsumoForm.hide();
+                    await this.fetchInsumos();
+                    this.toast(isEdit ? `"${this.formInsumo.nombre}" actualizado` : `"${this.formInsumo.nombre}" creado`);
+                } else {
+                    // Mapear errores del backend al objeto formInsumoErrors
+                    const err = await resp.json().catch(() => ({}));
+                    const nuevosErrores = {};
+                    for (const campo of Object.keys(err)) {
+                        const msgs = Array.isArray(err[campo]) ? err[campo] : [err[campo]];
+                        nuevosErrores[campo] = msgs.join(' ');
+                    }
+                    if (Object.keys(nuevosErrores).length > 0) {
+                        this.formInsumoErrors = { ...this.formInsumoErrors, ...nuevosErrores };
+                        this.toast(Object.values(nuevosErrores).join(' '), 'error');
+                    } else {
+                        this.toast('Error al guardar', 'error');
+                    }
+                }
+            } catch { this.toast('Error de conexión', 'error'); }
+            finally { this.guardando = false; }
+        },
+
+        async desactivarInsumo(insumo) {
+            if (!confirm(`¿Desactivar "${insumo.nombre}"?\n\nEl insumo se ocultará del catálogo y todas sus recetas quedarán inactivas. El historial de movimientos se conserva.`)) return;
+            try {
+                const resp = await fetch(`/api/inventario/insumos/${insumo.id}/`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: { 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                });
+                if (resp.ok || resp.status === 204) {
+                    await this.fetchInsumos();
+                    this.toast(`"${insumo.nombre}" desactivado`);
+                } else {
+                    const err = await resp.json().catch(() => ({}));
+                    this.toast(err.error || err.detail || 'No se pudo desactivar', 'error');
+                }
+            } catch { this.toast('Error de conexión', 'error'); }
+        },
+
+        _csrf() {
+            // Preferir el token renderizado por Django; fallback a cookie con regex robusta.
+            const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            if (el && el.value) return el.value;
+            const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,1020 @@
+/* ========================================================
+   KDS — Kitchen Display System
+   Estilos del panel de cocina
+   ======================================================== */
+
+/* ========= VARIABLES ========= */
+:root {
+    /* Colores primarios */
+    --kds-primary: #C0392B;
+    --kds-primary-dark: #A93226;
+    --kds-primary-light: #E74C3C;
+
+    /* Estados */
+    --color-pendiente: #95A5A6;
+    --color-en-prep: #F39C12;
+    --color-listo: #27AE60;
+    --color-entregado: #3498DB;
+    --color-anulado: #E74C3C;
+
+    /* Urgencia */
+    --color-urgente-bg: #FFEBEE;
+    --color-urgente-border: #E74C3C;
+    --color-alerta-bg: #FFF8E1;
+    --color-alerta-border: #F39C12;
+    --color-normal-bg: #FFFFFF;
+    --color-normal-border: #DEE2E6;
+
+    /* Notas */
+    --color-nota-bg: #FFF9C4;
+    --color-nota-border: #F39C12;
+
+    /* Fondos */
+    --bg-body: #F0F2F5;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #FFFFFF;
+
+    /* Texto */
+    --text-primary: #2C3E50;
+    --text-secondary: #7F8C8D;
+    --text-white: #FFFFFF;
+
+    /* Sombras */
+    --shadow-card: 0 2px 8px rgba(0,0,0,0.08);
+    --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.12);
+    --shadow-header: 0 2px 12px rgba(0,0,0,0.15);
+
+    /* Transiciones */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+
+    /* Tamaños */
+    --header-height: 56px;
+    --sidebar-width: 240px;
+    --card-min-width: 320px;
+    --card-max-width: 400px;
+}
+
+/* ========= HEADER ========= */
+.kds-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: var(--header-height);
+    background: linear-gradient(135deg, var(--kds-primary) 0%, var(--kds-primary-dark) 100%);
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-shadow: var(--shadow-header);
+}
+
+.kds-header__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.kds-header__logo {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.kds-header__title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+.kds-header__center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kds-header__filter-label {
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.kds-header__select {
+    padding: 6px 32px 6px 12px;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.15);
+    color: var(--text-white);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: background var(--transition-fast);
+}
+
+.kds-header__select:hover {
+    background-color: rgba(255,255,255,0.25);
+}
+
+.kds-header__select option {
+    color: #333;
+    background: #fff;
+}
+
+.kds-header__right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.kds-header__user {
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.kds-header__btn-logout {
+    padding: 6px 16px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-white);
+    transition: all var(--transition-fast);
+}
+
+.kds-header__btn-logout:hover {
+    background: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.6);
+}
+
+/* ========= MAIN LAYOUT ========= */
+.kds-main {
+    margin-top: var(--header-height);
+    display: flex;
+    min-height: calc(100vh - var(--header-height));
+    background: var(--bg-body);
+}
+
+.kds-grid {
+    flex: 1;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
+    gap: 16px;
+    align-content: start;
+}
+
+/* ========= LOADING ========= */
+.kds-loading {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+    font-size: 15px;
+}
+
+.kds-loading__spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e0e0e0;
+    border-top-color: var(--kds-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========= EMPTY STATE ========= */
+.kds-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    color: var(--text-secondary);
+}
+
+.kds-empty__icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.kds-empty__text {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.kds-empty__subtext {
+    font-size: 14px;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+
+/* ========= TARJETA DE COMANDA ========= */
+.kds-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    border-left: 5px solid var(--color-normal-border);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    transition: all var(--transition-normal);
+    animation: cardSlideIn 0.4s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes cardSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.kds-card:hover {
+    box-shadow: var(--shadow-card-hover);
+}
+
+/* Estados de urgencia de la tarjeta */
+.kds-card--normal {
+    border-left-color: var(--color-normal-border);
+    background: var(--color-normal-bg);
+}
+
+.kds-card--alerta {
+    border-left-color: var(--color-alerta-border);
+    background: var(--color-alerta-bg);
+}
+
+.kds-card--urgente {
+    border-left-color: var(--color-urgente-border);
+    background: var(--color-urgente-bg);
+    animation: cardSlideIn 0.4s ease, urgentPulse 2s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+    0%, 100% { box-shadow: var(--shadow-card); }
+    50% { box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2), var(--shadow-card-hover); }
+}
+
+/* --- Card Header --- */
+.kds-card__header {
+    padding: 12px 16px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.kds-card__pedido {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.kds-card__fecha {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* --- Card Subheader --- */
+.kds-card__subheader {
+    padding: 0 16px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.kds-card__codigo {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+.kds-card__info {
+    display: block;
+}
+
+.kds-card__info strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.kds-card__mesero {
+    display: block;
+}
+
+/* --- Card Body (líneas) --- */
+.kds-card__body {
+    padding: 0 16px;
+    flex: 1;
+}
+
+.kds-card__divider {
+    border: none;
+    border-top: 1px solid #EEE;
+    margin: 0 0 8px;
+}
+
+/* --- Línea de plato --- */
+.kds-linea {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #F5F5F5;
+    flex-wrap: wrap;
+}
+
+.kds-linea:last-child {
+    border-bottom: none;
+}
+
+.kds-linea__nombre {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.kds-linea__cantidad {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.kds-linea__orden {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: #ECF0F1;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.kds-linea__estado {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.kds-linea__estado--PENDIENTE  { background: #ECEFF1; color: #546E7A; }
+.kds-linea__estado--EN_PREP    { background: #FFF3E0; color: #E65100; }
+.kds-linea__estado--LISTO      { background: #E8F5E9; color: #2E7D32; }
+.kds-linea__estado--ENTREGADO  { background: #E3F2FD; color: #1565C0; }
+.kds-linea__estado--ANULADO    { background: #FFEBEE; color: #C62828; }
+
+.kds-linea__tiempo {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.kds-linea__tiempo--alerta {
+    color: var(--color-en-prep);
+    font-weight: 700;
+}
+
+.kds-linea__tiempo--urgente {
+    color: var(--color-anulado);
+    font-weight: 700;
+}
+
+/* --- Botones de acción --- */
+.kds-linea__actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.kds-btn {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-white);
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.kds-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+}
+
+.kds-btn:active {
+    transform: translateY(0);
+}
+
+.kds-btn--recibir  { background: var(--color-en-prep); }
+.kds-btn--servir   { background: var(--color-listo); }
+.kds-btn--cancelar { background: var(--color-anulado); }
+
+.kds-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+}
+
+/* --- Nota del pedido --- */
+.kds-card__nota {
+    margin: 8px 16px 12px;
+    padding: 10px 14px;
+    background: var(--color-nota-bg);
+    border-left: 3px solid var(--color-nota-border);
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.kds-card__nota-title {
+    font-weight: 700;
+    color: var(--color-en-prep);
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+/* ========= SIDEBAR ========= */
+.kds-sidebar {
+    width: var(--sidebar-width);
+    padding: 20px;
+    background: var(--bg-sidebar);
+    border-left: 1px solid #E0E0E0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+.kds-summary {
+    background: #FAFAFA;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.kds-summary__title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.kds-summary__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #EEE;
+}
+
+.kds-summary__item:last-child {
+    border-bottom: none;
+}
+
+.kds-summary__label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.kds-summary__value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.kds-summary__value--urgent {
+    color: var(--color-anulado);
+}
+
+/* ========= PAGINATION ========= */
+.kds-pagination {
+    background: #FAFAFA;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.kds-pagination__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.kds-pagination__info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.kds-pagination__dots {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.kds-pagination__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #DDD;
+    transition: background var(--transition-fast);
+}
+
+.kds-pagination__dot--active {
+    background: var(--kds-primary);
+}
+
+.kds-pagination__auto {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.kds-pagination__auto input {
+    accent-color: var(--kds-primary);
+}
+
+/* ========= CLOCK ========= */
+.kds-clock {
+    background: #FAFAFA;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    margin-top: auto;
+}
+
+.kds-clock__time {
+    display: block;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.kds-clock__date {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* ========= TOAST ========= */
+.kds-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    padding: 12px 24px;
+    background: #333;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.kds-toast--show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.kds-toast--success { background: var(--color-listo); }
+.kds-toast--error   { background: var(--color-anulado); }
+.kds-toast--warning { background: var(--color-en-prep); }
+
+/* ========= UNDO BAR ========= */
+.kds-linea--pending {
+    opacity: 0.7;
+    background: #FAFAFA;
+    border-radius: 6px;
+    padding: 8px 6px;
+    transition: opacity var(--transition-normal);
+}
+
+.kds-undo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 180px;
+    animation: undoSlideIn 0.3s ease;
+}
+
+@keyframes undoSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.kds-undo__info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.kds-undo__label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.kds-undo__seconds {
+    color: var(--kds-primary);
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.kds-undo__btn {
+    padding: 3px 10px;
+    border: 2px solid var(--kds-primary);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--kds-primary);
+    font-size: 11px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.kds-undo__btn:hover {
+    background: var(--kds-primary);
+    color: var(--text-white);
+    transform: scale(1.05);
+}
+
+.kds-undo__bar {
+    height: 4px;
+    background: #E0E0E0;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.kds-undo__progress {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s linear;
+}
+
+.kds-undo__progress--EN_PREP  { background: var(--color-en-prep); }
+.kds-undo__progress--LISTO    { background: var(--color-listo); }
+.kds-undo__progress--ANULADO  { background: var(--color-anulado); }
+
+/* ========= CARD DISAPPEAR OVERLAY ========= */
+.kds-card--completing {
+    position: relative;
+}
+
+.kds-card--fade-out {
+    animation: cardFadeOut 0.5s ease forwards;
+}
+
+@keyframes cardFadeOut {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.92);
+    }
+}
+
+.kds-disappear {
+    position: absolute;
+    inset: 0;
+    background: rgba(39, 174, 96, 0.12);
+    backdrop-filter: blur(2px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    z-index: 10;
+    animation: overlayFadeIn 0.4s ease;
+}
+
+@keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.kds-disappear__content {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kds-disappear__svg {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    transform: rotate(-90deg);
+}
+
+.kds-disappear__circle-bg {
+    fill: none;
+    stroke: #E0E0E0;
+    stroke-width: 3;
+}
+
+.kds-disappear__circle-progress {
+    fill: none;
+    stroke: var(--color-listo);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+}
+
+.kds-disappear__count {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--color-listo);
+    z-index: 1;
+}
+
+.kds-disappear__label {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2E7D32;
+    letter-spacing: 0.3px;
+}
+
+/* ========= WS INDICATOR ========= */
+.kds-ws-indicator {
+    font-size: 12px;
+    margin-left: 8px;
+    transition: color var(--transition-fast);
+}
+.kds-ws-indicator--on { color: #2ECC71; }
+.kds-ws-indicator--off { color: #E74C3C; animation: wsBlink 1.5s ease-in-out infinite; }
+@keyframes wsBlink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+/* ========= CANCELLED LINE (30s visible) ========= */
+.kds-linea--anulada {
+    opacity: 0.5;
+    text-decoration: line-through;
+    background: #FFEBEE;
+    border-radius: 4px;
+    padding: 6px 8px;
+    border-left: 3px solid var(--color-anulado);
+    animation: anuladaFadeIn 0.4s ease;
+}
+@keyframes anuladaFadeIn { from{opacity:0;transform:translateX(-8px);} to{opacity:0.5;transform:translateX(0);} }
+
+/* ========= MODAL ANULACIÓN ========= */
+.kds-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: overlayFadeIn 0.25s ease;
+}
+.kds-modal {
+    background: #fff;
+    border-radius: 14px;
+    width: 90%;
+    max-width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+    animation: modalSlideUp 0.3s ease;
+}
+@keyframes modalSlideUp { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+.kds-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #FFEBEE;
+    border-bottom: 1px solid #FFCDD2;
+}
+.kds-modal__title { font-size: 16px; font-weight: 700; color: #C62828; margin: 0; }
+.kds-modal__close {
+    background: none; border: none; font-size: 22px; color: #999;
+    cursor: pointer; padding: 0; line-height: 1;
+    transition: color var(--transition-fast);
+}
+.kds-modal__close:hover { color: #333; }
+.kds-modal__body { padding: 20px; }
+.kds-modal__plato {
+    font-size: 15px; font-weight: 700; color: var(--text-primary);
+    margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;
+}
+.kds-modal__label {
+    display: block; font-size: 13px; font-weight: 600;
+    color: var(--text-secondary); margin-bottom: 6px;
+}
+.kds-modal__required { color: var(--color-anulado); font-weight: 700; font-size: 11px; }
+.kds-modal__textarea {
+    width: 100%; padding: 10px 12px; border: 2px solid #E0E0E0;
+    border-radius: 8px; font-size: 14px; font-family: inherit;
+    resize: vertical; outline: none; transition: border-color var(--transition-fast);
+    box-sizing: border-box;
+}
+.kds-modal__textarea:focus { border-color: var(--kds-primary); }
+.kds-modal__counter { display: block; text-align: right; font-size: 11px; color: #999; margin-top: 4px; }
+.kds-modal__error {
+    color: var(--color-anulado); font-size: 12px; font-weight: 600;
+    margin-top: 8px; padding: 6px 10px; background: #FFF3F3; border-radius: 4px;
+}
+.kds-modal__footer {
+    display: flex; gap: 10px; justify-content: flex-end;
+    padding: 14px 20px; background: #FAFAFA; border-top: 1px solid #EEE;
+}
+.kds-modal__btn {
+    padding: 8px 20px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: all var(--transition-fast);
+}
+.kds-modal__btn--cancel { background: #E0E0E0; color: #555; }
+.kds-modal__btn--cancel:hover { background: #D0D0D0; }
+.kds-modal__btn--confirm { background: var(--color-anulado); color: #fff; }
+.kds-modal__btn--confirm:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+/* ========= RESPONSIVE ========= */
+@media (max-width: 1200px) {
+    .kds-sidebar {
+        width: 200px;
+    }
+    :root {
+        --card-min-width: 300px;
+    }
+}
+
+@media (max-width: 900px) {
+    .kds-main {
+        flex-direction: column;
+    }
+    .kds-sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-left: none;
+        border-top: 1px solid #E0E0E0;
+    }
+    .kds-summary,
+    .kds-pagination,
+    .kds-clock {
+        flex: 1;
+        min-width: 200px;
+    }
+    .kds-clock { margin-top: 0; }
+}
+
+@media (max-width: 600px) {
+    .kds-header {
+        padding: 0 12px;
+        flex-wrap: wrap;
+        height: auto;
+        padding: 10px 12px;
+    }
+    .kds-header__title { font-size: 14px; }
+    .kds-grid { padding: 12px; gap: 12px; }
+    :root {
+        --card-min-width: 100%;
+    }
+    .kds-modal { width: 95%; }
+}
+
+
+
+/* ========================================================
+   MESERO INTEGRATION � Adapts KDS to work inside MESERO's navbar
+   ======================================================== */
+
+/* El .kds-layout reemplaza el container-fluid del base.html */
+.kds-layout {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+}
+
+/* El kds-main NO necesita margin-top porque el navbar de MESERO ya est� */
+.kds-main {
+    margin-top: 0 !important;
+    min-height: calc(100vh - 60px) !important;
+}
+
+/* Sub-header interno del KDS */
+.kds-inner-header {
+    background: linear-gradient(135deg, var(--kds-primary) 0%, var(--kds-primary-dark) 100%);
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    box-shadow: var(--shadow-header);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.kds-inner-header .kds-header__left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kds-inner-header .kds-header__title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+.kds-inner-header .kds-header__center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kds-inner-header .kds-header__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.kds-inner-header .kds-header__user {
+    opacity: 0.85;
+    font-size: 12px;
+}
+
+.kds-inner-header .kds-header__btn-logout {
+    padding: 5px 14px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: var(--text-white);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+}
+
+.kds-inner-header .kds-header__btn-logout:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+/* El .kds-header original (fijo) se oculta */
+.kds-header {
+    display: none;
+}
