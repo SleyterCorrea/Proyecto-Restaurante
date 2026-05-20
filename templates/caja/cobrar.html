@@ -1,0 +1,610 @@
+{% extends 'base.html' %}
+{% block title %}Módulo de Cobros — RestaurantOS{% endblock %}
+{% block nav_caja %}active{% endblock %}
+
+{% block extra_css %}
+<!-- Material Symbols & Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<style>
+    .glass-card {
+        background: rgb(var(--surface) / 0.85);
+        backdrop-filter: blur(24px);
+        border: 1px solid rgb(var(--border) / 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    }
+    .order-scrollbar::-webkit-scrollbar { width: 4px; }
+    .order-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .order-scrollbar::-webkit-scrollbar-thumb { background: rgb(var(--border) / 0.15); border-radius: 10px; }
+    
+    [x-cloak] { display: none !important; }
+
+    .cobrar-container {
+        height: calc(100vh - var(--navbar-h) - 2rem);
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 cobrar-container" x-data="cobrarApp()" x-init="init()" x-cloak>
+    <div class="row h-100 g-4">
+        
+        <!-- ── Lista de Comandas / Historial (Izquierda) ── -->
+        <div class="col-lg-8 h-100 flex flex-col">
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <div class="flex items-center gap-4 mb-4">
+                        <button @click="setTab('cobrar')" :class="tab === 'cobrar' ? 'bg-primary text-[#160066]' : 'bg-surface-container text-on-surface-variant hover:text-white'" class="px-4 py-2 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg">
+                            <span class="material-symbols-outlined text-lg">point_of_sale</span> Por Cobrar
+                        </button>
+                        <button @click="setTab('historial')" :class="tab === 'historial' ? 'bg-primary text-[#160066]' : 'bg-surface-container text-on-surface-variant hover:text-white'" class="px-4 py-2 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-lg">
+                            <span class="material-symbols-outlined text-lg">history</span> Historial de Ventas
+                        </button>
+                    </div>
+                    <h2 class="text-white font-bold mb-1 flex items-center gap-2" x-show="tab === 'cobrar'">
+                        <span class="material-symbols-outlined text-primary text-3xl">payments</span>
+                        Comandas por Cobrar
+                    </h2>
+                    <h2 class="text-white font-bold mb-1 flex items-center gap-2" x-show="tab === 'historial'" x-cloak>
+                        <span class="material-symbols-outlined text-primary text-3xl">receipt_long</span>
+                        Historial de Ventas
+                    </h2>
+                    <p class="text-on-surface-variant text-sm" x-show="tab === 'cobrar'">Selecciona una mesa para procesar el pago final</p>
+                    <p class="text-on-surface-variant text-sm" x-show="tab === 'historial'" x-cloak>Revisa el registro de los pagos efectuados</p>
+                </div>
+                <div class="bg-surface-container-high border border-white/5 px-4 py-2 rounded-2xl flex items-center gap-3">
+                    <span class="material-symbols-outlined text-secondary">point_of_sale</span>
+                    <div class="text-left">
+                        <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Turno Activo</p>
+                        <p class="text-white font-bold leading-tight">{{ turno_activo.codigo_turno }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-y-auto order-scrollbar pr-2 pb-5 h-full" x-show="tab === 'cobrar'">
+                <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+                    {% for c in comandas %}
+                    <div class="col">
+                        <div class="glass-card rounded-3xl p-4 cursor-pointer hover:border-primary/50 transition-all group relative overflow-hidden"
+                             @click='seleccionarComanda({{ c.id }}, "{{ c.mesa.numero }}", "{{ c.total }}", {{ c.lineas_json|safe }}, "{{ c.nombre_cliente|default:''|escapejs }}", "{{ c.union_label|default:''|escapejs }}")'
+                             :class="selectedComanda && selectedComanda.id == {{ c.id }} ? 'ring-2 ring-primary border-transparent' : ''">
+                            
+                            <!-- Background Decoration -->
+                            <div class="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <span class="material-symbols-outlined text-8xl">table_restaurant</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-start mb-4 relative z-10">
+                                <div class="flex flex-col gap-1">
+                                    {% if c.union_label %}
+                                    <!-- Badge de Unión -->
+                                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black text-white" style="background:linear-gradient(135deg,#f97316,#fb923c)">
+                                        <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">link</span>
+                                        {{ c.union_label }}
+                                    </div>
+                                    <span class="text-[10px] font-bold text-on-surface-variant">{{ c.capacidad_union }} personas</span>
+                                    {% else %}
+                                    <div class="bg-primary/10 text-primary px-3 py-1.5 rounded-xl text-xs font-bold border border-primary/20">
+                                        Mesa {{ c.mesa.numero }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="px-2">
+                                    <p class="text-primary text-[10px] font-black uppercase tracking-widest mb-0">{{ c.nombre_cliente|default:"-" }}</p>
+                                </div>
+                                <span class="text-on-surface-variant text-xs flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm">schedule</span>
+                                    {{ c.fecha_apertura|date:"H:i" }}
+                                </span>
+                            </div>
+
+                            <div class="mb-3 relative z-10">
+                                <p class="text-on-surface-variant text-xs uppercase tracking-widest font-bold mb-1">Saldo Pendiente</p>
+                                <h3 class="text-white font-black text-3xl">S/. {{ c.total }}</h3>
+                            </div>
+
+                            <!-- Platos de la comanda (preview) -->
+                            <div class="mb-3 relative z-10 space-y-1">
+                                {% for linea in c.lineas.all %}
+                                {% if linea.estado != 'ANULADO' %}
+                                <div class="flex justify-between items-center text-xs py-1 border-b border-white/5 {% if linea.estado == 'ENTREGADO' %}opacity-40 line-through{% endif %}">
+                                    <span class="text-on-surface font-medium">{{ linea.cantidad }}x {{ linea.plato.nombre }}</span>
+                                    <span class="text-primary font-bold">S/. {{ linea.subtotal }}</span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+
+                            <div class="pt-2 border-t border-white/5 relative z-10 flex justify-between items-center gap-2">
+                                <p class="text-on-surface-variant text-xs flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm">person</span>
+                                    {{ c.mozo.username }}
+                                </p>
+                                <!-- Botón pérdida DIRECTO en el card -->
+                                <button class="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
+                                        @click.stop="marcarPerdidaDirecto({{ c.id }}, 'Mesa {{ c.mesa.numero }}')"
+                                        title="Marcar como Pérdida">
+                                    <span class="material-symbols-outlined text-xs">money_off</span>
+                                    Pérdida
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12 text-center py-20 bg-surface-container/20 rounded-[40px] border border-dashed border-white/10">
+                        <span class="material-symbols-outlined text-6xl text-white/5 mb-4">check_circle</span>
+                        <h4 class="text-white font-bold mb-1">¡Todo al día!</h4>
+                        <p class="text-on-surface-variant">No hay comandas pendientes de cobro.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Vista del Historial de Ventas -->
+            <div class="h-full flex flex-col" x-show="tab === 'historial'" x-cloak>
+                {% if user.rol.nombre == 'ADMIN' %}
+                <div class="bg-surface-container-high rounded-3xl p-4 mb-4 flex flex-wrap gap-4 items-end border border-white/5">
+                    <div>
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1 block mb-1">Fecha Inicio</label>
+                        <input type="date" x-model="fechaInicio" class="bg-surface/50 border border-on-surface/10 rounded-xl py-2 px-3 text-sm text-on-surface focus:border-primary focus:ring-0 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1 block mb-1">Fecha Fin</label>
+                        <input type="date" x-model="fechaFin" class="bg-surface/50 border border-on-surface/10 rounded-xl py-2 px-3 text-sm text-on-surface focus:border-primary focus:ring-0 transition-all">
+                    </div>
+                    <button @click="cargarHistorial" class="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/20 py-2 px-4 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
+                        <span class="material-symbols-outlined text-sm">search</span> Filtrar
+                    </button>
+                </div>
+                {% endif %}
+
+                <div class="overflow-y-auto order-scrollbar flex-1 bg-surface-container rounded-3xl border border-white/5">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-surface-container z-10 border-b border-white/10">
+                            <tr>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">ID</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Fecha/Hora</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Cliente</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ubicación</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Método</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Monto</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="pago in historial" :key="pago.pago_id">
+                                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                    <td class="py-3 px-4 text-sm text-white font-medium">#<span x-text="pago.comanda_codigo"></span></td>
+                                    <td class="py-3 px-4 text-sm text-on-surface-variant" x-text="pago.fecha_pago"></td>
+                                    <td class="py-3 px-4 text-sm text-primary font-bold" x-text="pago.cliente"></td>
+                                    <td class="py-3 px-4 text-sm text-on-surface" x-text="pago.mesa"></td>
+                                    <td class="py-3 px-4 text-sm text-on-surface">
+                                        <span :class="pago.es_multi ? 'bg-secondary/20 border-secondary/30 text-secondary' : 'bg-surface/50 border-white/10 text-on-surface'" class="border px-2 py-1 rounded text-xs font-bold" x-text="pago.metodo_display"></span>
+                                    </td>
+                                    <td class="py-3 px-4 text-sm font-black text-secondary text-right" x-text="'S/. ' + pago.monto_total.toFixed(2)"></td>
+                                    <td class="py-3 px-4 text-center">
+                                        <a :href="pago.boleta_url" target="_blank" class="w-8 h-8 mx-auto bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors" title="Ver Boleta">
+                                            <span class="material-symbols-outlined text-sm">receipt</span>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="historial.length === 0 && !loadingHistorial">
+                                <td colspan="7" class="text-center py-10 text-on-surface-variant">No se encontraron pagos en este rango de fechas.</td>
+                            </tr>
+                            <tr x-show="loadingHistorial">
+                                <td colspan="7" class="text-center py-10 text-primary">
+                                    <span class="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+                                    <p class="mt-2 text-sm font-bold">Cargando historial...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Panel de Pago (Derecha) ── -->
+        <div class="col-lg-4 h-100">
+            <div class="glass-card h-full rounded-[40px] p-6 flex flex-col relative overflow-hidden" x-show="selectedComanda" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-x-full opacity-0" x-transition:enter-end="translate-x-0 opacity-100">
+                
+                <div class="d-flex justify-content-between align-items-center mb-6">
+                    <h3 class="text-white font-bold mb-0">Detalle de Cobro</h3>
+                    <button class="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center text-on-surface-variant transition-colors" @click="selectedComanda = null">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <!-- Ticket -->
+                <div class="bg-black/20 rounded-3xl p-5 mb-6 border border-white/5">
+                    <div class="d-flex justify-content-between border-b border-white/10 pb-3 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-sm">receipt_long</span>
+                            <div>
+                                <!-- Si hay unión, mostrar badge naranja, sino badge normal -->
+                                <template x-if="selectedComanda?.union_label">
+                                    <div>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black text-white mb-0.5" style="background:linear-gradient(135deg,#f97316,#fb923c)">
+                                            <span class="material-symbols-outlined" style="font-size:10px;font-variation-settings:'FILL' 1">link</span>
+                                            <span x-text="selectedComanda.union_label"></span>
+                                        </span>
+                                        <span class="text-primary text-[10px] font-black uppercase tracking-widest block" x-text="selectedComanda.nombre_cliente"></span>
+                                    </div>
+                                </template>
+                                <template x-if="!selectedComanda?.union_label">
+                                    <div>
+                                        <span class="text-white font-bold text-sm block leading-none">Mesa <span x-text="selectedComanda?.mesa"></span></span>
+                                        <span class="text-primary text-[10px] font-black uppercase tracking-widest" x-text="selectedComanda?.nombre_cliente"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <span class="text-on-surface-variant text-[10px] font-bold tracking-widest">ID: #<span x-text="selectedComanda?.id"></span></span>
+                    </div>
+
+                    <div class="order-scrollbar overflow-y-auto mb-4 space-y-3" style="max-height: 200px;">
+                        <template x-for="item in selectedComanda?.lineas" :key="item.id">
+                            <div class="d-flex justify-content-between text-sm">
+                                <div class="flex gap-2 items-baseline">
+                                    <span class="text-primary font-bold" x-text="item.cantidad + 'x'"></span>
+                                    <span class="text-on-surface" x-text="item.plato_nombre"></span>
+                                </div>
+                                <span class="text-white font-medium" x-text="'S/. ' + item.subtotal"></span>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Selector de Platos para pago individual -->
+                    <div class="mb-3" x-show="selectedComanda && selectedComanda.lineas.filter(l=>l.estado !== 'ANULADO' && l.estado !== 'ENTREGADO').length > 1">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Seleccionar platos a pagar</span>
+                            <button type="button" @click="toggleSeleccionTodos()" class="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">
+                                <span x-text="lineasSeleccionadas.length === lineasPagables.length ? 'Desmarcar todo' : 'Marcar todo'"></span>
+                            </button>
+                        </div>
+                        <div class="space-y-1.5 max-h-36 overflow-y-auto order-scrollbar">
+                            <template x-for="item in lineasPagables" :key="item.id">
+                                <label class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group">
+                                    <input type="checkbox" :value="item.id" x-model="lineasSeleccionadas"
+                                           @change="recalcularTotal()"
+                                           class="w-4 h-4 rounded accent-primary flex-shrink-0">
+                                    <div class="flex-1 flex justify-between items-center">
+                                        <span class="text-xs text-on-surface group-hover:text-white transition-colors" x-text="item.cantidad + 'x ' + item.plato_nombre"></span>
+                                        <span class="text-xs font-bold text-primary" x-text="'S/. ' + parseFloat(item.subtotal).toFixed(2)"></span>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-white/10 flex justify-between items-center" x-show="lineasSeleccionadas.length < lineasPagables.length && lineasSeleccionadas.length > 0">
+                            <span class="text-[10px] text-warning font-bold uppercase tracking-widest">Pago parcial</span>
+                            <span class="text-warning font-black text-sm" x-text="'S/. ' + totalSeleccionado.toFixed(2)"></span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between border-t border-white/10 pt-4 mt-2">
+                        <span class="text-on-surface font-bold text-lg">TOTAL A COBRAR</span>
+                        <span class="text-primary font-black text-2xl" x-text="'S/. ' + totalACobrar.toFixed(2)"></span>
+                    </div>
+                </div>
+
+                <!-- Formulario -->
+                <form @submit.prevent="confirmarPago" class="flex-1 flex flex-col gap-5">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">Método de Pago</label>
+                        <div class="relative">
+                            <select class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-3 px-4 text-on-surface appearance-none focus:border-primary focus:ring-0 transition-all cursor-pointer" 
+                                    x-model="metodo_id" required @change="onMetodoChange">
+                                {% for m in metodos_pago %}
+                                <option value="{{ m.id }}" data-referencia="{{ m.requiere_referencia|yesno:'true,false' }}" data-vuelto="{{ m.permite_vuelto|yesno:'true,false' }}">
+                                    {{ m.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">unfold_more</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2" x-show="showMonto">
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">Monto Recibido (S/.)</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold">S/.</span>
+                            <input type="number" step="0.10" class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface text-xl font-bold focus:border-primary focus:ring-0 transition-all" 
+                                   x-model="monto_recibido" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2" x-show="showReferencia">
+                        <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">N° Referencia / Operación</label>
+                        <input type="text" class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-3 px-4 text-on-surface focus:border-primary focus:ring-0 transition-all" 
+                               x-model="referencia" placeholder="Ej: 123456">
+                    </div>
+
+                    <!-- Vuelto -->
+                    <div class="mt-auto bg-primary/10 border border-primary/20 rounded-3xl p-5 text-center flex flex-col justify-center animate-pulse-slow" x-show="showMonto && vuelto >= 0">
+                        <span class="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Vuelto a Entregar</span>
+                        <h2 class="text-white font-black text-4xl mb-0" x-text="'S/. ' + vuelto.toFixed(2)"></h2>
+                    </div>
+                    
+                    <div class="mt-auto" x-show="!showMonto || vuelto < 0"></div>
+
+                    <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-[#160066] py-4 rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4" 
+                            :disabled="loading || lineasSeleccionadas.length === 0 || (showMonto && parseFloat(monto_recibido) < totalACobrar)">
+                        <template x-if="!loading">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined font-bold">check_circle</span>
+                                <span>Confirmar Cobro</span>
+                            </div>
+                        </template>
+                        <template x-if="loading">
+                            <span class="animate-spin material-symbols-outlined">progress_activity</span>
+                        </template>
+                    </button>
+
+                    <!-- Botón Marcar como Pérdida -->
+                    <button type="button" @click="marcarPerdida()"
+                            class="w-full mt-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 py-3 rounded-3xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                            :disabled="loadingPerdida">
+                        <span class="material-symbols-outlined text-sm" x-show="!loadingPerdida">money_off</span>
+                        <span class="material-symbols-outlined text-sm animate-spin" x-show="loadingPerdida">progress_activity</span>
+                        <span x-text="loadingPerdida ? 'Registrando...' : 'Marcar como Pérdida (cliente no pagó)'"></span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Empty State -->
+            <div class="glass-card h-full rounded-[40px] d-flex flex-col align-items-center justify-content-center p-8 border-dashed border-2 opacity-30" x-show="!selectedComanda">
+                <span class="material-symbols-outlined text-8xl mb-4">touch_app</span>
+                <h4 class="font-bold text-white mb-2">Panel de Pago</h4>
+                <p class="text-center text-sm">Selecciona una comanda de la izquierda para ver los detalles y procesar el cobro.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function cobrarApp() {
+    return {
+        tab: 'cobrar',
+        selectedComanda: null,
+        metodo_id: null,
+        monto_recibido: 0,
+        referencia: '',
+        loading: false,
+        loadingPerdida: false,
+        showMonto: true,
+        showReferencia: false,
+
+        // Selección de platos individuales
+        lineasSeleccionadas: [],     // IDs de líneas seleccionadas para pagar
+        totalSeleccionado: 0,        // Total de las líneas seleccionadas
+
+        get lineasPagables() {
+            if (!this.selectedComanda) return [];
+            return (this.selectedComanda.lineas || []).filter(l =>
+                l.estado !== 'ANULADO' && l.estado !== 'ENTREGADO'
+            );
+        },
+
+        get totalACobrar() {
+            // Si todas las líneas están seleccionadas o es una sola, usar el total completo
+            if (this.lineasSeleccionadas.length === 0) return 0;
+            if (this.lineasSeleccionadas.length === this.lineasPagables.length) {
+                return parseFloat(this.selectedComanda?.total) || 0;
+            }
+            return this.totalSeleccionado;
+        },
+
+        recalcularTotal() {
+            const lineas = this.lineasPagables.filter(l => this.lineasSeleccionadas.includes(l.id));
+            this.totalSeleccionado = lineas.reduce((acc, l) => acc + parseFloat(l.subtotal || 0), 0);
+            if (this.showMonto) this.monto_recibido = this.totalACobrar;
+        },
+
+        toggleSeleccionTodos() {
+            if (this.lineasSeleccionadas.length === this.lineasPagables.length) {
+                this.lineasSeleccionadas = [];
+            } else {
+                this.lineasSeleccionadas = this.lineasPagables.map(l => l.id);
+            }
+            this.recalcularTotal();
+        },
+
+        // Historial de ventas
+        historial: [],
+        loadingHistorial: false,
+        fechaInicio: new Date().toISOString().split('T')[0],
+        fechaFin: new Date().toISOString().split('T')[0],
+
+        init() {
+            // Polling cada 15 segundos para nuevas comandas listas (solo si estamos en la pestaña de cobrar)
+            setInterval(() => {
+                if (!this.loading && !this.selectedComanda && this.tab === 'cobrar') {
+                    window.location.reload();
+                }
+            }, 15000);
+        },
+
+        setTab(newTab) {
+            this.tab = newTab;
+            if (newTab === 'historial') {
+                this.selectedComanda = null; // Cerramos el panel de pago al cambiar de tab
+                this.cargarHistorial();
+            }
+        },
+
+        async cargarHistorial() {
+            this.loadingHistorial = true;
+            this.historial = [];
+            try {
+                const params = new URLSearchParams({
+                    fecha_inicio: this.fechaInicio,
+                    fecha_fin: this.fechaFin
+                });
+                const res = await fetch(`/caja/api/historial/?${params.toString()}`);
+                const data = await res.json();
+                if (data.ok) {
+                    this.historial = data.pagos;
+                }
+            } catch (e) {
+                console.error("Error al cargar historial:", e);
+            } finally {
+                this.loadingHistorial = false;
+            }
+        },
+
+        seleccionarComanda(id, mesa, total, lineas, nombre_cliente, union_label = '') {
+            this.selectedComanda = { 
+                id, 
+                mesa, 
+                total: parseFloat(total) || 0, 
+                lineas: Array.isArray(lineas) ? lineas : [],
+                nombre_cliente: nombre_cliente || '',
+                union_label: union_label || ''
+            };
+            // Seleccionar todas las líneas pagables por defecto
+            this.$nextTick(() => {
+                this.lineasSeleccionadas = this.lineasPagables.map(l => l.id);
+                this.recalcularTotal();
+                this.monto_recibido = this.totalACobrar;
+                this.referencia = '';
+
+                const select = document.querySelector('select');
+                if (select) {
+                    this.metodo_id = select.value;
+                    this.onMetodoChange();
+                }
+            });
+        },
+
+        onMetodoChange() {
+            const option = document.querySelector(`option[value="${this.metodo_id}"]`);
+            if (option) {
+                this.showReferencia = option.dataset.referencia === 'true';
+                this.showMonto = option.dataset.vuelto === 'true';
+                if (!this.showMonto) {
+                    this.monto_recibido = this.selectedComanda.total;
+                }
+            }
+        },
+
+        get vuelto() {
+            if (!this.selectedComanda) return 0;
+            return Math.max(0, parseFloat(this.monto_recibido) - this.totalACobrar);
+        },
+
+        async confirmarPago() {
+            if (this.lineasSeleccionadas.length === 0) {
+                alert('Selecciona al menos un plato para cobrar.');
+                return;
+            }
+            if (this.showMonto && parseFloat(this.monto_recibido) < this.totalACobrar) {
+                alert('El monto recibido es insuficiente.');
+                return;
+            }
+            this.loading = true;
+            // Si es pago parcial (no todas las líneas), enviar lineas_ids
+            const esParcial = this.lineasSeleccionadas.length < this.lineasPagables.length;
+            try {
+                const body = {
+                    metodo_pago_id: this.metodo_id,
+                    monto_recibido: parseFloat(this.monto_recibido),
+                    referencia: this.referencia,
+                };
+                if (esParcial) body.lineas_ids = this.lineasSeleccionadas;
+                const response = await fetch(`/caja/api/comandas/${this.selectedComanda.id}/pagar/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._getCsrfToken() },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    const boletaId = data.pago_ids ? data.pago_ids[0] : data.pago_id;
+                    if (boletaId) window.open(`/caja/boleta/${boletaId}/`, '_blank');
+                    this.selectedComanda = null;
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    alert(data.error || 'Error al procesar el pago.');
+                }
+            } catch (e) {
+                alert('Error de conexión con el servidor.');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async marcarPerdida() {
+            if (!this.selectedComanda) return;
+            if (!confirm(`¿Confirmar que la comanda #${this.selectedComanda.id} (Mesa ${this.selectedComanda.mesa}) se registrará como PÉRDIDA? Esta acción no se puede deshacer.`)) return;
+            this.loadingPerdida = true;
+            try {
+                const response = await fetch(`/caja/api/registrar-perdida/${this.selectedComanda.id}/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._getCsrfToken() },
+                    body: JSON.stringify({ observacion: 'Cliente no pagó — registrado manualmente' })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    this.selectedComanda = null;
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    alert(data.error || 'Error al registrar la pérdida.');
+                }
+            } catch (e) {
+                alert('Error de conexión.');
+            } finally {
+                this.loadingPerdida = false;
+            }
+        },
+
+        // Pérdida directo desde el card pequeño
+        _perdiendoIds: {},
+        async marcarPerdidaDirecto(comandaId, mesaLabel) {
+            if (this._perdiendoIds[comandaId]) {
+                // Segunda confirmación — ejecutar
+                delete this._perdiendoIds[comandaId];
+                try {
+                    const response = await fetch(`/caja/api/registrar-perdida/${comandaId}/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._getCsrfToken() },
+                        body: JSON.stringify({ observacion: 'Pérdida registrada desde panel de cobro' })
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        setTimeout(() => window.location.reload(), 300);
+                    } else {
+                        alert(data.error || 'Error al registrar la pérdida.');
+                    }
+                } catch (e) {
+                    alert('Error de conexión.');
+                }
+            } else {
+                // Primera confirmación — feedback visual
+                this._perdiendoIds[comandaId] = true;
+                setTimeout(() => { delete this._perdiendoIds[comandaId]; }, 3000);
+                // Cambiar texto del botón temporalmente via querySelector
+                const btn = event.target.closest('button');
+                if (btn) {
+                    const origHtml = btn.innerHTML;
+                    btn.innerHTML = '<span class="material-symbols-outlined text-xs">warning</span> ¿Confirmar?';
+                    btn.classList.add('bg-red-500', 'text-white', 'border-red-500');
+                    setTimeout(() => {
+                        btn.innerHTML = origHtml;
+                        btn.classList.remove('bg-red-500', 'text-white', 'border-red-500');
+                    }, 3000);
+                }
+            }
+        },
+
+        _getCsrfToken() {
+            return document.cookie.split('; ')
+                .find(row => row.startsWith('csrftoken='))
+                ?.split('=')[1] || '';
+        }
+    }
+}
+</script>
+{% endblock %}

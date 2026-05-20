@@ -1,0 +1,43 @@
+schema:spec-driven
+
+context: |
+  Tech stack: Django 5.x, Alpine.js, Tailwind CSS, PostgreSQL, DRF.
+  Architecture: Monolithic with clear app boundaries (Clean Architecture inspired).
+  UI: Premium Glassmorphism, Dynamic Dark/Light Theme (Admin controlled).
+  Testing: Pytest with custom Django integration.
+
+strict_tdd: true
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected modules/packages
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group tasks by phase (infrastructure, implementation, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+  apply:
+    - Follow Clean Code and Clean Architecture principles.
+    - Use CSS variables for all styling (no hardcoded colors).
+  verify:
+    - Run pytest for all backend changes.
+    - Validate UI responsiveness and theme reactivity.
+  archive:
+    - Warn before merging destructive deltas.
+
+testing:
+  strict_tdd: true
+  test_runner:
+    command: "pytest"
+    framework: "pytest"
+  layers:
+    unit: true
+    integration: true
+    e2e: false
+  coverage:
+    available: false

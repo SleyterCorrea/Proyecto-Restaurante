@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoría — Admin Panel{% endblock %}
+{% block nav_auditoria %}active{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" x-data="auditApp()" x-init="init()">
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0 text-white font-black text-2xl">Auditoría de Sistema</h2>
+            <p class="text-on-surface-variant small font-bold">Registro detallado de acciones y trazabilidad</p>
+        </div>
+    </div>
+
+    <div class="card card-dark shadow-sm overflow-hidden">
+        <div class="card-header border-0 bg-transparent p-4">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text border-0 bg-surface text-on-surface-variant">
+                            <span class="material-symbols-outlined text-sm">search</span>
+                        </span>
+                        <input type="text" class="form-control border-0 bg-surface text-sm" placeholder="Buscar por usuario o detalle..." x-model="search" @input.debounce.500ms="fetchLogs()">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filtroEntidad" @change="fetchLogs()">
+                        <option value="">Todas las Entidades</option>
+                        <option value="PLATOS">Platos</option>
+                        <option value="CATEGORIA">Categorías</option>
+                        <option value="INSUMO">Inventario</option>
+                        <option value="USUARIO">Usuarios</option>
+                        <option value="COMANDA">Comandas</option>
+                        <option value="MESA">Mesas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filtroAccion" @change="fetchLogs()">
+                        <option value="">Todas las Acciones</option>
+                        <option value="CREACION">Creación</option>
+                        <option value="EDICION">Edición</option>
+                        <option value="ELIMINACION">Eliminación</option>
+                        <option value="LOGIN">Inicio de Sesión</option>
+                    </select>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-sm btn-outline-primary rounded-lg flex items-center gap-2 justify-center w-full" @click="fetchLogs()" :disabled="loading">
+                        <span class="material-symbols-outlined text-sm" :class="loading ? 'animate-spin' : ''">refresh</span>
+                        Actualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-sm mb-0">
+                <thead class="bg-black/20 text-on-surface-variant text-[10px] uppercase tracking-widest">
+                    <tr>
+                        <th class="px-4 py-3">Fecha/Hora</th>
+                        <th class="px-4 py-3">Usuario</th>
+                        <th class="px-4 py-3">Acción</th>
+                        <th class="px-4 py-3">Entidad</th>
+                        <th class="px-4 py-3">Detalles</th>
+                        <th class="px-4 py-3 text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5 border-t border-white/5">
+                    <template x-for="log in logs" :key="log.id">
+                        <tr class="hover:bg-white/5 transition-colors">
+                            <td class="px-4 py-3 align-middle text-xs font-mono text-primary" x-text="log.fecha"></td>
+                            <td class="px-4 py-3 align-middle">
+                                <span class="badge bg-surface border border-white/10 text-white font-bold" x-text="log.usuario"></span>
+                            </td>
+                            <td class="px-4 py-3 align-middle">
+                                <span :class="{
+                                    'text-green-400': log.accion === 'CREACION',
+                                    'text-blue-400': log.accion === 'EDICION',
+                                    'text-red-400': log.accion === 'ELIMINACION',
+                                    'text-yellow-400': log.accion === 'LOGIN'
+                                }" class="text-[10px] font-black uppercase tracking-tighter" x-text="log.accion"></span>
+                            </td>
+                            <td class="px-4 py-3 align-middle text-xs text-on-surface-variant" x-text="log.entidad + ' (#' + log.entidad_id + ')'"></td>
+                            <td class="px-4 py-3 align-middle">
+                                <div class="text-[10px] text-on-surface-variant truncate max-w-[300px]" x-text="getResumen(log)"></div>
+                            </td>
+                            <td class="px-4 py-3 align-middle text-end">
+                                <button class="btn btn-sm text-primary hover:bg-primary/10 rounded-lg" @click="verDetalle(log)">
+                                    <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="logs.length === 0 && !loading">
+                        <tr>
+                            <td colspan="6" class="text-center py-8 text-on-surface-variant">No se encontraron registros de auditoría.</td>
+                        </tr>
+                    </template>
+                    <template x-if="loading">
+                        <tr>
+                            <td colspan="6" class="text-center py-8">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Detalle -->
+    <div class="modal fade" id="modalDetalle" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content card-dark border-primary/20 shadow-2xl">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title font-black text-white">Detalle de Auditoría</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body pt-0" x-if="selectedLog">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="bg-surface p-3 rounded-xl border border-white/5">
+                                <label class="text-[9px] uppercase tracking-widest text-on-surface-variant block mb-1">Usuario</label>
+                                <span class="text-white font-bold" x-text="selectedLog.usuario"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-surface p-3 rounded-xl border border-white/5">
+                                <label class="text-[9px] uppercase tracking-widest text-on-surface-variant block mb-1">Acción</label>
+                                <span class="text-primary font-bold" x-text="selectedLog.accion"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-surface p-3 rounded-xl border border-white/5">
+                                <label class="text-[9px] uppercase tracking-widest text-on-surface-variant block mb-1">IP Origen</label>
+                                <span class="text-on-surface-variant font-mono text-xs" x-text="selectedLog.ip || 'Local/Interno'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-[10px] uppercase font-black text-on-surface-variant mb-2">Estado Anterior</h6>
+                            <pre class="bg-black/40 p-3 rounded-xl text-[10px] text-red-300 font-mono overflow-auto max-h-[300px] border border-white/5" x-text="JSON.stringify(selectedLog.detalle_anterior, null, 2) || 'Sin datos'"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-[10px] uppercase font-black text-on-surface-variant mb-2">Estado Nuevo</h6>
+                            <pre class="bg-black/40 p-3 rounded-xl text-[10px] text-green-300 font-mono overflow-auto max-h-[300px] border border-white/5" x-text="JSON.stringify(selectedLog.detalle_nuevo, null, 2) || 'Sin datos'"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+function auditApp() {
+    return {
+        logs: [],
+        loading: false,
+        search: '',
+        filtroEntidad: '',
+        filtroAccion: '',
+        selectedLog: null,
+        modalDetalleInst: null,
+
+        init() {
+            this.modalDetalleInst = new bootstrap.Modal(document.getElementById('modalDetalle'));
+            this.fetchLogs();
+        },
+
+        async fetchLogs() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    search: this.search,
+                    entidad: this.filtroEntidad,
+                    accion: this.filtroAccion
+                });
+                const res = await fetch(`/api/auditoria-logs/?${params.toString()}`);
+                if(res.ok) {
+                    this.logs = await res.json();
+                }
+            } catch(e) {
+                console.error(e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        getResumen(log) {
+            if (log.accion === 'EDICION' && log.detalle_nuevo) {
+                return Object.keys(log.detalle_nuevo).join(', ');
+            }
+            return log.entidad + ' #' + log.entidad_id;
+        },
+
+        verDetalle(log) {
+            this.selectedLog = log;
+            this.modalDetalleInst.show();
+        }
+    }
+}
+</script>
+{% endblock %}
+{% endblock %}

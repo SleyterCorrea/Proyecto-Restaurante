@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Apertura de Caja — RestaurantOS{% endblock %}
+{% block nav_caja %}active{% endblock %}
+
+{% block extra_css %}
+<!-- Material Symbols & Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<style>
+    .glass-card {
+        background: rgb(var(--surface) / 0.85);
+        backdrop-filter: blur(24px);
+        border: 1px solid rgb(var(--border) / 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    }
+    [x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-10" x-data="aperturaApp()" x-cloak>
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="glass-card rounded-[40px] p-8 text-center relative overflow-hidden">
+                <!-- Background Decoration -->
+                <div class="absolute -right-10 -top-10 opacity-5">
+                    <span class="material-symbols-outlined text-[200px]">key</span>
+                </div>
+
+                <div class="relative z-10">
+                    <div class="bg-primary/10 text-primary w-20 h-20 rounded-[30px] flex items-center justify-center mx-auto mb-6">
+                        <span class="material-symbols-outlined text-4xl">lock_open</span>
+                    </div>
+                    
+                    <h2 class="text-white font-black text-3xl mb-2">Turno de Caja</h2>
+                    <p class="text-on-surface-variant text-sm mb-8">Inicia tu jornada registrando el saldo base</p>
+
+                    {% if turno_activo %}
+                    <div class="bg-secondary/10 border border-secondary/20 rounded-3xl p-6 mb-8 text-left">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="material-symbols-outlined text-secondary">check_circle</span>
+                            <h5 class="text-white font-bold mb-0">Turno Activo</h5>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-on-surface-variant text-xs font-bold uppercase tracking-widest">Código</span>
+                                <span class="text-white font-bold text-xs">{{ turno_activo.codigo_turno }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-on-surface-variant text-xs font-bold uppercase tracking-widest">Cajero</span>
+                                <span class="text-white font-bold text-xs">{{ turno_activo.cajero.username }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-on-surface-variant text-xs font-bold uppercase tracking-widest">Apertura</span>
+                                <span class="text-white font-bold text-xs">{{ turno_activo.fecha_apertura|date:"H:i" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <a href="{% url 'caja_cobrar' %}" class="w-full bg-primary hover:bg-primary/90 text-[#160066] py-4 rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 transition-all active:scale-95">
+                        <span class="material-symbols-outlined font-bold">payments</span>
+                        <span>Ir a Cobrar</span>
+                    </a>
+                    {% else %}
+                    <form @submit.prevent="abrirTurno" class="space-y-6">
+                        <div class="space-y-3 text-left">
+                            <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">Punto de Caja</label>
+                            <select x-model="punto_caja" class="w-full bg-surface/50 border border-on-surface/10 rounded-[24px] py-4 px-6 text-on-surface font-bold focus:border-primary focus:ring-0 transition-all">
+                                {% for valor, etiqueta in puntos_caja %}
+                                <option value="{{ valor }}">{{ etiqueta }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="space-y-3 text-left">
+                            <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">Saldo Inicial en Caja (S/.)</label>
+                            <div class="relative">
+                                <span class="absolute left-6 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-xl">S/.</span>
+                                <input type="number" step="0.10" class="w-full bg-surface/50 border border-on-surface/10 rounded-[24px] py-6 pl-16 pr-6 text-on-surface text-3xl font-black focus:border-primary focus:ring-0 transition-all text-center" 
+                                       x-model="saldo_inicial" required placeholder="0.00">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-[#160066] py-4 rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 transition-all disabled:opacity-50" :disabled="loading">
+                            <template x-if="!loading">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined font-bold">play_arrow</span>
+                                    <span>Abrir Nuevo Turno</span>
+                                </div>
+                            </template>
+                            <template x-if="loading">
+                                <span class="animate-spin material-symbols-outlined">progress_activity</span>
+                            </template>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function aperturaApp() {
+    return {
+        saldo_inicial: 0,
+        punto_caja: 'PLANTA_BAJA',
+        loading: false,
+        async abrirTurno() {
+            this.loading = true;
+            try {
+                const response = await fetch('{% url "api_caja_apertura" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        saldo_inicial: this.saldo_inicial,
+                        punto_caja: this.punto_caja
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Error al abrir turno');
+                }
+            } catch (e) {
+                alert('Error de conexión');
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}
