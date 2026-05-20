@@ -436,7 +436,8 @@ function cobrarApp() {
         },
 
         recalcularTotal() {
-            const lineas = this.lineasPagables.filter(l => this.lineasSeleccionadas.includes(l.id));
+            const seleccionadosIds = this.lineasSeleccionadas.map(id => Number(id));
+            const lineas = this.lineasPagables.filter(l => seleccionadosIds.includes(Number(l.id)));
             this.totalSeleccionado = lineas.reduce((acc, l) => acc + parseFloat(l.subtotal || 0), 0);
             
             // Cada vez que cambia el total a cobrar, actualizar sugerencia de monto restante
@@ -445,15 +446,16 @@ function cobrarApp() {
 
         toggleSeleccionTodos() {
             const lineasNoPagadas = this.lineasPagables.filter(l => !l.ya_pagado);
-            const todosSeleccionados = lineasNoPagadas.every(l => this.lineasSeleccionadas.includes(l.id));
+            const seleccionadosIds = this.lineasSeleccionadas.map(id => Number(id));
+            const todosSeleccionados = lineasNoPagadas.every(l => seleccionadosIds.includes(Number(l.id)));
             
             if (todosSeleccionados) {
                 // Deseleccionar todas las no pagadas
-                this.lineasSeleccionadas = this.lineasSeleccionadas.filter(id => !lineasNoPagadas.some(l => l.id === id));
+                this.lineasSeleccionadas = this.lineasSeleccionadas.filter(id => !lineasNoPagadas.some(l => Number(l.id) === Number(id)));
             } else {
                 // Seleccionar todas las no pagadas
-                const noPagadasIds = lineasNoPagadas.map(l => l.id);
-                this.lineasSeleccionadas = [...new Set([...this.lineasSeleccionadas, ...noPagadasIds])];
+                const noPagadasIds = lineasNoPagadas.map(l => Number(l.id));
+                this.lineasSeleccionadas = [...new Set([...seleccionadosIds, ...noPagadasIds])];
             }
             this.recalcularTotal();
         },
@@ -582,7 +584,8 @@ function cobrarApp() {
         },
 
         async confirmarPago() {
-            if (this.lineasSeleccionadas.length === 0) {
+            const selectedIds = this.lineasSeleccionadas.map(id => Number(id));
+            if (selectedIds.length === 0) {
                 alert('Selecciona al menos un plato para cobrar.');
                 return;
             }
@@ -596,7 +599,7 @@ function cobrarApp() {
             }
 
             this.loading = true;
-            const esParcial = this.lineasSeleccionadas.length < this.lineasPagables.length;
+            const esParcial = selectedIds.length < this.lineasPagables.length;
             
             try {
                 const pagos = this.pagosRegistrados.map(p => ({
@@ -609,7 +612,7 @@ function cobrarApp() {
                 const body = {
                     pagos: pagos
                 };
-                if (esParcial) body.linea_ids = this.lineasSeleccionadas;
+                if (esParcial) body.linea_ids = selectedIds;
 
                 const response = await fetch(`/caja/api/comandas/${this.selectedComanda.id}/pagar/`, {
                     method: 'POST',
