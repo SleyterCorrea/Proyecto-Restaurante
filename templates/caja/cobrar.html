@@ -75,7 +75,7 @@
                     {% for c in comandas %}
                     <div class="col">
                         <div class="glass-card rounded-3xl p-4 cursor-pointer hover:border-primary/50 transition-all group relative overflow-hidden"
-                             @click='seleccionarComanda({{ c.id }}, "{{ c.mesa.numero }}", "{{ c.total }}", {{ c.lineas_caja_json|safe }}, "{{ c.nombre_cliente|default:''|escapejs }}", "{{ c.union_label|default:''|escapejs }}")'
+                             @click='seleccionarComanda({{ c.id }}, "{{ c.mesa.numero }}", "{{ c.total_pendiente }}", {{ c.lineas_caja_json|safe }}, "{{ c.nombre_cliente|default:''|escapejs }}", "{{ c.union_label|default:''|escapejs }}")'
                              :class="selectedComanda && selectedComanda.id == {{ c.id }} ? 'ring-2 ring-primary border-transparent' : ''">
                             
                             <!-- Background Decoration -->
@@ -109,7 +109,7 @@
 
                             <div class="mb-3 relative z-10">
                                 <p class="text-on-surface-variant text-xs uppercase tracking-widest font-bold mb-1">Saldo Pendiente</p>
-                                <h3 class="text-white font-black text-3xl">S/. {{ c.total }}</h3>
+                                <h3 class="text-white font-black text-3xl">S/. {{ c.total_pendiente }}</h3>
                             </div>
 
                             <div class="pt-2 border-t border-white/5 relative z-10 flex flex-col gap-2">
@@ -241,25 +241,43 @@
 
                     <div class="flex items-center justify-between mb-3 px-1">
                         <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Platos por pagar</span>
-                        <button type="button" @click="toggleSeleccionTodos()" class="text-[10px] font-black text-primary uppercase tracking-widest hover:underline" x-show="lineasPagables.length > 1">
-                            <span x-text="lineasSeleccionadas.length === lineasPagables.length ? 'Desmarcar todo' : 'Marcar todo'"></span>
+                        <button type="button" @click="toggleSeleccionTodos()" class="text-[10px] font-black text-primary uppercase tracking-widest hover:underline" x-show="lineasPagables.filter(l => !l.ya_pagado).length > 1">
+                            <span x-text="lineasPagables.filter(l => !l.ya_pagado).every(l => lineasSeleccionadas.includes(l.id)) ? 'Desmarcar todo' : 'Marcar todo'"></span>
                         </button>
                     </div>
 
                     <div class="order-scrollbar overflow-y-auto mb-4 space-y-1 max-h-48 border-b border-white/5 pb-2">
                         <template x-for="item in lineasPagables" :key="item.id">
-                            <label class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group">
-                                <input type="checkbox" :value="item.id" x-model="lineasSeleccionadas"
-                                       @change="recalcularTotal()"
-                                       class="w-4 h-4 rounded accent-primary flex-shrink-0">
+                            <div class="flex items-center gap-3 p-2 rounded-xl transition-colors group"
+                                 :class="item.ya_pagado ? 'opacity-65 bg-white/5' : 'hover:bg-white/5 cursor-pointer'">
+                                
+                                <!-- Si ya está pagado, mostrar ícono de check verde -->
+                                <template x-if="item.ya_pagado">
+                                    <span class="material-symbols-outlined text-green-500 text-lg flex-shrink-0" style="font-variation-settings:'FILL' 1">check_circle</span>
+                                </template>
+                                
+                                <!-- Si no está pagado, mostrar checkbox -->
+                                <template x-if="!item.ya_pagado">
+                                    <input type="checkbox" :value="item.id" x-model="lineasSeleccionadas"
+                                           @change="recalcularTotal()"
+                                           class="w-4 h-4 rounded accent-primary flex-shrink-0 cursor-pointer">
+                                </template>
+
                                 <div class="flex-1 flex justify-between items-center">
                                     <div class="flex gap-2 items-baseline">
                                         <span class="text-primary font-bold text-sm" x-text="item.cantidad + 'x'"></span>
-                                        <span class="text-on-surface group-hover:text-white transition-colors text-sm" x-text="item.plato_nombre"></span>
+                                        <span class="text-sm transition-colors"
+                                              :class="item.ya_pagado ? 'text-green-400 underline font-medium' : 'text-on-surface group-hover:text-white'"
+                                              x-text="item.plato_nombre"></span>
                                     </div>
-                                    <span class="text-white font-medium text-sm" x-text="'S/. ' + parseFloat(item.subtotal).toFixed(2)"></span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-white font-medium text-sm" x-text="'S/. ' + parseFloat(item.subtotal).toFixed(2)"></span>
+                                        <template x-if="item.ya_pagado">
+                                            <span class="text-[9px] bg-green-500/20 border border-green-500/30 text-green-400 font-extrabold px-1.5 py-0.5 rounded-lg uppercase tracking-wider">Pagado</span>
+                                        </template>
+                                    </div>
                                 </div>
-                            </label>
+                            </div>
                         </template>
                     </div>
 
@@ -414,10 +432,6 @@ function cobrarApp() {
         },
 
         get totalACobrar() {
-            if (this.lineasSeleccionadas.length === 0) return 0;
-            if (this.lineasSeleccionadas.length === this.lineasPagables.length) {
-                return parseFloat(this.selectedComanda?.total) || 0;
-            }
             return this.totalSeleccionado;
         },
 
@@ -430,10 +444,16 @@ function cobrarApp() {
         },
 
         toggleSeleccionTodos() {
-            if (this.lineasSeleccionadas.length === this.lineasPagables.length) {
-                this.lineasSeleccionadas = [];
+            const lineasNoPagadas = this.lineasPagables.filter(l => !l.ya_pagado);
+            const todosSeleccionados = lineasNoPagadas.every(l => this.lineasSeleccionadas.includes(l.id));
+            
+            if (todosSeleccionados) {
+                // Deseleccionar todas las no pagadas
+                this.lineasSeleccionadas = this.lineasSeleccionadas.filter(id => !lineasNoPagadas.some(l => l.id === id));
             } else {
-                this.lineasSeleccionadas = this.lineasPagables.map(l => l.id);
+                // Seleccionar todas las no pagadas
+                const noPagadasIds = lineasNoPagadas.map(l => l.id);
+                this.lineasSeleccionadas = [...new Set([...this.lineasSeleccionadas, ...noPagadasIds])];
             }
             this.recalcularTotal();
         },
@@ -547,9 +567,9 @@ function cobrarApp() {
             };
             this.pagosRegistrados = [];
             
-            // Seleccionar todas las líneas pagables por defecto
+            // Seleccionar solo las líneas que NO están pagadas por defecto
             this.$nextTick(() => {
-                this.lineasSeleccionadas = this.lineasPagables.map(l => l.id);
+                this.lineasSeleccionadas = this.lineasPagables.filter(l => !l.ya_pagado).map(l => l.id);
                 this.recalcularTotal();
                 
                 const select = document.querySelector('select[x-model="form_metodo_id"]');

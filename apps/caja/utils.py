@@ -107,6 +107,8 @@ def generar_pdf_boleta(pago, qr_url=None):
     line_h = 4 * mm
     
     cliente = pago.comanda.nombre_cliente or "PÚBLICO EN GENERAL"
+    if pago.observacion:
+        cliente = f"{cliente} - {pago.observacion}"
     c.drawString(10*mm, y, f"Cliente : {cliente.upper()}")
     y -= line_h
     
@@ -140,7 +142,10 @@ def generar_pdf_boleta(pago, qr_url=None):
     y -= 4 * mm_unit
     
     c.setFont("Helvetica", 7)
-    lineas = pago.comanda.lineas.exclude(estado='ANULADO')
+    if pago.lineas_pagadas.exists():
+        lineas = pago.lineas_pagadas.all()
+    else:
+        lineas = pago.comanda.lineas.exclude(estado='ANULADO')
     for l in lineas:
         nombre = l.plato.nombre
         if len(nombre) > 22: nombre = nombre[:20] + ".."
@@ -155,7 +160,7 @@ def generar_pdf_boleta(pago, qr_url=None):
     y -= 6 * mm_unit
     
     # ─── TOTALES ─────────────────────────────────────────────────────────────
-    monto_total = float(pago.monto)
+    monto_total = float(pago.monto - pago.vuelto)
     igv = monto_total * 0.10
     subtotal = monto_total - igv
     
@@ -171,6 +176,15 @@ def generar_pdf_boleta(pago, qr_url=None):
     c.drawRightString(55*mm, y, "Total Precio Venta")
     c.drawString(58*mm, y, f": S/ {monto_total:.2f}")
     y -= 6 * mm_unit
+    
+    if pago.vuelto > 0:
+        c.setFont("Helvetica", 8)
+        c.drawRightString(55*mm, y, "Efectivo Recibido")
+        c.drawString(58*mm, y, f": S/ {float(pago.monto):.2f}")
+        y -= 4 * mm_unit
+        c.drawRightString(55*mm, y, "Vuelto")
+        c.drawString(58*mm, y, f": S/ {float(pago.vuelto):.2f}")
+        y -= 6 * mm_unit
     
     c.line(10*mm, y, ancho_ticket - 10*mm, y)
     y -= 4 * mm_unit

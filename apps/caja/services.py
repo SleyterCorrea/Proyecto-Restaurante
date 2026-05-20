@@ -62,14 +62,36 @@ def procesar_cobro(comanda_id, pagos_data, usuario, linea_ids=None, observacion=
                 f"La comanda no está disponible para cobrar. Estado: {comanda.get_estado_display()}"
             )
 
+        # Líneas ya pagadas en cobros previos de la comanda
+        lineas_ya_pagadas_ids = set(
+            LineaComanda.objects.filter(
+                comanda=comanda,
+                pagos__estado=Pago.Estado.PAGADO
+            ).values_list('id', flat=True)
+        )
+
         # Determinar las líneas a cobrar
         if linea_ids:
             lineas = list(comanda.lineas.filter(pk__in=linea_ids).select_related('plato'))
         else:
-            lineas = list(comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO).select_related('plato'))
+            # Si no se especifican, se cobran todas las líneas activas que aún no han sido pagadas
+            lineas = list(
+                comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO)
+                .exclude(id__in=lineas_ya_pagadas_ids)
+                .select_related('plato')
+            )
 
         if not lineas:
             raise ValidationError("No hay líneas válidas para cobrar.")
+
+        # Validar que ninguna de las líneas que se quieren pagar ahora esté ya pagada
+        lineas_ahora_ids = set(l.id for l in lineas)
+        lineas_repetidas = lineas_ahora_ids.intersection(lineas_ya_pagadas_ids)
+        if lineas_repetidas:
+            nombres_repetidos = [l.plato.nombre for l in lineas if l.id in lineas_repetidas]
+            raise ValidationError(
+                f"Las siguientes líneas ya fueron pagadas: {', '.join(nombres_repetidos)}."
+            )
 
         # Calcular el total a cobrar según las líneas seleccionadas
         total_a_cobrar = sum(l.subtotal for l in lineas)
@@ -114,13 +136,21 @@ def procesar_cobro(comanda_id, pagos_data, usuario, linea_ids=None, observacion=
             pagos_creados.append(pago)
             metodos_usados.append(metodo)
 
-        # Actualizar estado de la comanda
-        comanda.estado = Comanda.Estado.COBRADA
-        comanda.fecha_cierre = timezone.now()
-        comanda.save(update_fields=['estado', 'fecha_cierre'])
+        # Determinar si con este pago se completa toda la comanda
+        lineas_activas = comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO)
+        lineas_activas_ids = set(lineas_activas.values_list('id', flat=True))
 
-        # Liberar mesas
-        _liberar_mesas_comanda(comanda)
+        total_pagadas_ids = lineas_ya_pagadas_ids.union(lineas_ahora_ids)
+        es_pago_completo = lineas_activas_ids.issubset(total_pagadas_ids)
+
+        if es_pago_completo:
+            # Si se completó el pago de toda la comanda, actualizar estado y liberar mesa
+            comanda.estado = Comanda.Estado.COBRADA
+            comanda.fecha_cierre = timezone.now()
+            comanda.save(update_fields=['estado', 'fecha_cierre'])
+
+            # Liberar mesas
+            _liberar_mesas_comanda(comanda)
 
         # Actualizar totales del turno
         for i, pago in enumerate(pagos_creados):

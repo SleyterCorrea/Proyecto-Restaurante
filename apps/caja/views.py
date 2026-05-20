@@ -96,23 +96,33 @@ def cobrar_view(request):
             mesa__estado=Mesa.Estado.POR_PAGAR
         )
         .select_related('mesa', 'mozo', 'mesa__zona')
-        .prefetch_related('mesas_adicionales', 'lineas__plato')
+        .prefetch_related('mesas_adicionales', 'lineas__plato', 'lineas__pagos')
     )
 
     _anotar_union_labels(comandas_listas)
 
     import json
-    # Calcular total_pendiente para cada comanda (excluye líneas anuladas)
+    # Calcular total_pendiente para cada comanda (excluye líneas anuladas y ya pagadas)
     for c in comandas_listas:
+        # Determinar qué líneas ya fueron pagadas en cobros previos usando prefetch cache
+        lineas_ya_pagadas_ids = set()
+        for l in c.lineas.all():
+            if any(p.estado == Pago.Estado.PAGADO for p in l.pagos.all()):
+                lineas_ya_pagadas_ids.add(l.id)
+
         lineas_activas = [l for l in c.lineas.all() if l.estado != LineaComanda.Estado.ANULADO]
-        c.total_pendiente = sum(l.subtotal for l in lineas_activas)
-        # Serializar lineas para Alpine.js (selector de platos individuales)
+        lineas_por_pagar = [l for l in lineas_activas if l.id not in lineas_ya_pagadas_ids]
+        
+        c.total_pendiente = sum(l.subtotal for l in lineas_por_pagar)
+        
+        # Serializar lineas para Alpine.js (selector de platos individuales con estado de pago)
         c.lineas_caja_json = json.dumps([{
             'id': l.id,
             'plato_nombre': l.plato.nombre,
             'cantidad': l.cantidad,
             'subtotal': float(l.subtotal),
             'estado': l.estado,
+            'ya_pagado': l.id in lineas_ya_pagadas_ids,
         } for l in c.lineas.all()])
 
     metodos_pago = MetodoPago.objects.filter(activo=True)
