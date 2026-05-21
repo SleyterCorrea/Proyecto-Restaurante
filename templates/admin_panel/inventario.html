@@ -454,7 +454,10 @@ html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
 
 {% block content %}
 {% csrf_token %}
-<div class="container-fluid py-4 inv-page" x-data="inventarioApp()">
+{# Datos SSR embebidos como JSON puro — no se ejecutan como JS #}
+<script type="application/json" id="inv-insumos-ssr">{{ insumos_json|default:"[]"|safe }}</script>
+<script type="application/json" id="inv-unidades-ssr">{{ unidades_json|default:"[]"|safe }}</script>
+<div class="container-fluid py-4 inv-page" x-data="inventarioApp">
 
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -1101,6 +1104,26 @@ html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
                     <div class="invalid-feedback" x-show="formInsumoErrors.unidad_medida" x-text="formInsumoErrors.unidad_medida"></div>
                 </div>
 
+                <!-- Categoría -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold inv-text-muted">
+                        Categoría <span class="text-danger">*</span>
+                    </label>
+                    <select class="form-select inv-input"
+                            :class="{'is-invalid': formInsumoErrors.categoria}"
+                            x-model="formInsumo.categoria"
+                            @change="validarFormInsumo()">
+                        <option value="PROTEINA">🥩 Proteínas</option>
+                        <option value="VEGETAL">🥦 Vegetales</option>
+                        <option value="BEBIDA">🥤 Bebidas</option>
+                        <option value="SECO">🌾 Secos / Abarrotes</option>
+                        <option value="LACTEO">🥛 Lácteos</option>
+                        <option value="CONDIMENTO">🧂 Condimentos</option>
+                        <option value="OTRO">📦 Otros</option>
+                    </select>
+                    <div class="invalid-feedback" x-show="formInsumoErrors.categoria" x-text="formInsumoErrors.categoria"></div>
+                </div>
+
                 <!-- Stock mínimo + Costo unitario -->
                 <div class="row g-3">
                     <div class="col-12 col-md-6">
@@ -1215,8 +1238,8 @@ html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
 <script>
 function inventarioApp() {
     return {
-        insumos: {{ insumos_json|safe }},
-        unidades: {{ unidades_json|safe }},
+        insumos: [],
+        unidades: [],
         historial: [],
         cargandoHistorial: false,
         selectedInsumo: null,
@@ -1227,7 +1250,7 @@ function inventarioApp() {
         guardando: false,
         toasts: [],
         ajuste: { tipo: 'AJUSTE_POSITIVO', cantidad: 0, motivo: '' },
-        formInsumo: { id: null, nombre: '', unidad_medida: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 },
+        formInsumo: { id: null, nombre: '', unidad_medida: '', categoria: 'OTRO', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 },
         formInsumoErrors: {},
         formInsumoWarnings: {},
         modalAjuste: null,
@@ -1437,13 +1460,14 @@ function inventarioApp() {
         },
 
         async verMovimientosGlobales() {
-            // Carga los últimos movimientos de cada insumo y los combina
+            // Usa this.insumos (ya cargados) para obtener historial de cada uno en paralelo
             this.cargandoHistorial = true;
             this.movimientosGlobales = [];
             try {
-                const resp = await fetch('/api/inventario/insumos/?activo=true', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-                if (!resp.ok) throw new Error('No se pudo cargar');
-                // Obtenemos historial de cada insumo en paralelo (limitado a los activos)
+                if (this.insumos.length === 0) {
+                    this.toast('No hay insumos cargados. Refresca la página.', 'error');
+                    return;
+                }
                 const lista = this.insumos.slice(0, 50);
                 const movs = await Promise.all(lista.map(i =>
                     fetch(`/api/inventario/insumos/${i.id}/historial/`, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
@@ -1533,13 +1557,24 @@ function inventarioApp() {
             }
         },
 
-        init() {
-            try { this.modalAjuste     = new bootstrap.Modal(document.getElementById('modalAjuste')); } catch(e) { console.error('Modal ajuste error:', e); }
-            try { this.modalInsumoForm = new bootstrap.Modal(document.getElementById('modalInsumo')); } catch(e) { console.error('Modal insumo error:', e); }
-            try { this.modalHistorial  = new bootstrap.Modal(document.getElementById('modalHistorial')); } catch(e) { console.error('Modal historial error:', e); }
-            // Atajos de teclado globales
+        async init() {
+            // Cargar datos SSR desde los elementos <script type="application/json">
+            try {
+                const elI = document.getElementById('inv-insumos-ssr');
+                const elU = document.getElementById('inv-unidades-ssr');
+                if (elI && elI.textContent.trim()) this.insumos  = JSON.parse(elI.textContent);
+                if (elU && elU.textContent.trim()) this.unidades = JSON.parse(elU.textContent);
+            } catch(e) { console.error('[INV] Error SSR:', e); }
+
+            // Modales Bootstrap
+            try { this.modalAjuste     = new bootstrap.Modal(document.getElementById('modalAjuste')); } catch(e) {}
+            try { this.modalInsumoForm = new bootstrap.Modal(document.getElementById('modalInsumo')); } catch(e) {}
+            try { this.modalHistorial  = new bootstrap.Modal(document.getElementById('modalHistorial')); } catch(e) {}
             this._keyHandler = (e) => this._onKeyDown(e);
             window.addEventListener('keydown', this._keyHandler);
+            // Fallback API si SSR no entregó datos
+            if (this.insumos.length === 0)  await this.fetchInsumos();
+            if (this.unidades.length === 0) await this.fetchUnidades();
         },
 
         destroy() {
@@ -1553,9 +1588,21 @@ function inventarioApp() {
         },
 
         async fetchInsumos() {
-            const resp = await fetch('/api/inventario/insumos/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-            if (!resp.ok) { this.toast(`Error al cargar insumos (HTTP ${resp.status})`, 'error'); this.insumos = []; return; }
-            try { this.insumos = await resp.json(); } catch { this.toast('Respuesta inesperada del servidor', 'error'); this.insumos = []; }
+            try {
+                // La API devuelve paginación: {count, next, previous, results:[...]}
+                // Cargamos todas las páginas para mostrar el inventario completo
+                let url = '/api/inventario/insumos/?page_size=100';
+                let todos = [];
+                while (url) {
+                    const resp = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                    if (!resp.ok) { this.toast(`Error al cargar insumos (HTTP ${resp.status})`, 'error'); return; }
+                    const data = await resp.json();
+                    const pagina = Array.isArray(data) ? data : (data.results || []);
+                    todos = todos.concat(pagina);
+                    url = Array.isArray(data) ? null : (data.next || null);
+                }
+                this.insumos = todos;
+            } catch { this.toast('Respuesta inesperada del servidor', 'error'); }
         },
 
         async fetchUnidades() {
@@ -1612,7 +1659,7 @@ function inventarioApp() {
         },
 
         nuevoInsumo() {
-            this.formInsumo = { id: null, nombre: '', unidad_medida: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 };
+            this.formInsumo = { id: null, nombre: '', unidad_medida: '', categoria: 'OTRO', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
             this.guardando = false;
@@ -1620,7 +1667,7 @@ function inventarioApp() {
         },
 
         editarInsumo(i) {
-            this.formInsumo = { id: i.id, nombre: i.nombre, unidad_medida: i.unidad_medida, stock_minimo: i.stock_minimo, costo_unitario: i.costo_unitario, stock_inicial: 0 };
+            this.formInsumo = { id: i.id, nombre: i.nombre, unidad_medida: i.unidad_medida, categoria: i.categoria || 'OTRO', stock_minimo: i.stock_minimo, costo_unitario: i.costo_unitario, stock_inicial: 0 };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
             this.guardando = false;
@@ -1676,7 +1723,7 @@ function inventarioApp() {
             }
             this.guardando = true;
             const isEdit = !!this.formInsumo.id;
-            const body = { nombre: this.formInsumo.nombre, unidad_medida: this.formInsumo.unidad_medida, stock_minimo: this.formInsumo.stock_minimo, costo_unitario: this.formInsumo.costo_unitario };
+            const body = { nombre: this.formInsumo.nombre, unidad_medida: this.formInsumo.unidad_medida, categoria: this.formInsumo.categoria, stock_minimo: this.formInsumo.stock_minimo, costo_unitario: this.formInsumo.costo_unitario };
             if (!isEdit) { body.stock_actual = this.formInsumo.stock_inicial || 0; body.stock_real = this.formInsumo.stock_inicial || 0; }
             try {
                 const resp = await fetch(isEdit ? `/api/inventario/insumos/${this.formInsumo.id}/` : '/api/inventario/insumos/', {
@@ -1734,5 +1781,11 @@ function inventarioApp() {
         }
     }
 }
+// Registrar con Alpine.data en el mismo script donde se define la función
+document.addEventListener('alpine:init', function () {
+    Alpine.data('inventarioApp', inventarioApp);
+});
 </script>
 {% endblock %}
+
+{% block extra_js %}{% endblock %}
