@@ -1,7 +1,7 @@
 import csv
 from django.shortcuts import render
 from django.http import HttpResponse
-from django.db.models import Sum, Count, Avg, F, Q
+from django.db.models import Sum, Count, Avg, F, Q, Max
 from django.db.models.functions import ExtractHour, ExtractWeekDay
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
@@ -39,7 +39,9 @@ def _calcular_tendencia(valor_actual, valor_anterior):
 @rol_requerido('ADMIN', 'CAJERO')
 def admin_reportes(request):
     """Vista principal de reportes gráficos."""
-    return render(request, 'admin_panel/reportes.html')
+    from apps.usuarios.models import Usuario
+    cajeros = Usuario.objects.filter(rol__nombre__in=['ADMIN', 'CAJERO'], is_active=True)
+    return render(request, 'admin_panel/reportes.html', {'cajeros': cajeros})
 
 @login_required
 @rol_requerido('ADMIN')
@@ -59,7 +61,9 @@ def admin_menu(request):
 @login_required
 @rol_requerido('ADMIN', 'CAJERO')
 def admin_dashboard(request):
-    return render(request, 'admin_panel/reportes.html')
+    from apps.usuarios.models import Usuario
+    cajeros = Usuario.objects.filter(rol__nombre__in=['ADMIN', 'CAJERO'], is_active=True)
+    return render(request, 'admin_panel/reportes.html', {'cajeros': cajeros})
 
 @login_required
 @rol_requerido('ADMIN')
@@ -71,77 +75,154 @@ def admin_auditoria(request):
 # API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _get_base_pagos(request):
+    """
+    Retorna los pagos filtrados según los parámetros de consulta globales.
+    Si no se especifican filtros temporales (fecha, mes, anio), se limita
+    por defecto al turno activo o al último turno registrado para evitar
+    mostrar todo el historial de la base de datos.
+    """
+    cajero_id = request.GET.get('cajero')
+    turno_filtro = request.GET.get('turno')
+    fecha_exacta = request.GET.get('fecha')
+    mes = request.GET.get('mes')
+    anio = request.GET.get('anio')
+    solo_perdidas = request.GET.get('solo_perdidas')
+    mesa = request.GET.get('mesa')
+    estado_pago = request.GET.get('estado_pago')
+    
+    tiene_filtros_fecha = any([fecha_exacta, mes, anio])
+    tiene_filtros = any([cajero_id, turno_filtro, fecha_exacta, mes, anio, solo_perdidas, mesa, estado_pago])
+    
+    if tiene_filtros_fecha:
+        base = Pago.objects.all()
+        if fecha_exacta:
+            try:
+                dt = timezone.datetime.strptime(fecha_exacta, '%Y-%m-%d').date()
+                base = base.filter(fecha_pago__date=dt)
+            except ValueError:
+                pass
+        else:
+            if anio:
+                base = base.filter(fecha_pago__year=int(anio))
+            if mes:
+                base = base.filter(fecha_pago__month=int(mes))
+    else:
+        # Si no hay filtros de fecha, acotamos por el turno activo o el último registrado
+        turno_activo = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
+        if turno_activo:
+            base = Pago.objects.filter(caja_turno=turno_activo)
+        else:
+            ultimo = CajaTurno.objects.order_by('-fecha_apertura').first()
+            if ultimo:
+                base = Pago.objects.filter(caja_turno=ultimo)
+            else:
+                base = Pago.objects.none()
+                
+    # Aplicar filtros no temporales de forma acumulativa y estricta
+    if cajero_id:
+        base = base.filter(caja_turno__cajero_id=cajero_id)
+        
+    if turno_filtro:
+        base = base.filter(caja_turno__cajero__turno=turno_filtro)
+        
+    if solo_perdidas == 'true' or estado_pago == 'PERDIDAS':
+        base = base.filter(estado=Pago.Estado.PERDIDA)
+    elif estado_pago == 'COBRADOS':
+        base = base.filter(estado=Pago.Estado.PAGADO)
+        
+    if mesa:
+        base = base.filter(comanda__mesa__numero=mesa)
+        
+    return base, tiene_filtros
+
 @api_view(['GET'])
 @permission_classes([EsCajeroOAdmin])
 def api_ventas_turno(request):
     """
-    Obtiene los KPIs del turno de caja activo, incluyendo tendencia
-    comparada contra el turno anterior cerrado.
+    Obtiene los KPIs filtrados o del turno de caja activo,
+    incluyendo tendencias si no se aplican filtros globales.
     """
-    turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-    if not turno:
-        return Response({'error': 'No hay turno activo'}, status=400)
+    base_pagos, tiene_filtros = _get_base_pagos(request)
 
-    mesa = request.GET.get('mesa')
+    # 1. Ventas Totales (exitosas)
+    ventas_exitosas = base_pagos.filter(estado=Pago.Estado.PAGADO)
+    total_ventas = ventas_exitosas.aggregate(res=Sum('monto'))['res'] or 0
 
-    # ── Turno anterior para tendencias ──
-    turno_anterior = CajaTurno.objects.filter(
-        estado=CajaTurno.Estado.CERRADA
-    ).order_by('-fecha_cierre').first()
+    # 2. Cantidad de Comandas Cobradas
+    comanda_ids = base_pagos.values_list('comanda_id', flat=True).distinct()
+    cant_comandas = base_pagos.filter(estado=Pago.Estado.PAGADO).values('comanda').distinct().count()
 
-    # Filtro base para las comandas del turno
-    comandas_turno = Comanda.objects.filter(pagos__caja_turno=turno, estado=Comanda.Estado.COBRADA).distinct()
-    comandas_ant = Comanda.objects.filter(pagos__caja_turno=turno_anterior, estado=Comanda.Estado.COBRADA).distinct() if turno_anterior else None
+    # 3. Total Pérdidas
+    total_perdidas = base_pagos.filter(estado=Pago.Estado.PERDIDA).aggregate(res=Sum('monto'))['res'] or 0
 
-    if mesa:
-        comandas_turno = comandas_turno.filter(mesa__numero=mesa)
-        if comandas_ant:
-            comandas_ant = comandas_ant.filter(mesa__numero=mesa)
-
-    cant_comandas = comandas_turno.count()
-    cant_ant = comandas_ant.count() if comandas_ant else None
-
-    total_ventas = comandas_turno.aggregate(res=Sum('total'))['res'] or 0
-    total_ant = comandas_ant.aggregate(res=Sum('total'))['res'] or 0 if comandas_ant else None
-
-    ticket_promedio = float(total_ventas / cant_comandas) if cant_comandas > 0 else 0
-    ticket_ant = (float(total_ant / cant_ant)
-                  if comandas_ant and cant_ant and cant_ant > 0 else None)
-
-    # Tiempo promedio de preparación (en minutos)
-    base_lineas_turno = LineaComanda.objects.filter(
-        comanda__in=comandas_turno,
+    # 4. Tiempo Máximo de Preparación (Minutos)
+    lineas = LineaComanda.objects.filter(
+        comanda_id__in=comanda_ids,
         fecha_inicio_prep__isnull=False,
         fecha_listo__isnull=False
     ).exclude(estado=LineaComanda.Estado.ANULADO)
 
-    tiempo_prep = base_lineas_turno.annotate(
-        duracion=(F('fecha_listo') - F('fecha_inicio_prep'))
-    ).aggregate(avg_time=Avg('duracion'))['avg_time']
-
-    tiempo_min = (tiempo_prep.total_seconds() / 60) if tiempo_prep else 0
-
-    tiempo_ant = None
-    if comandas_ant:
-        tp_ant = LineaComanda.objects.filter(
-            comanda__in=comandas_ant,
-            fecha_inicio_prep__isnull=False,
-            fecha_listo__isnull=False
-        ).exclude(estado=LineaComanda.Estado.ANULADO).annotate(
+    tiempo_max = 0
+    if lineas.exists():
+        duraciones = lineas.annotate(
             duracion=(F('fecha_listo') - F('fecha_inicio_prep'))
-        ).aggregate(avg_time=Avg('duracion'))['avg_time']
-        tiempo_ant = (tp_ant.total_seconds() / 60) if tp_ant else None
+        )
+        max_duracion = duraciones.aggregate(max_time=Max('duracion'))['max_time']
+        if max_duracion:
+            tiempo_max = max_duracion.total_seconds() / 60
 
+    # Tendencias: Solo calculadas si no se aplican filtros globales (para el turno activo actual)
+    total_ant = None
+    cant_ant = None
+    perdidas_ant = None
+    tiempo_ant = None
+
+    if not tiene_filtros:
+        # Buscamos el turno anterior
+        turno_anterior = CajaTurno.objects.filter(
+            estado=CajaTurno.Estado.CERRADA
+        ).order_by('-fecha_cierre').first()
+
+        if turno_anterior:
+            pagos_ant = Pago.objects.filter(caja_turno=turno_anterior)
+            
+            # Ventas ant
+            total_ant = pagos_ant.filter(estado=Pago.Estado.PAGADO).aggregate(res=Sum('monto'))['res'] or 0
+            
+            # Comandas ant
+            cant_ant = pagos_ant.filter(estado=Pago.Estado.PAGADO).values('comanda').distinct().count()
+            
+            # Pérdidas ant
+            perdidas_ant = pagos_ant.filter(estado=Pago.Estado.PERDIDA).aggregate(res=Sum('monto'))['res'] or 0
+            
+            # Tiempo ant
+            comandas_ant_ids = pagos_ant.values_list('comanda_id', flat=True).distinct()
+            lineas_ant = LineaComanda.objects.filter(
+                comanda_id__in=comandas_ant_ids,
+                fecha_inicio_prep__isnull=False,
+                fecha_listo__isnull=False
+            ).exclude(estado=LineaComanda.Estado.ANULADO)
+            
+            if lineas_ant.exists():
+                duraciones_ant = lineas_ant.annotate(
+                    duracion=(F('fecha_listo') - F('fecha_inicio_prep'))
+                )
+                max_duracion_ant = duraciones_ant.aggregate(max_time=Max('duracion'))['max_time']
+                if max_duracion_ant:
+                    tiempo_ant = max_duracion_ant.total_seconds() / 60
+
+    # Retornar los KPIs
     return Response({
         'total_ventas': float(total_ventas),
         'cant_comandas': cant_comandas,
-        'ticket_promedio': round(ticket_promedio, 2),
-        'tiempo_promedio_prep': round(tiempo_min, 1),
+        'total_perdidas': float(total_perdidas),
+        'tiempo_maximo_prep': round(tiempo_max, 1),
         # ── Tendencias ──
-        'tendencia_ventas': _calcular_tendencia(total_ventas, total_ant),
-        'tendencia_comandas': _calcular_tendencia(cant_comandas, cant_ant),
-        'tendencia_ticket': _calcular_tendencia(ticket_promedio, ticket_ant),
-        'tendencia_tiempo': _calcular_tendencia(tiempo_min, tiempo_ant),
+        'tendencia_ventas': _calcular_tendencia(total_ventas, total_ant) if total_ant is not None else None,
+        'tendencia_comandas': _calcular_tendencia(cant_comandas, cant_ant) if cant_ant is not None else None,
+        'tendencia_perdidas': _calcular_tendencia(total_perdidas, perdidas_ant) if perdidas_ant is not None else None,
+        'tendencia_tiempo': _calcular_tendencia(tiempo_max, tiempo_ant) if tiempo_ant is not None else None,
     })
 
 
@@ -149,34 +230,27 @@ def api_ventas_turno(request):
 @permission_classes([EsCajeroOAdmin])
 def api_top_platos(request):
     """
-    Obtiene el ranking de los 5 platos más vendidos en el turno actual.
-    Incluye el total del turno para calcular los anchos de barra.
+    Obtiene el ranking de platos más vendidos y menos vendidos,
+    así como la distribución por niveles de rotación aplicando filtros globales.
     """
-    limite = int(request.GET.get('limite', 5))
-    mesa = request.GET.get('mesa')
-    turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-
-    if not turno:
-        return Response([])
-
-    # Solo líneas activas de comandas cobradas del turno.
+    base_pagos, _ = _get_base_pagos(request)
+    
+    # Solo consideramos comandas cobradas exitosamente (excluyendo pérdidas de las estadísticas de rotación)
+    comandas_exitosas = base_pagos.filter(estado=Pago.Estado.PAGADO).values_list('comanda_id', flat=True)
+    
     base_lineas = LineaComanda.objects.filter(
-        comanda__pagos__caja_turno=turno,
-        comanda__estado=Comanda.Estado.COBRADA,
-    ).exclude(
-        estado=LineaComanda.Estado.ANULADO
-    )
+        comanda_id__in=comandas_exitosas
+    ).exclude(estado=LineaComanda.Estado.ANULADO)
 
-    if mesa:
-        base_lineas = base_lineas.filter(comanda__mesa__numero=mesa)
-
-    qs = base_lineas.values('plato_id', 'plato__nombre').annotate(
+    qs_all = base_lineas.values('plato_id', 'plato__nombre').annotate(
         cantidad=Sum('cantidad'),
-    ).order_by('-cantidad')[:limite]
+    ).order_by('-cantidad')
 
-    data = list(qs)
-    max_cantidad = data[0]['cantidad'] if data else 1
-
+    top_platos = list(qs_all[:5])
+    peores_platos = list(qs_all.order_by('cantidad')[:5])
+    
+    max_cantidad = top_platos[0]['cantidad'] if top_platos else 1
+    
     weekday_es = {
         1: 'Domingo',
         2: 'Lunes',
@@ -187,48 +261,96 @@ def api_top_platos(request):
         7: 'Sábado',
     }
 
-    for item in data:
-        item['porcentaje'] = round(item['cantidad'] / max_cantidad * 100)
+    for item in top_platos:
+        item['porcentaje'] = round(item['cantidad'] / max_cantidad * 100) if max_cantidad > 0 else 0
         plato_id = item.get('plato_id')
 
-        # Hora pico: hora con mayor cantidad vendida (basado en fecha de pago).
-        # Si hay múltiples pagos por comanda (poco común), tomamos el agrupado por hora igualmente.
+        # Hora pico: hora con mayor cantidad vendida
         pico_hora = base_lineas.filter(plato_id=plato_id).annotate(
             hora=ExtractHour('comanda__pagos__fecha_pago')
         ).values('hora').annotate(
-            cantidad=Sum('cantidad')
-        ).order_by('-cantidad', 'hora').first()
+            cantidad_hora=Sum('cantidad')
+        ).order_by('-cantidad_hora', 'hora').first()
 
         item['hora_pico'] = (pico_hora['hora'] if pico_hora and pico_hora['hora'] is not None else None)
 
-        # Día pico: día de semana con mayor cantidad vendida (basado en fecha de pago).
+        # Día pico
         pico_dia = base_lineas.filter(plato_id=plato_id).annotate(
             dia=ExtractWeekDay('comanda__pagos__fecha_pago')
         ).values('dia').annotate(
-            cantidad=Sum('cantidad')
-        ).order_by('-cantidad', 'dia').first()
+            cantidad_dia=Sum('cantidad')
+        ).order_by('-cantidad_dia', 'dia').first()
 
         dia_num = (pico_dia['dia'] if pico_dia and pico_dia['dia'] is not None else None)
         item['dia_pico'] = weekday_es.get(dia_num) if dia_num else None
 
-    return Response(data)
+    # Distribución de rotación (Alta, Media, Baja) y clasificación detallada de platos
+    from apps.menu.models import Plato
+    from django.db.models import Value, IntegerField
+
+    platos_alta = []
+    platos_media = []
+    platos_baja_rotacion = []
+
+    # Platos que se han vendido en el periodo filtrado
+    for item in qs_all:
+        qty = item['cantidad']
+        item['porcentaje'] = round(item['cantidad'] / max_cantidad * 100) if max_cantidad > 0 else 0
+        if qty >= max_cantidad * 0.6:
+            platos_alta.append(item)
+        elif qty >= max_cantidad * 0.2:
+            platos_media.append(item)
+        else:
+            platos_baja_rotacion.append(item)
+
+    # Identificar platos activos que NO se vendieron en absoluto durante este periodo (0 ventas)
+    platos_vendidos_ids = [item['plato_id'] for item in qs_all]
+    platos_no_vendidos = list(Plato.objects.filter(activo=True).exclude(id__in=platos_vendidos_ids).values('id', 'nombre'))
+    
+    platos_no_vendidos_mapped = []
+    for p in platos_no_vendidos:
+        platos_no_vendidos_mapped.append({
+            'plato_id': p['id'],
+            'plato__nombre': p['nombre'],
+            'cantidad': 0,
+            'porcentaje': 0,
+            'hora_pico': None,
+            'dia_pico': None
+        })
+
+    # Platos Rezagados/Baja demanda incluye los que se vendieron poco + los que NO se vendieron nada (0 uds)
+    platos_baja = platos_no_vendidos_mapped + platos_baja_rotacion
+
+    alta_count = len(platos_alta)
+    media_count = len(platos_media)
+    baja_count = len(platos_baja)
+
+    return Response({
+        'top_platos': top_platos,
+        'peores_platos': peores_platos,
+        'distribucion': {
+            'alta': alta_count,
+            'media': media_count,
+            'baja': baja_count,
+        },
+        'categorizados': {
+            'alta': platos_alta,
+            'media': platos_media,
+            'baja': platos_baja,
+        }
+    })
 
 
 @api_view(['GET'])
 @permission_classes([EsCajeroOAdmin])
 def api_ventas_por_hora(request):
     """
-    Obtiene el acumulado de ventas agrupado por hora para el gráfico de líneas.
+    Obtiene el acumulado de ventas agrupado por hora aplicando filtros globales.
     """
-    turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-    mesa = request.GET.get('mesa')
-
-    pago_filter = Q(caja_turno=turno)
-    if mesa:
-        pago_filter &= Q(comanda__mesa__numero=mesa)
-
-    qs = Pago.objects.filter(
-        pago_filter
+    base_pagos, _ = _get_base_pagos(request)
+    
+    qs = base_pagos.filter(
+        estado=Pago.Estado.PAGADO
     ).annotate(
         hora=ExtractHour('fecha_pago')
     ).values('hora').annotate(
@@ -242,89 +364,68 @@ def api_ventas_por_hora(request):
 @permission_classes([EsCajeroOAdmin])
 def api_ventas_historial(request):
     """
-    Devuelve el historial detallado de todas las comandas cobradas
-    en el turno activo, con soporte de búsqueda por código o mesa.
-    Incluye el desglose de productos por comanda.
+    Devuelve el historial detallado de todas las comandas cobradas o pérdidas,
+    filtrado según los parámetros globales y de búsqueda.
     """
-    turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-    if not turno:
-        return Response({'results': []})
-
+    base_pagos, _ = _get_base_pagos(request)
+    
     search = request.GET.get('search', '').strip()
-    mesa = request.GET.get('mesa', '').strip()
-    fecha = request.GET.get('fecha', '').strip()  # YYYY-MM-DD (exacta)
-    mes = request.GET.get('mes', '').strip()      # YYYY-MM (mes completo)
+    if search:
+        if search.isdigit():
+            base_pagos = base_pagos.filter(
+                Q(comanda__mesa__numero=int(search)) |
+                Q(comanda__codigo_comanda__endswith=search)
+            )
+        else:
+            base_pagos = base_pagos.filter(
+                Q(comanda__codigo_comanda__icontains=search) | 
+                Q(comanda__mesa__numero__icontains=search)
+            )
 
+    comandas_ids = base_pagos.values_list('comanda_id', flat=True).distinct()
+    
     comandas_qs = Comanda.objects.filter(
-        pagos__caja_turno=turno,
-        estado=Comanda.Estado.COBRADA,
+        id__in=comandas_ids
     ).distinct().select_related('mesa', 'mozo').prefetch_related(
-        'lineas__plato', 'pagos__metodo_pago'
+        'lineas__plato', 'pagos__metodo_pago', 'pagos__caja_turno__cajero'
     ).order_by('-fecha_cierre')
 
-    # Filtros: búsqueda (código o mesa), mesa exacta, y fecha/mes por fecha de pago.
-    filtros = Q()
-    if search:
-        # Si el usuario escribe solo un número, asumimos que está buscando una mesa EXACTA.
-        # Esto evita que "5" devuelva mesas como "15".
-        if search.isdigit():
-            filtros &= Q(mesa__numero=int(search))
-        else:
-            filtros &= (Q(codigo_comanda__icontains=search) | Q(mesa__numero__icontains=search))
-    if mesa:
-        # El filtro de mesa debe ser exacto cuando es un número.
-        if mesa.isdigit():
-            filtros &= Q(mesa__numero=int(mesa))
-        else:
-            filtros &= Q(mesa__numero__icontains=mesa)
-
-    if fecha:
-        # Fecha exacta (día)
-        try:
-            dt = timezone.datetime.strptime(fecha, '%Y-%m-%d').date()
-            filtros &= Q(pagos__fecha_pago__date=dt)
-        except ValueError:
-            pass
-
-    if mes:
-        # Mes completo (YYYY-MM)
-        try:
-            dtm = timezone.datetime.strptime(mes, '%Y-%m').date()
-            filtros &= Q(pagos__fecha_pago__year=dtm.year, pagos__fecha_pago__month=dtm.month)
-        except ValueError:
-            pass
-
-    if filtros:
-        comandas_qs = comandas_qs.filter(filtros).distinct()
-
     TAX_RATE = 0.10  # IGV 10%
-
     results = []
+    
     for c in comandas_qs:
-        # Concatenar líneas no anuladas: "2x Lomo Saltado, 1x Inca Kola"
         lineas_activas = c.lineas.exclude(estado=LineaComanda.Estado.ANULADO)
         detalle = ', '.join(
             f"{l.cantidad}x {l.plato.nombre}" for l in lineas_activas
         )
 
-        pago = c.pagos.filter(caja_turno=turno).order_by('-fecha_pago').first()
+        pago = c.pagos.filter(id__in=base_pagos.values_list('id', flat=True)).order_by('-fecha_pago').first()
+        if not pago:
+            pago = c.pagos.order_by('-fecha_pago').first()
+            
         bruto = float(c.total)
         impuesto = round(bruto * TAX_RATE, 2)
         neto = round(bruto - impuesto, 2)
+        es_multi = c.pagos.count() > 1
+
+        turno_nombre = '—'
+        if pago and pago.caja_turno and pago.caja_turno.cajero:
+            turno_nombre = pago.caja_turno.cajero.get_turno_display().replace('Turno ', '')
 
         results.append({
             'id': c.id,
             'codigo': c.codigo_comanda,
-            # En historial debe registrarse la fecha/hora real del registro de venta (pago).
-            'fecha': pago.fecha_pago.strftime('%Y-%m-%d %H:%M') if pago and pago.fecha_pago else '—',
+            'fecha': timezone.localtime(pago.fecha_pago).strftime('%d/%m/%Y %H:%M') if pago and pago.fecha_pago else '—',
             'mesa': str(c.mesa.numero),
-            'mozo': c.mozo.username,
+            'mozo': f"{c.mozo.nombres} {c.mozo.apellidos}".strip() or c.mozo.username,
             'detalle': detalle or '—',
-            'bruto': bruto,
+            'bruto': bruto,       # Ganancia Final
             'impuesto': impuesto,
-            'neto': neto,
-            'metodo': pago.metodo_pago.nombre if pago else 'N/A',
-            'estado': c.estado,
+            'neto': neto,         # Precio Inicial
+            'metodo': pago.metodo_pago.nombre if (pago and pago.metodo_pago) else 'N/A',
+            'estado': pago.estado if pago else c.estado,
+            'es_multi': es_multi,
+            'turno': turno_nombre,
         })
 
     return Response({'results': results})
@@ -334,28 +435,67 @@ def api_ventas_historial(request):
 @permission_classes([EsCajeroOAdmin])
 def api_exportar_csv(request):
     """
-    Genera y descarga un archivo CSV con el detalle de todas las comandas cobradas en el turno.
+    Genera y descarga un archivo CSV profesional con BOM UTF-8
+    para que Excel lo abra correctamente con tildes y caracteres especiales.
     """
     turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
     if not turno:
         return Response({'error': 'No hay turno activo'}, status=400)
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="reporte_ventas_{turno.codigo_turno}.csv"'
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = f'attachment; filename="Reporte_Ventas_{turno.codigo_turno}.csv"'
 
-    writer = csv.writer(response)
-    writer.writerow(['Codigo', 'Mesa', 'Mozo', 'Apertura', 'Cierre', 'Total Bruto', 'Impuesto (10%)', 'Neto', 'Metodo Pago'])
+    # utf-8-sig agrega el BOM automáticamente — Excel lo detecta y muestra tildes correctamente
+    writer = csv.writer(response, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
 
-    TAX_RATE = 0.10
+    # ── Encabezado del reporte ──
+    writer.writerow(['REPORTE DE VENTAS', '', '', '', '', '', '', '', ''])
+    writer.writerow(['Turno:', turno.codigo_turno, '', 'Cajero:', turno.cajero.username, '', 'Fecha apertura:', turno.fecha_apertura.strftime('%d/%m/%Y %H:%M'), ''])
+    writer.writerow(['Estado:', turno.get_estado_display(), '', 'Punto de caja:', turno.get_punto_caja_display(), '', '', '', ''])
+    writer.writerow(['', '', '', '', '', '', '', '', ''])  # fila vacía
+
+    # ── Cabecera de columnas ──
+    writer.writerow([
+        'N°',
+        'Código Comanda',
+        'Mesa',
+        'Mozo',
+        'Apertura',
+        'Cierre',
+        'Detalle',
+        'Método de Pago',
+        'Estado',
+        'Precio Neto (sin IGV)',
+        'IGV (18%)',
+        'Total Bruto',
+    ])
+
+    TAX_RATE = 0.18
     comandas = Comanda.objects.filter(
         pagos__caja_turno=turno
-    ).distinct().select_related('mesa', 'mozo')
+    ).distinct().select_related('mesa', 'mozo').prefetch_related(
+        'lineas__plato', 'pagos__metodo_pago'
+    ).order_by('fecha_apertura')
+
+    total_bruto = 0
+    total_igv = 0
+    total_neto = 0
+    total_perdidas = 0
+    contador = 1
 
     for c in comandas:
         pago = c.pagos.filter(caja_turno=turno).first()
         bruto = float(c.total)
         impuesto = round(bruto * TAX_RATE, 2)
         neto = round(bruto - impuesto, 2)
+        
+        if pago and pago.estado == Pago.Estado.PERDIDA:
+            metodo_display = 'PÉRDIDA'
+        elif pago:
+            metodo_display = pago.metodo_pago.nombre
+        else:
+            metodo_display = 'N/A'
+
         writer.writerow([
             c.codigo_comanda,
             c.mesa.numero,
@@ -365,7 +505,7 @@ def api_exportar_csv(request):
             bruto,
             impuesto,
             neto,
-            pago.metodo_pago.nombre if pago else 'N/A'
+            metodo_display
         ])
 
     return response

@@ -10,16 +10,20 @@ User = get_user_model()
 
 @pytest.fixture
 def setup_data(db):
-    # Crear usuario
-    user = User.objects.create_user(username='admin_test', password='password123', email='test@test.com')
     from apps.usuarios.models import Rol
-    rol_admin = Rol.objects.create(nombre='ADMIN', descripcion='Administrador')
-    user.rol = rol_admin
-    user.save()
+    rol_admin, _ = Rol.objects.get_or_create(nombre='ADMIN', defaults={'descripcion': 'Administrador'})
+    
+    # Crear usuario con rol
+    user = User.objects.create_user(
+        username='admin_test', 
+        password='password123', 
+        email='test@test.com',
+        rol=rol_admin
+    )
 
     # Crear categoria y plato
     cat = Categoria.objects.create(nombre='Test Cat')
-    plato = Plato.objects.create(nombre='Ceviche', precio=50, categoria=cat)
+    plato = Plato.objects.create(nombre='Ceviche', precio_actual=50, categoria=cat)
     
     # Metodo de pago
     metodo = MetodoPago.objects.create(codigo='EFECTIVO', nombre='Efectivo')
@@ -31,6 +35,11 @@ def test_api_ventas_turno_trends(client, setup_data):
     user, plato, metodo = setup_data
     client.login(username='admin_test', password='password123')
 
+    from apps.mesas.models import Mesa, Zona
+    zona = Zona.objects.create(nombre='Zona Principal')
+    mesa1 = Mesa.objects.create(numero=1, capacidad=4, zona=zona)
+    mesa2 = Mesa.objects.create(numero=2, capacidad=4, zona=zona)
+
     # 1. Crear turno anterior cerrado
     turno_ant = CajaTurno.objects.create(
         codigo_turno='TUR-ANT',
@@ -40,7 +49,7 @@ def test_api_ventas_turno_trends(client, setup_data):
         estado=CajaTurno.Estado.CERRADA
     )
     # Crear un pago para el turno anterior
-    comanda_ant = Comanda.objects.create(codigo_comanda='C-ANT', mesa_id=1, mozo=user, total=100, estado=Comanda.Estado.COBRADA)
+    comanda_ant = Comanda.objects.create(codigo_comanda='C-ANT', mesa=mesa1, mozo=user, total=100, estado=Comanda.Estado.COBRADA)
     Pago.objects.create(caja_turno=turno_ant, comanda=comanda_ant, metodo_pago=metodo, monto=100)
 
     # 2. Crear turno actual abierto
@@ -52,7 +61,7 @@ def test_api_ventas_turno_trends(client, setup_data):
         estado=CajaTurno.Estado.ABIERTA
     )
     # Crear un pago para el turno actual
-    comanda_act = Comanda.objects.create(codigo_comanda='C-ACT', mesa_id=2, mozo=user, total=150, estado=Comanda.Estado.COBRADA)
+    comanda_act = Comanda.objects.create(codigo_comanda='C-ACT', mesa=mesa2, mozo=user, total=150, estado=Comanda.Estado.COBRADA)
     Pago.objects.create(caja_turno=turno_act, comanda=comanda_act, metodo_pago=metodo, monto=150)
 
     url = reverse('api_ventas_turno')
@@ -78,9 +87,10 @@ def test_api_ventas_historial_search(client, setup_data):
         estado=CajaTurno.Estado.ABIERTA
     )
     
-    from apps.mesas.models import Mesa
-    mesa5 = Mesa.objects.create(numero=5, capacidad=4)
-    mesa10 = Mesa.objects.create(numero=10, capacidad=4)
+    from apps.mesas.models import Mesa, Zona
+    zona = Zona.objects.create(nombre='Planta Baja')
+    mesa5 = Mesa.objects.create(numero=5, capacidad=4, zona=zona)
+    mesa10 = Mesa.objects.create(numero=10, capacidad=4, zona=zona)
 
     c1 = Comanda.objects.create(codigo_comanda='ORD-101', mesa=mesa5, mozo=user, total=50, estado=Comanda.Estado.COBRADA)
     LineaComanda.objects.create(comanda=c1, plato=plato, cantidad=1, precio_unitario=50, subtotal=50)
