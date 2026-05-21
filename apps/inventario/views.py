@@ -12,7 +12,7 @@ from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, Or
 from .serializers import (
     UnidadMedidaSerializer, InsumoSerializer, RecetaInsumoSerializer,
     MovimientoInventarioSerializer, AjusteStockSerializer, RecetaPorPlatoSerializer,
-    MermaSerializer, OrdenCompraSerializer, OrdenCompraItemSerializer,
+    MermaSerializer, ReponerSerializer, OrdenCompraSerializer, OrdenCompraItemSerializer,
 )
 from apps.usuarios.permissions import EsAdmin
 from apps.menu.models import Plato
@@ -50,24 +50,18 @@ class InsumoViewSet(viewsets.ModelViewSet):
     serializer_class = InsumoSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
-    filterset_fields = ['activo', 'unidad_medida']
+    filterset_fields = ['activo', 'unidad_medida', 'categoria']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'disponibles']:
+        if self.action in ['list', 'retrieve', 'disponibles', 'criticos', 'stock_bajo', 'historial']:
             return [IsAuthenticated()]
         return [EsAdmin()]
 
-    @action(detail=False, methods=['get'], url_path='bajo-stock')
-    def bajo_stock(self, request):
-        """Lista insumos donde el stock actual es menor o igual al mínimo."""
-        insumos = Insumo.objects.filter(stock_real__lte=models.F('stock_minimo'), activo=True)
-        serializer = self.get_serializer(insumos, many=True)
-        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='disponibles')
     def disponibles(self, request):
-        """Lista todos los insumos disponibles con información completa para recetas."""
-        insumos = Insumo.objects.filter(activo=True).select_related('unidad_medida').order_by('nombre')
+        """Lista todos los insumos activos con información completa para recetas."""
+        insumos = Insumo.objects.para_recetas()
         resultado = []
         for insumo in insumos:
             resultado.append({
@@ -98,11 +92,12 @@ class InsumoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='reponer')
     def reponer(self, request, pk=None):
         """Registra entrada/reposición de inventario."""
-        cantidad = request.data.get('cantidad')
-        observacion = request.data.get('observacion', '')
+        serializer = ReponerSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not cantidad or float(cantidad) <= 0:
-            return Response({'error': 'Cantidad inválida'}, status=status.HTTP_400_BAD_REQUEST)
+        cantidad = serializer.validated_data['cantidad']
+        observacion = serializer.validated_data.get('observacion', '') or 'Reposición de inventario'
 
         with transaction.atomic():
             try:
@@ -110,19 +105,22 @@ class InsumoViewSet(viewsets.ModelViewSet):
             except Insumo.DoesNotExist:
                 return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
+            if not insumo.activo:
+                return Response({'error': 'No se puede reponer un insumo inactivo.'}, status=status.HTTP_400_BAD_REQUEST)
+
             stock_anterior = insumo.stock_real
-            insumo.stock_real += Decimal(str(cantidad))
-            insumo.stock_actual += Decimal(str(cantidad))
+            insumo.stock_real += cantidad
+            insumo.stock_actual += cantidad
             insumo.save(update_fields=['stock_real', 'stock_actual'])
 
             MovimientoInventario.objects.create(
                 insumo=insumo,
                 tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
-                cantidad=Decimal(str(cantidad)),
+                cantidad=cantidad,
                 stock_anterior=stock_anterior,
                 stock_nuevo=insumo.stock_real,
                 usuario=request.user,
-                observacion=observacion or 'Reposición de inventario',
+                observacion=observacion,
             )
 
         return Response(self.get_serializer(insumo).data)
@@ -374,6 +372,8 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
                 except (Insumo.DoesNotExist, KeyError):
                     return Response({'error': f'Insumo inválido en ítem: {item}'}, status=status.HTTP_400_BAD_REQUEST)
                 cantidad = Decimal(str(item.get('cantidad_solicitada', 0)))
+                if cantidad <= 0:
+                    return Response({'error': f'La cantidad solicitada para el insumo {insumo.nombre} debe ser mayor a 0.'}, status=status.HTTP_400_BAD_REQUEST)
                 costo = Decimal(str(item.get('costo_unitario', insumo.costo_unitario or 0)))
                 subtotal = cantidad * costo
                 total += subtotal
@@ -460,11 +460,20 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
             if orden.estado in (OrdenCompra.Estado.RECIBIDA, OrdenCompra.Estado.CANCELADA):
                 return Response({'error': f'Orden ya está {orden.get_estado_display()}'}, status=status.HTTP_400_BAD_REQUEST)
 
-            for item in orden.items.select_related('insumo').select_for_update():
+            # Ordenar IDs para prevenir deadlocks en transacciones concurrentes
+            item_insumo_ids = sorted([item.insumo_id for item in orden.items.all()])
+            insumos_bloqueados = {
+                insumo.id: insumo 
+                for insumo in Insumo.objects.select_for_update().filter(id__in=item_insumo_ids)
+            }
+
+            for item in orden.items.select_related('insumo'):
                 cant_recibida = recepciones.get(item.id, item.cantidad_solicitada)
                 if cant_recibida <= 0:
                     continue
-                insumo = Insumo.objects.select_for_update().get(pk=item.insumo_id)
+                insumo = insumos_bloqueados.get(item.insumo_id)
+                if not insumo:
+                    continue
                 stock_anterior = insumo.stock_real
                 insumo.stock_real += cant_recibida
                 insumo.stock_actual += cant_recibida

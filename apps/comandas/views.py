@@ -808,17 +808,26 @@ def api_cocina_resumen(request):
 
     total = qs.count()
 
-    # Urgentes: comandas con alguna línea EN_PREP que supera su tiempo estimado
+    # Urgentes y Recién Llegados
     ahora = timezone.now()
     urgentes = 0
+    recien_llegados = 0
+    
     for c in qs.prefetch_related('lineas'):
-        for l in c.lineas.filter(estado=LineaComanda.Estado.EN_PREP):
-            est = l.tiempo_estimado_min or 0
-            if est > 0 and l.fecha_inicio_prep:
-                mins = (ahora - l.fecha_inicio_prep).total_seconds() / 60
-                if mins > est:
-                    urgentes += 1
-                    break
+        # Recién llegado: Todas las líneas relevantes para cocina están en PENDIENTE
+        lineas_relevantes = [l for l in c.lineas.all() if l.estado in [LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP]]
+        if lineas_relevantes and all(l.estado == LineaComanda.Estado.PENDIENTE for l in lineas_relevantes):
+            recien_llegados += 1
+            
+        # Urgentes: comandas con alguna línea EN_PREP que supera su tiempo estimado
+        for l in c.lineas.all():
+            if l.estado == LineaComanda.Estado.EN_PREP:
+                est = l.tiempo_estimado_min or 0
+                if est > 0 and l.fecha_inicio_prep:
+                    mins = (ahora - l.fecha_inicio_prep).total_seconds() / 60
+                    if mins > est:
+                        urgentes += 1
+                        break
 
-    return Response({'total_pedidos': total, 'pedidos_urgentes': urgentes})
+    return Response({'total_pedidos': total, 'pedidos_urgentes': urgentes, 'recien_llegados': recien_llegados})
 
