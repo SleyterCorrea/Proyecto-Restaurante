@@ -132,48 +132,39 @@
       white-space: nowrap;
     }
 
-    .btn-toggle-sidebar-desktop {
-      background: transparent;
-      border: none;
-      color: rgb(var(--on-surface-variant));
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0.4rem;
-      padding: 0.2rem;
-      transition: all 0.2s;
-    }
-
-    .btn-toggle-sidebar-desktop:hover {
-      background: rgb(var(--on-surface) / 0.08);
-      color: rgb(var(--on-surface));
-    }
-
-    /* Botón flotante para reabrir el sidebar cuando está oculto */
-    #btn-reopen-sidebar {
-      position: fixed;
-      top: 15px;
-      left: 15px;
-      z-index: 150;
-      background: rgb(var(--surface));
-      border: 1px solid rgb(var(--border) / 0.08);
-      border-radius: 0.5rem;
-      padding: 0.4rem;
-      color: rgb(var(--on-surface));
-      cursor: pointer;
-      display: none;
-      /* Se maneja por JS */
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
     @media (max-width: 1024px) {
       .btn-toggle-sidebar-desktop {
         display: none !important;
       }
+    }
 
-      #btn-reopen-sidebar {
-        display: none !important;
+    @media (min-width: 1025px) {
+      .btn-toggle-sidebar-desktop {
+        position: fixed;
+        top: 15px;
+        left: calc(var(--sidebar-width) - 40px);
+        z-index: 1050;
+        background: transparent;
+        border: none;
+        color: rgb(var(--on-surface-variant));
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.4rem;
+        padding: 0.2rem;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .btn-toggle-sidebar-desktop:hover {
+        background: rgb(var(--primary) / 0.1);
+        color: rgb(var(--primary));
+      }
+      .btn-toggle-sidebar-desktop.is-collapsed {
+        left: 15px;
+        background: rgb(var(--surface));
+        border: 1px solid rgb(var(--border) / 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        color: rgb(var(--on-surface));
       }
     }
 
@@ -576,13 +567,18 @@
   <!-- Overlay oscuro (mobile) -->
   <div id="sidebar-overlay"></div>
 
+  <!-- Botón unificado para colapsar/expandir sidebar en desktop -->
+  <button class="btn-toggle-sidebar-desktop" id="btn-toggle-sidebar-desktop" title="Ocultar/Mostrar menú">
+    <span class="material-symbols-outlined" id="toggle-sidebar-icon" style="font-size:1.3rem;">keyboard_double_arrow_left</span>
+  </button>
+
   <!-- ══════════════════════════════════════
        SIDEBAR LATERAL
   ══════════════════════════════════════ -->
   <aside id="sidebar">
 
     <!-- Header / Logo -->
-    <div class="sidebar-header">
+    <div class="sidebar-header" style="justify-content: flex-start;">
       <a href="{% url 'index' %}" class="sidebar-logo">
         <div class="logo-icon">
           <span class="material-symbols-outlined"
@@ -590,9 +586,6 @@
         </div>
         <span class="logo-text">RestaurantOS</span>
       </a>
-      <button class="btn-toggle-sidebar-desktop" id="btn-collapse-sidebar" title="Ocultar menú">
-        <span class="material-symbols-outlined" style="font-size:1.3rem;">keyboard_double_arrow_left</span>
-      </button>
     </div>
 
     <!-- Nav Links -->
@@ -896,33 +889,29 @@
         });
       });
 
-      // ── Sidebar collapse (desktop) ───────────────────────────────
-      const btnCollapse = document.getElementById('btn-collapse-sidebar');
-      const btnReopen = document.getElementById('btn-reopen-sidebar');
+      // ── Sidebar toggle (desktop) ───────────────────────────────
+      const btnToggle = document.getElementById('btn-toggle-sidebar-desktop');
+      const toggleIcon = document.getElementById('toggle-sidebar-icon');
       const mainWrapper = document.getElementById('main-wrapper');
 
-      function collapseSidebar() {
-        sidebar.classList.add('collapsed-desktop');
-        mainWrapper.classList.add('expanded-desktop');
-        btnReopen.style.display = 'flex';
+      function toggleSidebarDesktop() {
+        const isCollapsed = sidebar.classList.toggle('collapsed-desktop');
+        mainWrapper.classList.toggle('expanded-desktop');
+        btnToggle.classList.toggle('is-collapsed');
+        
+        if (isCollapsed) {
+          toggleIcon.innerText = 'keyboard_double_arrow_right';
+          document.body.classList.add('sidebar-is-hidden');
+        } else {
+          toggleIcon.innerText = 'keyboard_double_arrow_left';
+          document.body.classList.remove('sidebar-is-hidden');
+        }
       }
 
-      function expandSidebar() {
-        sidebar.classList.remove('collapsed-desktop');
-        mainWrapper.classList.remove('expanded-desktop');
-        btnReopen.style.display = 'none';
-      }
-
-      if (btnCollapse) btnCollapse.addEventListener('click', collapseSidebar);
-      if (btnReopen) btnReopen.addEventListener('click', expandSidebar);
+      if (btnToggle) btnToggle.addEventListener('click', toggleSidebarDesktop);
 
     })();
   </script>
-
-  <!-- Botón para reabrir sidebar en desktop -->
-  <button id="btn-reopen-sidebar" title="Mostrar menú">
-    <span class="material-symbols-outlined" style="font-size:1.3rem;">menu</span>
-  </button>
 
   {% block extra_js %}{% endblock %}
 </body>
