@@ -78,36 +78,58 @@ class PlatoViewSet(viewsets.ModelViewSet):
                       detalle_anterior=old_data, request=self.request)
 
     def _asignar_recetas(self, plato):
-        """Asigna recetas al plato si vienen en request.data"""
+        """
+        Actualiza la receta del plato con los insumos del request.
+        Usa update_or_create para no perder historial — nunca hace delete físico.
+        """
         if 'receta' not in self.request.data:
             return
-        
+
         receta_data = self.request.data.getlist('receta')
         if not receta_data:
             return
-        
-        # Limpiar recetas anteriores
-        plato.receta.all().delete()
-        
-        # Crear nuevas recetas
-        for item in receta_data:
-            try:
-                if isinstance(item, str):
-                    item = json.loads(item)
-                if not isinstance(item, dict):
+
+        from apps.inventario.models import Insumo
+        from django.db import transaction as db_transaction
+
+        with db_transaction.atomic():
+            insumo_ids_nuevos = set()
+
+            for item in receta_data:
+                try:
+                    if isinstance(item, str):
+                        item = json.loads(item)
+                    if not isinstance(item, dict):
+                        continue
+
+                    insumo_id = item.get('insumo_id')
+                    cantidad = item.get('cantidad_por_porcion', 1)
+
+                    if not insumo_id:
+                        continue
+                    if float(cantidad) <= 0:
+                        raise ValidationError(f'Cantidad inválida para insumo {insumo_id}')
+
+                    if not Insumo.objects.filter(pk=insumo_id, activo=True).exists():
+                        raise ValidationError(f'Insumo {insumo_id} no existe o está inactivo.')
+
+                    RecetaInsumo.objects.update_or_create(
+                        plato=plato,
+                        insumo_id=insumo_id,
+                        defaults={
+                            'cantidad_por_porcion': cantidad,
+                            'merma_porcentaje': item.get('merma_porcentaje', 0),
+                            'activo': True,
+                        },
+                    )
+                    insumo_ids_nuevos.add(int(insumo_id))
+
+                except (json.JSONDecodeError, ValueError):
                     continue
-                insumo_id = item.get('insumo_id')
-                if not insumo_id:
-                    continue
-                RecetaInsumo.objects.create(
-                    plato=plato,
-                    insumo_id=insumo_id,
-                    cantidad_por_porcion=item.get('cantidad_por_porcion', 1),
-                    merma_porcentaje=item.get('merma_porcentaje', 0),
-                    activo=item.get('activo', True)
-                )
-            except (json.JSONDecodeError, Exception):
-                continue
+
+            # Desactivar insumos de la receta que ya no están en la lista nueva
+            if insumo_ids_nuevos:
+                plato.receta.exclude(insumo_id__in=insumo_ids_nuevos).update(activo=False)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, EsAdmin])
     def insumos_criticos(self, request):

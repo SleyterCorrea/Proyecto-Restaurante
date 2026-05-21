@@ -5,6 +5,7 @@ from django.db.models import Sum, Count, Avg, F, Q
 from django.db.models.functions import ExtractHour, ExtractWeekDay
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -41,6 +42,7 @@ def admin_reportes(request):
     """Vista principal de reportes gráficos."""
     return render(request, 'admin_panel/reportes.html')
 
+@never_cache
 @login_required
 @rol_requerido('ADMIN')
 def admin_inventario(request):

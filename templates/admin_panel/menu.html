@@ -3,6 +3,16 @@
 {% block nav_menu_sidebar %}active{% endblock %}
 
 {% block content %}
+<style>
+.custom-search-input:focus {
+    background-color: transparent !important;
+    color: white !important;
+    box-shadow: none !important;
+}
+.custom-search-input::placeholder {
+    color: #94a3b8 !important;
+}
+</style>
 <div class="container-fluid py-4" x-data="menuApp()" x-init="init()">
     <div class="mb-4 d-flex justify-content-between align-items-center">
         <div>
@@ -110,7 +120,7 @@
                             <span class="material-symbols-outlined text-[18px]">search</span>
                         </span>
                         <input type="text"
-                            class="form-control border-0 bg-transparent text-white text-xs font-bold shadow-none"
+                            class="form-control border-0 bg-transparent text-white text-xs font-bold shadow-none custom-search-input"
                             x-model="busquedaPlato" placeholder="Buscar plato..." />
                     </div>
 
@@ -646,5 +656,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'menu/menu.js' %}"></script>
+<script src="{% static 'menu/menu.js' %}?v=2"></script>
 {% endblock %}

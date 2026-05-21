@@ -57,9 +57,9 @@ function menuApp() {
                 lista = lista.filter(p => p.categoria == this.filtroCategoriaPlatos);
             }
 
-            if (this.busquedaPlato.trim() !== "") {
+            if ((this.busquedaPlato || '').trim() !== "") {
                 const termino = this.busquedaPlato.toLowerCase();
-                lista = lista.filter(p => p.nombre.toLowerCase().includes(termino));
+                lista = lista.filter(p => (p.nombre || '').toLowerCase().includes(termino));
             }
 
             this.platosPaginacion.totalPaginas = Math.ceil(lista.length / this.platosPaginacion.porPagina) || 1;
@@ -198,12 +198,15 @@ function menuApp() {
 
         async fetchInsumosDisponibles() {
             try {
-                const res = await fetch("/api/inventario/insumos/", {
+                // page_size=500 para traer todos sin paginación; extraer .results del wrapper
+                const res = await fetch("/api/inventario/insumos/?activo=true&page_size=500", {
                     credentials: "same-origin",
                     headers: { Accept: "application/json" },
                 });
                 if (res.ok) {
-                    this.insumosDisponibles = await res.json();
+                    const data = await res.json();
+                    // La API devuelve {count, results:[...]} — extraemos solo el array
+                    this.insumosDisponibles = Array.isArray(data) ? data : (data.results || []);
                 } else {
                     console.error("Error cargando insumos:", res.status);
                 }

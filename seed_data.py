@@ -122,20 +122,21 @@ from apps.inventario.models import Insumo, RecetaInsumo
 um = {u.abreviatura: u for u in UnidadMedida.objects.all()}
 
 insumos_data = [
-    {'nombre': 'Pescado (Reineta)', 'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 10.00, 'costo_unitario': 25.00},
-    {'nombre': 'Limón Sutil',       'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 5.00,  'costo_unitario': 4.50},
-    {'nombre': 'Cebolla Roja',      'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 8.00,  'costo_unitario': 3.20},
-    {'nombre': 'Ají Amarillo',      'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 5.00,  'costo_unitario': 6.00},
-    {'nombre': 'Lomo Fino',         'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 12.00, 'costo_unitario': 45.00},
-    {'nombre': 'Pollo (Pechuga)',   'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 10.00, 'costo_unitario': 18.50},
-    {'nombre': 'Papa Amarilla',     'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 15.00, 'costo_unitario': 4.00},
-    {'nombre': 'Pisco Quebranta',   'unidad_medida': um['BOT'], 'stock_actual': 50.00, 'stock_minimo': 6.00,  'costo_unitario': 35.00},
-    {'nombre': 'Inka Kola (600ml)', 'unidad_medida': um['UND'], 'stock_actual': 50.00, 'stock_minimo': 24.00, 'costo_unitario': 3.50},
-    {'nombre': 'Masa Wantán',       'unidad_medida': um['KG'],  'stock_actual': 50.00, 'stock_minimo': 3.00,  'costo_unitario': 12.00},
+    {'nombre': 'Pescado (Reineta)', 'unidad_medida': um['KG'],  'stock_actual': 15.00, 'stock_minimo': 10.00, 'costo_unitario': 25.00},
+    {'nombre': 'Limón Sutil',       'unidad_medida': um['KG'],  'stock_actual':  8.00, 'stock_minimo': 5.00,  'costo_unitario': 4.50},
+    {'nombre': 'Cebolla Roja',      'unidad_medida': um['KG'],  'stock_actual': 12.00, 'stock_minimo': 8.00,  'costo_unitario': 3.20},
+    {'nombre': 'Ají Amarillo',      'unidad_medida': um['KG'],  'stock_actual':  4.00, 'stock_minimo': 5.00,  'costo_unitario': 6.00},
+    {'nombre': 'Lomo Fino',         'unidad_medida': um['KG'],  'stock_actual':  8.00, 'stock_minimo': 12.00, 'costo_unitario': 45.00},
+    {'nombre': 'Pollo (Pechuga)',   'unidad_medida': um['KG'],  'stock_actual': 20.00, 'stock_minimo': 10.00, 'costo_unitario': 18.50},
+    {'nombre': 'Papa Amarilla',     'unidad_medida': um['KG'],  'stock_actual': 18.00, 'stock_minimo': 15.00, 'costo_unitario': 4.00},
+    {'nombre': 'Pisco Quebranta',   'unidad_medida': um['BOT'], 'stock_actual':  8.00, 'stock_minimo': 6.00,  'costo_unitario': 35.00},
+    {'nombre': 'Inka Kola (600ml)', 'unidad_medida': um['UND'], 'stock_actual': 36.00, 'stock_minimo': 24.00, 'costo_unitario': 3.50},
+    {'nombre': 'Masa Wantán',       'unidad_medida': um['KG'],  'stock_actual':  5.00, 'stock_minimo': 3.00,  'costo_unitario': 12.00},
 ]
 for idat in insumos_data:
     sr = idat['stock_actual']
-    Insumo.objects.update_or_create(
+    # get_or_create: solo crea si no existe, NO sobreescribe stock en reinicios
+    Insumo.objects.get_or_create(
         nombre=idat['nombre'],
         defaults={**idat, 'stock_real': sr, 'activo': True},
     )
