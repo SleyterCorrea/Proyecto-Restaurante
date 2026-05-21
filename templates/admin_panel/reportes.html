@@ -16,6 +16,10 @@
     --r-red: #ef4444;
     --r-red-dim: rgba(239,68,68,0.12);
     --r-yellow: #eab308;
+    --r-orange: #f97316;
+    --r-orange-dim: rgba(249,115,22,0.12);
+    --r-cyan: #06b6d4;
+    --r-cyan-dim: rgba(6,182,212,0.12);
     --r-radius: 16px;
     --r-radius-lg: 24px;
   }
@@ -118,7 +122,29 @@
   /* ── Status Badge ── */
   .badge-pagado  { color: var(--r-green); background: var(--r-green-dim); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
   .badge-anulado { color: var(--r-red);   background: var(--r-red-dim);   border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-perdida { color: var(--r-red);   background: var(--r-red-dim);   border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .badge-multi   { color: #3b82f6; background: rgba(59,130,246,0.12); border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 700; margin-left: 6px; }
   .badge-otro    { color: rgb(var(--on-surface-variant)); background: rgb(var(--border) / 0.05); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+
+  /* ── Filter Bar ── */
+  .filter-bar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    background: rgb(var(--surface)); border: 1px solid rgb(var(--border) / 0.1);
+    border-radius: var(--r-radius); padding: 12px 16px; margin-bottom: 20px;
+  }
+  .filter-bar select, .filter-bar input {
+    background: rgb(var(--bg)) !important; border: 1px solid rgb(var(--border) / 0.15);
+    border-radius: 8px; padding: 7px 12px; color: rgb(var(--on-surface)) !important;
+    font-size: 12px; outline: none; min-width: 120px; color-scheme: dark;
+  }
+  html.light .filter-bar select, html.light .filter-bar input { color-scheme: light; }
+  .filter-bar label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: rgb(var(--on-surface-variant)); margin-bottom: 2px;
+  }
+
+  /* ── Doughnut wrapper ── */
+  .doughnut-wrap { position: relative; height: 200px; width: 200px; margin: 0 auto; }
 
   /* ── Section Title ── */
   .r-section-title { font-size: 15px; font-weight: 700; color: rgb(var(--on-surface)); }
@@ -148,6 +174,16 @@
   @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
   .skeleton { background: rgb(var(--border) / 0.15); border-radius: 8px; animation: skeleton-pulse 1.6s ease-in-out infinite; }
 
+  /* ── Clickable Rotation Columns ── */
+  .rotacion-col {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rotacion-col:hover {
+    opacity: 0.9;
+    background: rgb(var(--border) / 0.05);
+    border-radius: 12px;
+  }
+
   [x-cloak] { display: none !important; }
 </style>
 {% endblock %}
@@ -156,7 +192,7 @@
 <div class="px-4 py-5 px-lg-6" x-data="analyticsApp()" x-init="init()" x-cloak>
 
   <!-- ─── Header ─── -->
-  <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
       <h1 class="mb-1" style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:22px;color:rgb(var(--on-surface));">
         Dashboard de reportes
@@ -165,12 +201,38 @@
         Métricas en tiempo real &bull; Turno: <span class="fw-bold" style="color:rgb(var(--primary));" x-text="turnoCodigo"></span>
       </p>
     </div>
-    <a href="{% url 'api_exportar_csv' %}"
-       class="d-flex align-items-center gap-2 px-3 py-2"
-       style="background:rgb(var(--surface));border:1px solid rgb(var(--border)/0.1);border-radius:10px;color:rgb(var(--on-surface));text-decoration:none;font-size:12px;font-weight:700;letter-spacing:0.05em;">
-      <span class="material-symbols-outlined" style="font-size:17px;">download</span>
-      Exportar CSV
-    </a>
+  </div>
+
+  <!-- ─── Global Filter Bar ─── -->
+  <div class="filter-bar">
+    <span class="material-symbols-outlined" style="font-size:18px;color:rgb(var(--on-surface-variant));">filter_alt</span>
+
+    <div class="d-flex flex-column">
+      <label>Día</label>
+      <input type="date" x-model="filterFechaGlobal" @change="cargarTodo()">
+    </div>
+    <div class="d-flex flex-column">
+      <label>Turno</label>
+      <select x-model="filterTurno" @change="cargarTodo()">
+        <option value="">Todos</option>
+        <option value="MANANA">Mañana</option>
+        <option value="TARDE">Tarde</option>
+        <option value="NOCHE">Noche</option>
+      </select>
+    </div>
+    <div class="d-flex flex-column">
+      <label>Personal Caja</label>
+      <select x-model="filterCajero" @change="cargarTodo()">
+        <option value="">Todos</option>
+        {% for c in cajeros %}
+        <option value="{{ c.id }}">{{ c.nombres }} {{ c.apellidos }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button @click="limpiarFiltros()" class="d-flex align-items-center gap-1 px-3 py-2 ms-auto"
+            style="background:transparent;border:1px solid rgb(var(--border)/0.15);border-radius:8px;color:rgb(var(--on-surface-variant));font-size:11px;font-weight:600;cursor:pointer;">
+      <span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span> Limpiar
+    </button>
   </div>
 
   <!-- ─── KPIs ─── -->
@@ -183,15 +245,19 @@
           <div class="kpi-icon" style="background:rgba(139,124,248,0.12);">
             <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:20px;">payments</span>
           </div>
-          <span class="trend-badge"
-            :class="kpis.tendencia_ventas === null ? 'trend-flat' : kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_ventas !== undefined">
-            <span x-text="kpis.tendencia_ventas !== null
-              ? (kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'
-              : '—'"></span>
-          </span>
+              <span class="trend-badge"
+      :class="kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
+      x-show="kpis.tendencia_ventas !== null && kpis.tendencia_ventas !== undefined">
+      
+      <span x-text="(kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'"></span>
+    </span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Ventas totales</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Ventas totales</span>
+          <button type="button" @click="abrirInfoModal('Ventas totales')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_ventas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
@@ -205,58 +271,70 @@
             <span class="material-symbols-outlined" style="color:#22c55e;font-size:20px;">receipt_long</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_comandas === null ? 'trend-flat' : kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_comandas !== undefined">
-            <span x-text="kpis.tendencia_comandas !== null
-              ? (kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
+  x-show="kpis.tendencia_comandas !== null && kpis.tendencia_comandas !== undefined">
+
+  <span x-text="(kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'"></span>
+</span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Comandas cobradas</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Comandas cobradas</span>
+          <button type="button" @click="abrirInfoModal('Comandas cobradas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.cant_comandas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
     </div>
 
-    <!-- Ticket promedio -->
+    <!-- Tiempo máximo cocina (TIEMPO PICO PREP) -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
         <div class="d-flex justify-content-between align-items-start mb-3">
-          <div class="kpi-icon" style="background:rgba(234,179,8,0.12);">
-            <span class="material-symbols-outlined" style="color:#eab308;font-size:20px;">avg_pace</span>
+          <div class="kpi-icon" style="background:var(--r-cyan-dim);">
+            <span class="material-symbols-outlined" style="color:var(--r-cyan);font-size:20px;">timer</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_ticket === null ? 'trend-flat' : kpis.tendencia_ticket >= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_ticket !== undefined">
-            <span x-text="kpis.tendencia_ticket !== null
-              ? (kpis.tendencia_ticket >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ticket) + '%'
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
+  x-show="kpis.tendencia_tiempo !== null && kpis.tendencia_tiempo !== undefined">
+
+  <span x-text="kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%'"></span>
+</span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Ticket promedio</div>
-        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.ticket_promedio"></div>
-        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Tiempo pico prep.</span>
+          <button type="button" @click="abrirInfoModal('Tiempo pico prep.')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
+        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.tiempo_maximo_prep ? kpis.tiempo_maximo_prep + ' min' : '0 min'"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">plato que más tardó</div>
       </div>
     </div>
 
-    <!-- Tiempo de cocina -->
+    <!-- Total Pérdidas -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
         <div class="d-flex justify-content-between align-items-start mb-3">
-          <div class="kpi-icon" style="background:rgba(20,184,166,0.12);">
-            <span class="material-symbols-outlined" style="color:#14b8a6;font-size:20px;">timer</span>
+          <div class="kpi-icon" style="background:var(--r-orange-dim);">
+            <span class="material-symbols-outlined" style="color:var(--r-orange);font-size:20px;">warning</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_tiempo === null ? 'trend-flat' : kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_tiempo !== undefined">
-            <span x-text="kpis.tendencia_tiempo !== null
-              ? (kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%')
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_perdidas >= 0 ? 'trend-down' : 'trend-up'"
+  x-show="kpis.tendencia_perdidas !== null && kpis.tendencia_perdidas !== undefined">
+
+  <span x-text="(kpis.tendencia_perdidas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_perdidas) + '%'"></span>
+</span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Tiempo promedio de preparación</div>
-        <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.tiempo_promedio_prep + ' m'"></div>
-        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">promedio por plato</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Total Pérdidas</span>
+          <button type="button" @click="abrirInfoModal('Total Pérdidas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
+        <div style="font-size:26px;font-weight:800;color:var(--r-orange);font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_perdidas"></div>
+        <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">cuentas no cobradas</div>
       </div>
     </div>
 
@@ -265,16 +343,16 @@
   <!-- ─── Charts Row ─── -->
   <div class="row g-3 mb-4">
 
-    <!-- Top platos (barras) -->
-    <div class="col-lg-8">
+    <!-- Gráfico de barras: Platos más vendidos -->
+    <div class="col-lg-5">
       <div class="r-card p-4 h-100">
         <div class="d-flex align-items-center gap-2 mb-4">
           <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:18px;">bar_chart</span>
           <div>
             <div class="r-section-title">Platos más vendidos</div>
-            <div class="r-section-sub">Ranking del turno (incluye hora y día pico por plato)</div>
+            <div class="r-section-sub">Ranking del periodo filtrado</div>
           </div>
-          <span class="ms-auto" style="background:rgba(139,124,248,0.1);color:#8b7cf8;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:0.05em;">● PLATOS</span>
+          <span class="ms-auto" style="background:rgba(139,124,248,0.1);color:#8b7cf8;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;">● PLATOS</span>
         </div>
         <div class="chart-wrap">
           <canvas id="chartVentasHora"></canvas>
@@ -282,46 +360,100 @@
       </div>
     </div>
 
-    <!-- Top de platos -->
+    <!-- Top platos lista detallada -->
     <div class="col-lg-4">
       <div class="r-card p-4 h-100">
         <div class="d-flex align-items-center gap-2 mb-4">
           <span class="material-symbols-outlined" style="color:#f97316;font-size:18px;">local_fire_department</span>
           <div>
-            <div class="r-section-title">Platos más vendidos</div>
-            <div class="r-section-sub">Platos más pedidos</div>
+            <div class="r-section-title">Top 5 Platos</div>
+            <div class="r-section-sub">Con hora y día pico</div>
           </div>
         </div>
-
-        <!-- Empty state -->
         <template x-if="topPlatos.length === 0">
-          <div class="empty-state">
-            <span class="material-symbols-outlined">restaurant_menu</span>
-            <p style="font-size:13px;">Sin datos aún</p>
-          </div>
+          <div class="empty-state"><span class="material-symbols-outlined">restaurant_menu</span><p style="font-size:13px;">Sin datos aún</p></div>
         </template>
-
-        <!-- List -->
         <div class="d-flex flex-column gap-3">
           <template x-for="(item, idx) in topPlatos" :key="idx">
             <div>
               <div class="d-flex justify-content-between align-items-center mb-1">
                 <span style="font-size:13px;font-weight:600;color:rgb(var(--on-surface));" x-text="item.plato__nombre"></span>
-                <span style="font-size:12px;font-weight:700;color:rgb(var(--on-surface-variant));" x-text="item.cantidad + ' vendidos'"></span>
+                <span style="font-size:12px;font-weight:700;color:rgb(var(--on-surface-variant));" x-text="item.cantidad + ' uds'"></span>
               </div>
               <div class="d-flex justify-content-between align-items-center" style="margin-bottom:6px;">
                 <span style="font-size:11px;color:rgb(var(--on-surface-variant));">
-                  Hora pico:
-                  <strong style="color:rgb(var(--on-surface));" x-text="item.hora_pico !== null && item.hora_pico !== undefined ? (String(item.hora_pico).padStart(2,'0') + ':00') : '—'"></strong>
+                  Hora pico: <strong style="color:rgb(var(--on-surface));" x-text="item.hora_pico !== null && item.hora_pico !== undefined ? (String(item.hora_pico).padStart(2,'0') + ':00') : '—'"></strong>
                 </span>
                 <span style="font-size:11px;color:rgb(var(--on-surface-variant));">
-                  Día pico:
-                  <strong style="color:rgb(var(--on-surface));" x-text="item.dia_pico || '—'"></strong>
+                  Día pico: <strong style="color:rgb(var(--on-surface));" x-text="item.dia_pico || '—'"></strong>
                 </span>
               </div>
-              <div class="top-bar-track">
-                <div class="top-bar-fill" :style="`width: ${item.porcentaje}%`"></div>
-              </div>
+              <div class="top-bar-track"><div class="top-bar-fill" :style="`width: ${item.porcentaje}%`"></div></div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doughnut Rotación + Peores Platos -->
+    <div class="col-lg-3">
+      <div class="r-card p-4 mb-3">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="material-symbols-outlined" style="color:#22c55e;font-size:18px;">donut_large</span>
+          <div>
+            <div class="r-section-title">Popularidad de Menú</div>
+            <div class="r-section-sub">Distribución de ventas</div>
+          </div>
+        </div>
+        <div class="doughnut-wrap">
+          <canvas id="chartDoughnut"></canvas>
+        </div>
+        <div class="row text-center mt-3" style="font-size:12px;">
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'alta' ? 'background: rgba(34, 197, 94, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(34, 197, 94, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'alta'">
+            <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Estrellas</div>
+            <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+              <span style="color:#22c55e; font-size:12px; line-height: 1;">●</span>
+              <span class="fw-bold" style="font-size: 14px; color:rgb(var(--on-surface));" x-text="distribucion.alta || 0"></span>
+            </div>
+          </div>
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'media' ? 'background: rgba(234, 196, 8, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(234, 196, 8, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'media'">
+            <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Regulares</div>
+            <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+              <span style="color:#eab308; font-size:12px; line-height: 1;">●</span>
+              <span class="fw-bold" style="font-size: 14px; color:rgb(var(--on-surface));" x-text="distribucion.media || 0"></span>
+            </div>
+          </div>
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'baja' ? 'background: rgba(239, 68, 68, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(239, 68, 68, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'baja'">
+            <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Rezagados</div>
+            <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
+              <span style="color:#ef4444; font-size:12px; line-height: 1;">●</span>
+              <span class="fw-bold" style="font-size: 14px; color:rgb(var(--on-surface));" x-text="distribucion.baja || 0"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="r-card p-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="material-symbols-outlined" :style="'color:' + rotacionCardInfo.color + ';font-size:18px;'" x-text="rotacionCardInfo.icon"></span>
+          <div>
+            <div class="r-section-title" x-text="rotacionCardInfo.title"></div>
+            <div class="r-section-sub" x-text="rotacionCardInfo.sub"></div>
+          </div>
+        </div>
+        <template x-if="activeRotacionList.length === 0">
+          <div class="empty-state" style="padding:20px 0;"><span class="material-symbols-outlined">restaurant_menu</span><p style="font-size:12px;">Sin datos</p></div>
+        </template>
+        <div class="d-flex flex-column gap-2" style="max-height: 250px; overflow-y: auto; padding-right: 4px;">
+          <template x-for="(item, idx) in activeRotacionList" :key="idx">
+            <div class="d-flex justify-content-between align-items-center" style="padding:6px 0;border-bottom:1px solid rgb(var(--border)/0.07);">
+              <span style="font-size:12px;color:rgb(var(--on-surface));" x-text="item.plato__nombre"></span>
+              <span :style="'color:' + rotacionCardInfo.color + ';font-weight:700;font-size:11px;'" x-text="item.cantidad + ' uds'"></span>
             </div>
           </template>
         </div>
@@ -335,113 +467,214 @@
     <div class="d-flex align-items-center flex-wrap gap-3 mb-4">
       <div>
         <div class="r-section-title">Historial de ventas</div>
-        <div class="r-section-sub">Historial detallado de todas las ventas del turno</div>
+        <div class="r-section-sub">Historial detallado de ventas y pérdidas</div>
       </div>
-
-      <!-- Filters -->
-      <div class="ms-auto d-flex align-items-center flex-wrap gap-2">
+      <div class="ms-auto d-flex align-items-center flex-wrap gap-3">
+        <!-- Toggle de Estado -->
+        <div class="btn-group" role="group" style="background: rgb(var(--bg)); border: 1px solid rgb(var(--border) / 0.15); border-radius: 8px; padding: 2px; display: inline-flex;">
+          <button type="button" class="btn btn-sm" 
+                  :style="filterEstadoHistorial === 'TODOS' ? 'background: rgb(var(--border) / 0.15); color: rgb(var(--on-surface)); border-radius: 6px;' : 'background: transparent; color: rgb(var(--on-surface-variant)); border: none;'"
+                  @click="filterEstadoHistorial = 'TODOS'; cargarHistorial()" 
+                  style="font-size: 11px; font-weight: 600; padding: 4px 12px; transition: all 0.2s;">Todos</button>
+          <button type="button" class="btn btn-sm" 
+                  :style="filterEstadoHistorial === 'COBRADOS' ? 'background: var(--r-green-dim); color: var(--r-green); border-radius: 6px;' : 'background: transparent; color: rgb(var(--on-surface-variant)); border: none;'"
+                  @click="filterEstadoHistorial = 'COBRADOS'; cargarHistorial()" 
+                  style="font-size: 11px; font-weight: 600; padding: 4px 12px; transition: all 0.2s;">Cobrados</button>
+          <button type="button" class="btn btn-sm" 
+                  :style="filterEstadoHistorial === 'PERDIDAS' ? 'background: var(--r-red-dim); color: var(--r-red); border-radius: 6px;' : 'background: transparent; color: rgb(var(--on-surface-variant)); border: none;'"
+                  @click="filterEstadoHistorial = 'PERDIDAS'; cargarHistorial()" 
+                  style="font-size: 11px; font-weight: 600; padding: 4px 12px; transition: all 0.2s;">Pérdidas</button>
+        </div>
+        
         <div class="position-relative">
           <span class="material-symbols-outlined position-absolute"
-                style="left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#64748b;pointer-events:none;">table_restaurant</span>
-          <select class="r-search"
-                  x-model="filterMesa"
-                  @change="cargarTodo()"
-                  style="width:160px;padding-left:36px;appearance:none;cursor:pointer;">
-            <option value="">Todas las mesas</option>
-            <template x-for="m in mesas" :key="m.id">
-              <option :value="m.numero" x-text="'Mesa ' + m.numero + ' (' + m.piso + ')'"></option>
-            </template>
-          </select>
+                style="left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#64748b;pointer-events:none;">search</span>
+          <input type="text" class="r-search" x-model="filterSearch"
+                 @input.debounce.400ms="cargarHistorial()"
+                 placeholder="Buscar por mesa..."
+                 style="width:180px;">
         </div>
-
-        <input type="date"
-               class="r-search"
-               x-model="filterFecha"
-               @change="cargarHistorial()"
-               style="width:170px;padding-left:12px;">
       </div>
     </div>
 
-    <!-- Table -->
     <div style="overflow-x:auto;">
       <table class="r-table">
         <thead>
           <tr>
-            <th>Fecha / Hora</th>
-            <th>Código</th>
-            <th>Mesa</th>
-            <th>Detalle</th>
-            <th>Bruto</th>
-            <th>IGV (10%)</th>
-            <th>Neto</th>
-            <th>Método</th>
-            <th>Estado</th>
+            <th>FECHA/HORA</th>
+            <th>MESA</th>
+            <th>MOZO</th>
+            <th>TURNO</th>
+            <th>DETALLE</th>
+            <th>PRECIO INICIAL</th>
+            <th>IGV (18%)</th>
+            <th>GANANCIA FINAL</th>
+            <th>METODO</th>
+            <th>ESTADO</th>
           </tr>
         </thead>
         <tbody>
-
-          <!-- Loading rows -->
           <template x-if="loadingHistorial">
             <template x-for="n in 5" :key="n">
-              <tr>
-                <td colspan="9">
-                  <div class="skeleton" style="height:18px;width:100%;border-radius:6px;"></div>
-                </td>
-              </tr>
+              <tr><td colspan="10"><div class="skeleton" style="height:18px;width:100%;border-radius:6px;"></div></td></tr>
             </template>
           </template>
-
-          <!-- Empty -->
           <template x-if="!loadingHistorial && historial.length === 0">
-            <tr>
-              <td colspan="9">
-                <div class="empty-state" style="padding:36px 0;">
-                  <span class="material-symbols-outlined">receipt_long</span>
-                  <p style="font-size:13px;">No hay ventas registradas aún en este turno</p>
-                </div>
-              </td>
-            </tr>
+            <tr><td colspan="10">
+              <div class="empty-state" style="padding:36px 0;">
+                <span class="material-symbols-outlined">receipt_long</span>
+                <p style="font-size:13px;">No hay ventas registradas con los filtros aplicados</p>
+              </div>
+            </td></tr>
           </template>
-
-          <!-- Rows -->
           <template x-if="!loadingHistorial && historial.length > 0">
-            <template x-for="venta in historial" :key="venta.id">
-              <tr>
-                <td style="color:rgb(var(--on-surface-variant));font-size:12px;font-variant-numeric:tabular-nums;" x-text="venta.fecha"></td>
+            <template x-for="v in historial" :key="v.id">
+              <tr :style="v.estado === 'PERDIDA' ? 'background: rgba(239, 68, 68, 0.08) !important;' : ''">
+                <td :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface-variant));'" style="font-size:12px;font-variant-numeric:tabular-nums;" x-text="v.fecha"></td>
                 <td>
-                  <span style="font-family:monospace;font-size:12px;font-weight:600;color:#8b7cf8;" x-text="venta.codigo"></span>
+                  <span :style="v.estado === 'PERDIDA' ? 'background:rgba(239,68,68,0.15);color:#ef4444;' : 'background:rgba(255,255,255,0.06);'" style="border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;" x-text="'Mesa ' + v.mesa"></span>
+                </td>
+                <td :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface));'" style="font-size:12px;font-weight:600;" x-text="v.mozo"></td>
+                <td style="font-size:12px;color:rgb(var(--on-surface-variant));" x-text="v.turno"></td>
+                <td style="max-width:200px;">
+                  <span :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface-variant));'" style="font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" :title="v.detalle" x-text="v.detalle"></span>
+                </td>
+                <td :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface-variant));'" style="font-size:12px;font-variant-numeric:tabular-nums;" x-text="'S/. ' + v.neto.toFixed(2)"></td>
+                <td :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface-variant));'" style="font-size:12px;font-variant-numeric:tabular-nums;" x-text="'S/. ' + v.impuesto.toFixed(2)"></td>
+                <td :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : ''" style="font-weight:700;font-variant-numeric:tabular-nums;" x-text="'S/. ' + v.bruto.toFixed(2)"></td>
+                <td style="font-size:12px;">
+                  <span :style="v.estado === 'PERDIDA' ? 'color:#ef4444;' : 'color:rgb(var(--on-surface-variant));'" x-text="v.estado === 'PERDIDA' ? 'SIN PAGAR (PERDIDA)' : v.metodo"></span>
                 </td>
                 <td>
-                  <span style="background:rgba(255,255,255,0.06);border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;" x-text="'Mesa ' + venta.mesa"></span>
-                </td>
-                <td style="max-width:220px;">
-                  <span style="font-size:12px;color:rgb(var(--on-surface-variant));display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" :title="venta.detalle" x-text="venta.detalle"></span>
-                </td>
-                <td style="font-weight:700;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.bruto.toFixed(2)"></td>
-                <td style="color:rgb(var(--on-surface-variant));font-size:12px;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.impuesto.toFixed(2)"></td>
-                <td style="font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums;" x-text="'S/. ' + venta.neto.toFixed(2)"></td>
-                <td style="font-size:12px;color:rgb(var(--on-surface-variant));" x-text="venta.metodo"></td>
-                <td>
-                  <span :class="venta.estado === 'COBRADA' ? 'badge-pagado' : venta.estado === 'ANULADA' ? 'badge-anulado' : 'badge-otro'"
-                        x-text="venta.estado === 'COBRADA' ? 'COBRADA' : venta.estado"></span>
+                  <div class="d-flex align-items-center gap-2">
+                    <span :class="v.estado === 'PAGADO' ? 'badge-pagado' : (v.estado === 'PERDIDA' ? 'badge-perdida' : (v.estado === 'ANULADA' ? 'badge-anulado' : 'badge-otro'))"
+                          x-text="v.estado === 'PAGADO' ? 'COBRADO' : (v.estado === 'PERDIDA' ? 'PERDIDA' : v.estado)"></span>
+                    <span x-show="v.es_multi && v.estado !== 'PERDIDA'" 
+                          style="color:#d97706; background:rgba(217,119,6,0.12); border-radius:6px; padding:3px 8px; font-size:11px; font-weight:700;"
+                          x-text="'DIVIDIDA'"></span>
+                  </div>
                 </td>
               </tr>
             </template>
           </template>
-
         </tbody>
       </table>
     </div>
 
-    <!-- Footer: count -->
-    <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2"
+    <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-3"
          x-show="!loadingHistorial && historial.length > 0">
-      <span style="font-size:12px;color:#64748b;">
+      <span style="font-size:12px;color:rgb(var(--on-surface-variant));">
         <span x-text="historial.length"></span> ventas registradas
       </span>
-      <span style="font-size:12px;color:#64748b;">
-        Total neto: <strong style="color:#22c55e;" x-text="'S/. ' + historial.reduce((a,v)=>a+v.neto,0).toFixed(2)"></strong>
-      </span>
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#22c55e;letter-spacing:0.06em;">Total cobrado</div>
+          <div style="font-size:15px;font-weight:800;color:#22c55e;" 
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.bruto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;letter-spacing:0.06em;">IGV 18%</div>
+          <div style="font-size:15px;font-weight:800;color:#3b82f6;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.impuesto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(139,124,248,0.08);border:1px solid rgba(139,124,248,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#8b7cf8;letter-spacing:0.06em;">Neto sin IGV</div>
+          <div style="font-size:15px;font-weight:800;color:#8b7cf8;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.neto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#ef4444;letter-spacing:0.06em;">Pérdidas</div>
+          <div style="font-size:15px;font-weight:800;color:#ef4444;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PERDIDA').reduce((a,v) => a + v.bruto, 0).toFixed(2)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Proporción de Estado de Transacciones ─── -->
+  <div class="r-card p-4 mt-4">
+    <div class="r-section-title mb-4 text-center">Proporción de Estado de Transacciones</div>
+    <div class="row align-items-center">
+      <div class="col-md-6 position-relative d-flex justify-content-center">
+        <!-- Contenedor del Gauge -->
+        <div style="position: relative; height: 180px; width: 260px;">
+  <canvas id="chartGauge"></canvas>
+  <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
+    <div class="d-flex gap-4 justify-content-center">
+      <div class="badge-pagado" x-show="filterEstadoHistorial !== 'PERDIDAS'" x-text="historial.filter(v => v.estado === 'PAGADO').length"></div>
+      <div class="badge-perdida" x-show="filterEstadoHistorial !== 'COBRADOS'" x-text="historial.filter(v => v.estado === 'PERDIDA').length"></div>
+    </div>
+    <div style="font-size: 10px; color: rgb(var(--on-surface-variant)); font-weight: 600; text-transform: uppercase;">Total Transacciones</div>
+  </div>
+</div>
+      </div>
+      <div class="col-md-6">
+        <div class="d-flex justify-content-around">
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Modal Glassmorphic de Información de KPIs ─── -->
+  <div x-show="infoModal.show" 
+       class="position-fixed top-0 start-0 w-100 h-100"
+       style="z-index: 1050; display: none;"
+       x-transition.opacity>
+    <!-- Fondo de desenfoque oscuro -->
+    <div class="position-absolute w-100 h-100" 
+         @click="infoModal.show = false"
+         style="background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px);"></div>
+    
+    <!-- Contenedor Flex intermedio para centrado perfecto -->
+    <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative" style="pointer-events: none;">
+      <!-- Contenido del modal con Glassmorphism -->
+      <div class="position-relative p-4 r-card" 
+           style="pointer-events: auto; max-width: 500px; width: 90%; background: rgb(var(--surface) / 0.85); backdrop-filter: blur(20px); border: 1px solid rgb(var(--border) / 0.25); box-shadow: 0 20px 40px rgba(0,0,0,0.55);"
+           x-transition.scale.95>
+        
+        <!-- Encabezado del modal -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div class="kpi-icon" :style="`background: ${infoModal.iconBg}; width: 48px; height: 48px; border-radius:12px; display:flex; align-items:center; justify-content:center;`">
+            <span class="material-symbols-outlined" :style="`color: ${infoModal.iconColor}; font-size: 24px;`" x-text="infoModal.icon"></span>
+          </div>
+          <div>
+            <h3 class="m-0" style="font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:17px; color:rgb(var(--on-surface));" x-text="infoModal.title"></h3>
+            <span style="font-size:10px; font-weight:700; color:rgb(var(--on-surface-variant)); text-transform:uppercase; letter-spacing:0.05em;">Detalle del Indicador</span>
+          </div>
+          <button type="button" @click="infoModal.show = false" 
+                  class="ms-auto d-flex align-items-center justify-content-center" 
+                  style="background: rgb(var(--border) / 0.1); border: none; width: 32px; height: 32px; border-radius: 50%; color: rgb(var(--on-surface)); cursor: pointer; transition: all 0.2s;"
+                  onmouseover="this.style.background='rgb(var(--border) / 0.25)'"
+                  onmouseout="this.style.background='rgb(var(--border) / 0.1)'">
+            <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          </button>
+        </div>
+        
+        <!-- Cuerpo del modal -->
+        <div class="d-flex flex-column gap-3 mb-4 text-start">
+          <div>
+            <h4 style="font-size:11px; font-weight:700; color:rgb(var(--primary)); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">¿Qué significa?</h4>
+            <p style="font-size:13px; color:rgb(var(--on-surface)); line-height:1.6; margin:0;" x-text="infoModal.description"></p>
+          </div>
+          
+          <div style="border-top: 1px solid rgb(var(--border) / 0.1); padding-top: 12px;">
+            <h4 style="font-size:11px; font-weight:700; color:var(--r-green); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">¿Para qué sirve?</h4>
+            <p style="font-size:13px; color:rgb(var(--on-surface-variant)); line-height:1.6; margin:0;" x-text="infoModal.utility"></p>
+          </div>
+        </div>
+        
+        <!-- Pie del modal -->
+        <div class="d-flex justify-content-end">
+          <button type="button" @click="infoModal.show = false" 
+                  class="px-4 py-2"
+                  style="background: linear-gradient(90deg, rgb(var(--primary)), #c084fc); border: none; border-radius: 10px; color: #fff; font-size:12px; font-weight:700; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 12px rgb(var(--primary) / 0.3);"
+                  onmouseover="this.style.transform='scale(1.03)'"
+                  onmouseout="this.style.transform='scale(1)'">
+            Entendido
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -457,20 +690,47 @@ function analyticsApp() {
     kpis: {
       total_ventas: 0,
       cant_comandas: 0,
-      ticket_promedio: 0,
-      tiempo_promedio_prep: 0,
+      total_perdidas: 0,
+      tiempo_maximo_prep: 0,
       tendencia_ventas: null,
       tendencia_comandas: null,
-      tendencia_ticket: null,
+      tendencia_perdidas: null,
       tendencia_tiempo: null,
     },
     topPlatos: [],
+    peoresPlatos: [],
+    distribucion: { alta: 0, media: 0, baja: 0 },
     mesas: [],
     historial: [],
+    
+    // Filtros
+    filterFechaGlobal: '',
+    filterTurno: '',
+    filterCajero: '',
     filterMesa: '',
-    filterFecha: '',
+    filterSearch: '',
+    filterEstadoHistorial: 'TODOS',
+    
+    // Modal interactivo de información de KPIs
+    infoModal: {
+      show: false,
+      title: '',
+      icon: '',
+      iconColor: '',
+      iconBg: '',
+      description: '',
+      utility: ''
+    },
+    
     loadingHistorial: true,
     lineChart: null,
+    doughnutChart: null,
+    gaugeChart: null,
+    barChartTimeout: null,
+    doughnutChartTimeout: null,
+    gaugeChartTimeout: null,
+    categorizados: { alta: [], media: [], baja: [] },
+    rotacionFiltro: 'baja',
 
     async init() {
       try {
@@ -478,15 +738,115 @@ function analyticsApp() {
         const data = await res.json();
         if (data.activo) {
           this.turnoCodigo = data.codigo;
-          await this.cargarTodo();
         } else {
           this.turnoCodigo = 'Sin turno activo';
-          this.loadingHistorial = false;
         }
+        // Wait for Alpine to remove x-cloak (display:none) before loading charts
+        await this.$nextTick();
+        await this.cargarTodo();
       } catch (e) {
         this.turnoCodigo = 'Error de conexión';
         this.loadingHistorial = false;
       }
+    },
+
+    getQueryParams() {
+      const params = new URLSearchParams();
+      if (this.filterFechaGlobal) params.set('fecha', this.filterFechaGlobal);
+      if (this.filterTurno) params.set('turno', this.filterTurno);
+      if (this.filterCajero) params.set('cajero', this.filterCajero);
+      if (this.filterMesa) params.set('mesa', this.filterMesa);
+      if (this.filterSearch) params.set('search', this.filterSearch);
+      if (this.filterEstadoHistorial && this.filterEstadoHistorial !== 'TODOS') {
+        params.set('estado_pago', this.filterEstadoHistorial);
+      }
+      return params.toString();
+    },
+
+    limpiarFiltros() {
+      this.filterFechaGlobal = '';
+      this.filterTurno = '';
+      this.filterCajero = '';
+      this.filterMesa = '';
+      this.filterSearch = '';
+      this.filterEstadoHistorial = 'TODOS';
+      this.cargarTodo();
+    },
+
+    abrirInfoModal(kpiName) {
+      const modalData = {
+        'Ventas totales': {
+          title: 'Ventas Totales',
+          icon: 'payments',
+          iconColor: '#8b7cf8',
+          iconBg: 'rgba(139,124,248,0.12)',
+          description: 'Representa la suma acumulada de todos los montos de comandas que han sido cobradas exitosamente en el periodo seleccionado (excluyendo pérdidas y comandas pendientes).',
+          utility: 'Te sirve para conocer la facturación real y neta del negocio, medir el rendimiento comercial y verificar los ingresos financieros en caja para el cuadre diario.'
+        },
+        'Comandas cobradas': {
+          title: 'Comandas Cobradas',
+          icon: 'receipt_long',
+          iconColor: '#22c55e',
+          iconBg: 'rgba(34,197,94,0.12)',
+          description: 'Es el número total de comandas únicas o mesas que completaron su proceso de pago de forma exitosa durante el tiempo filtrado.',
+          utility: 'Te sirve para medir el volumen de transacciones y el flujo de clientes que consumieron en el salón, lo cual ayuda a dimensionar la operatividad y capacidad de atención del restaurante.'
+        },
+        'Tiempo pico prep.': {
+          title: 'Tiempo Pico Prep.',
+          icon: 'timer',
+          iconColor: '#06b6d4',
+          iconBg: 'rgba(6,182,212,0.12)',
+          description: 'Indica el tiempo máximo de preparación (en minutos) que registró el plato que más demoró en salir de cocina desde que se mandó la comanda hasta que estuvo listo.',
+          utility: 'Te sirve para identificar cuellos de botella en la cocina, evaluar la eficiencia del equipo de chefs y supervisar que los tiempos de espera no perjudiquen la experiencia del comensal.'
+        },
+        'Total Pérdidas': {
+          title: 'Total Pérdidas',
+          icon: 'warning',
+          iconColor: '#f97316',
+          iconBg: 'rgba(249,115,22,0.12)',
+          description: 'Muestra la suma monetaria de aquellas comandas que fueron marcadas como "Pérdida" (por ejemplo, clientes que se retiraron sin pagar, platos mal preparados que se desecharon o errores operativos).',
+          utility: 'Te permite auditar las mermas o fugas de dinero en el restaurante, ayudándote a tomar medidas correctivas en seguridad, atención al cliente o procesos en cocina para proteger el margen de ganancia.'
+        }
+      };
+
+      const data = modalData[kpiName];
+      if (data) {
+        this.infoModal.title = data.title;
+        this.infoModal.icon = data.icon;
+        this.infoModal.iconColor = data.iconColor;
+        this.infoModal.iconBg = data.iconBg;
+        this.infoModal.description = data.description;
+        this.infoModal.utility = data.utility;
+        this.infoModal.show = true;
+      }
+    },
+
+    get activeRotacionList() {
+      return this.categorizados[this.rotacionFiltro] || [];
+    },
+
+    get rotacionCardInfo() {
+      const config = {
+        alta: {
+          title: 'Platos Estrellas',
+          sub: 'Platos con alta demanda',
+          icon: 'trending_up',
+          color: '#22c55e',
+        },
+        media: {
+          title: 'Platos Regulares',
+          sub: 'Platos con demanda promedio',
+          icon: 'trending_flat',
+          color: '#eab308',
+        },
+        baja: {
+          title: 'Platos Rezagados',
+          sub: 'Platos con baja demanda o sin ventas',
+          icon: 'trending_down',
+          color: '#ef4444',
+        }
+      };
+      return config[this.rotacionFiltro] || config.baja;
     },
 
     async cargarTodo() {
@@ -508,7 +868,7 @@ function analyticsApp() {
 
     async cargarKPIs() {
       try {
-        const url = '{% url "api_ventas_turno" %}' + (this.filterMesa ? `?mesa=${this.filterMesa}` : '');
+        const url = '{% url "api_ventas_turno" %}?' + this.getQueryParams();
         const res = await fetch(url);
         if (res.ok) this.kpis = await res.json();
       } catch(e) { console.error('KPI error', e); }
@@ -516,36 +876,88 @@ function analyticsApp() {
 
     async cargarTopPlatos() {
       try {
-        const url = '{% url "api_top_platos" %}' + (this.filterMesa ? `?mesa=${this.filterMesa}` : '');
+        const url = '{% url "api_top_platos" %}?' + this.getQueryParams();
         const res = await fetch(url);
-        if (res.ok) this.topPlatos = await res.json();
+        if (res.ok) {
+          const data = await res.json();
+          this.topPlatos = data.top_platos || [];
+          this.peoresPlatos = data.peores_platos || [];
+          this.distribucion = data.distribucion || { alta: 0, media: 0, baja: 0 };
+          this.categorizados = data.categorizados || { alta: [], media: [], baja: [] };
+          
+          if (this.doughnutChartTimeout) clearTimeout(this.doughnutChartTimeout);
+          this.doughnutChartTimeout = setTimeout(() => {
+            this.renderDoughnutChart(this.distribucion);
+          }, 50);
+        }
       } catch(e) { console.error('Top platos error', e); }
     },
 
     async cargarTopPlatosChart() {
       try {
-        const params = new URLSearchParams();
+        const params = new URLSearchParams(this.getQueryParams());
         params.set('limite', '10');
-        if (this.filterMesa) params.set('mesa', this.filterMesa);
         const url = '{% url "api_top_platos" %}?' + params.toString();
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
-        requestAnimationFrame(() => this.renderBarChart(data || []));
-      } catch(e) { console.error('Ventas hora error', e); }
+        
+        if (this.barChartTimeout) clearTimeout(this.barChartTimeout);
+        this.barChartTimeout = setTimeout(() => {
+          this.renderBarChart(data.top_platos || []);
+        }, 50);
+      } catch(e) { console.error('Top platos chart error', e); }
     },
 
     async cargarHistorial() {
       this.loadingHistorial = true;
       try {
-        const params = new URLSearchParams();
-        if (this.filterMesa) params.set('mesa', this.filterMesa);
-        if (this.filterFecha) params.set('fecha', this.filterFecha);
-        const url = '{% url "api_ventas_historial" %}' + (params.toString() ? `?${params.toString()}` : '');
+        const url = '{% url "api_ventas_historial" %}?' + this.getQueryParams();
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           this.historial = data.results || [];
+          
+          if (this.gaugeChartTimeout) clearTimeout(this.gaugeChartTimeout);
+          this.gaugeChartTimeout = setTimeout(() => {
+            this.renderGaugeChart();
+          }, 100);
+          // Export CSV function
+          this.exportCSV = function() {
+            // Build CSV header
+            const headers = ['Fecha','Mesa','Mozo','Turno','Detalle','Neto','Impuesto','Bruto','Estado','Método'];
+            const rows = this.historial.map(v => [
+              v.fecha,
+              v.mesa,
+              v.mozo,
+              v.turno,
+              v.detalle,
+              v.neto,
+              v.impuesto,
+              v.bruto,
+              v.estado,
+              v.metodo
+            ].map(item => {
+              // Escape commas and quotes
+              const str = String(item ?? '');
+              if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+              }
+              return str;
+            }));
+            const csvContent = [headers, ...rows].map(e => e.join(',')).join('\r\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const now = new Date();
+            const fname = `reporte_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.csv`;
+            link.setAttribute('href', url);
+            link.setAttribute('download', fname);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          };
         }
       } catch(e) {
         console.error('Historial error', e);
@@ -560,7 +972,6 @@ function analyticsApp() {
     },
 
     _rgbCsv(rgbSpaceSeparated) {
-      // Espera "r g b" y devuelve "r, g, b" (compatible con canvas/Chart.js)
       return (rgbSpaceSeparated || '').trim().split(/\s+/).slice(0,3).join(', ');
     },
 
@@ -569,14 +980,19 @@ function analyticsApp() {
         console.error('Chart.js no está cargado');
         return;
       }
+
       const canvas = document.getElementById('chartVentasHora');
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
 
-      if (this.lineChart) {
-        this.lineChart.destroy();
-        this.lineChart = null;
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
       }
 
       const colorPrimary = this._rgbCsv(this._cssVar('--primary', '139 124 248'));
@@ -591,17 +1007,27 @@ function analyticsApp() {
         return;
       }
 
-      this.lineChart = new Chart(ctx, {
+      const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+      gradient.addColorStop(0, `rgba(${colorPrimary}, 0.85)`);
+      gradient.addColorStop(1, `rgba(${colorPrimary}, 0.15)`);
+
+      this.lineChart = new Chart(canvas, {
         type: 'bar',
         data: {
           labels,
           datasets: [{
             label: 'Cantidad vendida',
             data: values,
-            backgroundColor: `rgba(${colorPrimary}, 0.4)`,
-            borderColor: `rgba(${colorPrimary}, 0.8)`,
-            borderWidth: 1,
-            borderRadius: 10,
+            backgroundColor: gradient,
+            borderColor: `rgba(${colorPrimary}, 1)`,
+            borderWidth: 1.5,
+            borderRadius: {
+              topLeft: 8,
+              topRight: 8,
+              bottomLeft: 0,
+              bottomRight: 0
+            },
+            borderSkipped: 'bottom',
             maxBarThickness: 28,
           }]
         },
@@ -611,7 +1037,7 @@ function analyticsApp() {
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: `rgba(${colorOnSurface}, 0.06)`,
+              backgroundColor: `rgba(${colorOnSurface}, 0.08)`,
               borderColor: `rgba(${colorBorder}, 0.18)`,
               borderWidth: 1,
               padding: 12,
@@ -632,7 +1058,7 @@ function analyticsApp() {
           scales: {
             y: {
               beginAtZero: true,
-              grid: { color: `rgba(${colorBorder}, 0.08)`, drawBorder: false },
+              grid: { color: `rgba(${colorBorder}, 0.05)`, drawBorder: false },
               ticks: {
                 color: `rgb(${colorOnVariant})`,
                 font: { size: 10 },
@@ -646,8 +1072,98 @@ function analyticsApp() {
           }
         }
       });
-      requestAnimationFrame(() => {
-        if (this.lineChart) this.lineChart.resize();
+    },
+
+    renderDoughnutChart(distribucion) {
+      if (typeof Chart === 'undefined') return;
+
+      const canvas = document.getElementById('chartDoughnut');
+      if (!canvas) return;
+
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
+      }
+
+      this.doughnutChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Estrellas', 'Regulares', 'Rezagados'],
+          datasets: [{
+            data: [distribucion.alta || 0, distribucion.media || 0, distribucion.baja || 0],
+            backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: c => ` ${c.label}: ${c.raw} platos`
+              }
+            }
+          },
+          cutout: '72%'
+        }
+      });
+    },
+
+    renderGaugeChart() {
+      if (typeof Chart === 'undefined') return;
+
+      const canvas = document.getElementById('chartGauge');
+      if (!canvas) return;
+
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
+      }
+
+      const cobradas = this.historial.filter(v => v.estado === 'PAGADO').length;
+      const perdidas = this.historial.filter(v => v.estado === 'PERDIDA').length;
+      const total = cobradas + perdidas;
+
+      this.gaugeChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Cobradas', 'Pérdidas'],
+          datasets: [{
+            data: [cobradas, perdidas],
+            backgroundColor: ['#22c55e', '#ef4444'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          circumference: 180,
+          rotation: -90,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: c => ` ${c.label}: ${c.raw} transacciones`
+              }
+            }
+          },
+          cutout: '75%'
+        }
       });
     }
   };

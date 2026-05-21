@@ -18,7 +18,7 @@
         <h1 class="kds-header__title">Panel de Comandas</h1>
         <span class="kds-ws-indicator kds-ws-indicator--off" id="ws-indicator" title="WebSocket desconectado">●</span>
     </div>
-    <div class="kds-header__center">
+    <div class="kds-header__right">
         <label for="filtro-zona" class="kds-header__filter-label">Piso:</label>
         <select id="filtro-zona" class="kds-header__select">
             <option value="">Todas</option>
@@ -26,13 +26,6 @@
             <option value="{{ zona.id }}">{{ zona.nombre }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div class="kds-header__right">
-        <span class="kds-header__user">{{ user.username }}</span>
-        <form action="{% url 'logout' %}" method="post" class="m-0 d-inline">
-            {% csrf_token %}
-            <button type="submit" class="kds-header__btn-logout">Salir</button>
-        </form>
     </div>
 </div>
 
@@ -57,6 +50,10 @@
             <div class="kds-summary__item">
                 <span class="kds-summary__label">Pedidos urgentes:</span>
                 <span class="kds-summary__value kds-summary__value--urgent" id="pedidos-urgentes">0</span>
+            </div>
+            <div class="kds-summary__item" style="margin-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
+                <span class="kds-summary__label" style="font-size: 0.8rem;">Recién llegados:</span>
+                <span class="kds-summary__value" style="font-size: 1rem; color: var(--kds-warning);" id="pedidos-recien-llegados">0</span>
             </div>
         </div>
 
@@ -93,6 +90,20 @@
         </div>
         <div class="kds-modal__body">
             <p class="kds-modal__plato" id="modal-plato-nombre"></p>
+
+            <!-- Cantidad parcial -->
+            <div class="kds-modal__parcial" id="modal-parcial-wrapper" style="display:none;">
+                <label class="kds-modal__label" for="modal-cantidad-parcial">
+                    ¿Cuántas unidades deseas cancelar/cocinar?
+                </label>
+                <select id="modal-cantidad-parcial" class="kds-modal__select">
+                    <option value="0">Cancelar todo — No cocinar ninguno</option>
+                </select>
+                <p class="kds-modal__parcial-info">
+                    Se cancelarán todas las unidades. No se cocinará ninguna.
+                </p>
+            </div>
+
             <label class="kds-modal__label" for="modal-motivo">
                 Motivo de anulación <span class="kds-modal__required">*obligatorio</span>
             </label>

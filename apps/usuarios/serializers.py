@@ -14,7 +14,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         model = Usuario
         fields = [
             'id', 'username', 'nombres', 'apellidos', 'email', 'rol', 'rol_nombre', 
-            'activo', 'dni', 'tipo_trabajo', 'fecha_ingreso', 'fecha_termino', 'password'
+            'activo', 'dni', 'tipo_trabajo', 'turno', 'fecha_ingreso', 'fecha_termino', 'password'
         ]
         extra_kwargs = {
             'password': {'write_only': True, 'required': False},
