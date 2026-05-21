@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-
-{% block title %}Gestión de Menú — Admin Panel{% endblock %}
+{% load static %} {% block title %}Gestión de Menú — Admin Panel{% endblock %}
 {% block nav_menu_sidebar %}active{% endblock %}
 
 {% block content %}
@@ -8,30 +7,38 @@
     <div class="mb-4 d-flex justify-content-between align-items-center">
         <div>
             <h2 class="mb-0 text-white font-black text-2xl">Gestión de Menú</h2>
-            <p class="text-on-surface-variant small font-bold">Configuración de Categorías, Platos e Insumos del sistema</p>
+            <p class="text-on-surface-variant small font-bold">
+                Configuración de Categorías, Platos e Insumos del sistema
+            </p>
         </div>
         <div>
-            <!-- Tabs / Segmented Control para cambiar entre Categorías y Platos -->
             <div class="btn-group bg-black/20 p-1 rounded-xl border border-white/5 shadow-inner" role="group">
-                <button type="button" @click="tab = 'categorias'" 
-                        :class="tab === 'categorias' ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold'"
-                        class="btn rounded-lg px-4 py-2 border-0 text-xs tracking-widest uppercase transition-all">Categorías</button>
-                <button type="button" @click="tab = 'platos'" 
-                        :class="tab === 'platos' ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold'"
-                        class="btn rounded-lg px-4 py-2 border-0 text-xs tracking-widest uppercase transition-all">Platos</button>
+                <button type="button" @click="tab = 'categorias'"
+                    :class="tab === 'categorias' ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold'"
+                    class="btn rounded-lg px-4 py-2 border-0 text-xs tracking-widest uppercase transition-all">
+                    Categorías
+                </button>
+                <button type="button" @click="tab = 'platos'"
+                    :class="tab === 'platos' ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold'"
+                    class="btn rounded-lg px-4 py-2 border-0 text-xs tracking-widest uppercase transition-all">
+                    Platos
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Pestaña Categorías -->
     <div x-show="tab === 'categorias'" x-transition.opacity>
         <div class="card card-dark shadow-sm">
             <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center p-4">
                 <h3 class="h5 mb-0 font-bold text-white flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary">category</span> Listado de Categorías
+                    <span class="material-symbols-outlined text-primary">category</span>
+                    Listado de Categorías
                 </h3>
-                <button class="btn btn-sm bg-primary text-[#160066] hover:bg-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-lg" @click="abrirModalCategoria()">
-                    <span class="material-symbols-outlined text-[18px]">add</span> Nueva Categoría
+                <button
+                    class="btn btn-sm bg-primary text-[#160066] hover:bg-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-lg"
+                    @click="abrirModalCategoria()">
+                    <span class="material-symbols-outlined text-[18px]">add</span> Nueva
+                    Categoría
                 </button>
             </div>
             <div class="table-responsive">
@@ -49,23 +56,28 @@
                         <template x-for="cat in categorias" :key="cat.id">
                             <tr class="hover:bg-white/5 transition-colors">
                                 <td class="px-4 py-2 align-middle">
-                                    <div class="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-white/10">
+                                    <div
+                                        class="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-white/10">
                                         <template x-if="cat.icono && cat.icono.startsWith('bi-')">
                                             <i class="bi text-primary text-[18px]" :class="cat.icono"></i>
                                         </template>
                                         <template x-if="!cat.icono || !cat.icono.startsWith('bi-')">
-                                            <span class="material-symbols-outlined text-primary text-[18px]" x-text="cat.icono || 'restaurant'"></span>
+                                            <span class="material-symbols-outlined text-primary text-[18px]"
+                                                x-text="cat.icono || 'restaurant'"></span>
                                         </template>
                                     </div>
                                 </td>
                                 <td class="px-4 py-2 align-middle font-bold text-white" x-text="cat.nombre"></td>
                                 <td class="px-4 py-2 align-middle text-on-surface-variant" x-text="cat.orden"></td>
-                                <td class="px-4 py-2 align-middle text-center text-on-surface-variant font-bold" x-text="platos.filter(p => p.categoria == cat.id).length"></td>
+                                <td class="px-4 py-2 align-middle text-center text-on-surface-variant font-bold"
+                                    x-text="platos.filter(p => p.categoria == cat.id).length"></td>
                                 <td class="px-4 py-2 align-middle text-end">
-                                    <button class="btn btn-sm text-primary hover:bg-primary/10 rounded-lg border-0" @click="editarCategoria(cat)" title="Editar">
+                                    <button class="btn btn-sm text-primary hover:bg-primary/10 rounded-lg border-0"
+                                        @click="editarCategoria(cat)" title="Editar">
                                         <span class="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
-                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="abrirConfirmarEliminarCategoria(cat)" title="Eliminar">
+                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0"
+                                        @click="abrirConfirmarEliminarCategoria(cat)" title="Eliminar">
                                         <span class="material-symbols-outlined text-[18px]">delete</span>
                                     </button>
                                 </td>
@@ -73,7 +85,9 @@
                         </template>
                         <template x-if="categorias.length === 0">
                             <tr>
-                                <td colspan="4" class="text-center py-8 text-on-surface-variant">No hay categorías registradas.</td>
+                                <td colspan="5" class="text-center py-8 text-on-surface-variant">
+                                    No hay categorías registradas.
+                                </td>
                             </tr>
                         </template>
                     </tbody>
@@ -82,22 +96,37 @@
         </div>
     </div>
 
-    <!-- Pestaña Platos -->
     <div x-show="tab === 'platos'" x-transition.opacity x-cloak>
         <div class="card card-dark shadow-sm mb-4">
             <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center p-4">
                 <h3 class="h5 mb-0 font-bold text-white flex items-center gap-2">
-                    <span class="material-symbols-outlined text-secondary">restaurant_menu</span> Listado de Platos
+                    <span class="material-symbols-outlined text-secondary">restaurant_menu</span>
+                    Listado de Platos
                 </h3>
-                <div class="d-flex gap-3">
-                    <select class="form-select form-select-sm border-0 bg-surface rounded-lg text-xs font-bold" x-model="filtroCategoriaPlatos" @change="platosPaginacion.paginaActual = 1">
+                <div class="d-flex gap-3 align-items-center">
+                    <div class="input-group input-group-sm border-0 bg-surface rounded-lg shadow-sm"
+                        style="max-width: 200px">
+                        <span class="input-group-text bg-transparent border-0 text-on-surface-variant">
+                            <span class="material-symbols-outlined text-[18px]">search</span>
+                        </span>
+                        <input type="text"
+                            class="form-control border-0 bg-transparent text-white text-xs font-bold shadow-none"
+                            x-model="busquedaPlato" placeholder="Buscar plato..." />
+                    </div>
+
+                    <select class="form-select form-select-sm border-0 bg-surface rounded-lg text-xs font-bold"
+                        x-model="filtroCategoriaPlatos" @change="fetchPlatos()">
                         <option value="">Todas las Categorías</option>
                         <template x-for="cat in categorias" :key="cat.id">
                             <option :value="cat.id" x-text="cat.nombre"></option>
                         </template>
                     </select>
-                    <button class="btn btn-sm bg-primary text-[#160066] hover:bg-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-lg text-nowrap" @click="abrirModalPlato()">
-                        <span class="material-symbols-outlined text-[18px]">add</span> Nuevo Plato
+
+                    <button
+                        class="btn btn-sm bg-primary text-[#160066] hover:bg-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-lg text-nowrap"
+                        @click="abrirModalPlato()">
+                        <span class="material-symbols-outlined text-[18px]">add</span> Nuevo
+                        Plato
                     </button>
                 </div>
             </div>
@@ -105,7 +134,7 @@
                 <table class="table table-dark table-sm mb-0">
                     <thead class="bg-black/20 text-on-surface-variant text-[10px] uppercase tracking-widest">
                         <tr>
-                            <th class="px-4 py-3 text-center" style="width: 50px;">Imagen</th>
+                            <th class="px-4 py-3 text-center" style="width: 50px">Imagen</th>
                             <th class="px-4 py-3">Plato</th>
                             <th class="px-4 py-3">Categoría</th>
                             <th class="px-4 py-3">Precio</th>
@@ -115,92 +144,112 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-white/5 border-t border-white/5">
-                        <template x-for="plato in platosActuales" :key="plato.id">
+                        <template x-for="plato in platosFiltrados" :key="plato.id">
                             <tr class="hover:bg-white/5 transition-colors">
                                 <td class="px-4 py-2 align-middle text-center">
                                     <template x-if="plato.imagen_url">
-                                        <img :src="plato.imagen_url" :alt="plato.nombre" class="w-10 h-10 rounded-lg object-cover border border-white/10">
+                                        <img :src="plato.imagen_url" :alt="plato.nombre"
+                                            class="w-10 h-10 rounded-lg object-cover border border-white/10" />
                                     </template>
                                     <template x-if="!plato.imagen_url">
-                                        <div class="w-10 h-10 rounded-lg bg-surface border border-white/10 flex items-center justify-center">
-                                            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">image</span>
+                                        <div
+                                            class="w-10 h-10 rounded-lg bg-surface border border-white/10 flex items-center justify-center">
+                                            <span
+                                                class="material-symbols-outlined text-[18px] text-on-surface-variant">image</span>
                                         </div>
                                     </template>
                                 </td>
                                 <td class="px-4 py-2 align-middle">
                                     <div class="font-bold text-white" x-text="plato.nombre"></div>
-                                    <div class="text-[10px] text-on-surface-variant truncate max-w-[200px]" x-text="plato.descripcion"></div>
+                                    <div class="text-[10px] text-on-surface-variant truncate max-w-[200px]"
+                                        x-text="plato.descripcion"></div>
                                 </td>
                                 <td class="px-4 py-2 align-middle">
-                                    <span class="bg-surface border border-white/10 px-2 py-1 rounded text-xs text-on-surface-variant" x-text="plato.categoria_nombre"></span>
+                                    <span
+                                        class="bg-surface border border-white/10 px-2 py-1 rounded text-xs text-on-surface-variant"
+                                        x-text="plato.categoria_nombre"></span>
                                 </td>
-                                <td class="px-4 py-2 align-middle font-black text-secondary" x-text="'S/. ' + parseFloat(plato.precio_actual).toFixed(2)"></td>
+                                <td class="px-4 py-2 align-middle font-black text-secondary"
+                                    x-text="'S/. ' + parseFloat(plato.precio_actual).toFixed(2)"></td>
                                 <td class="px-4 py-2 align-middle text-center">
-                                    <span class="flex items-center justify-center gap-1 text-xs text-on-surface-variant font-bold">
+                                    <span
+                                        class="flex items-center justify-center gap-1 text-xs text-on-surface-variant font-bold">
                                         <span class="material-symbols-outlined text-[14px]">schedule</span>
                                         <span x-text="plato.tiempo_preparacion_min + ' min'"></span>
                                     </span>
                                 </td>
                                 <td class="px-4 py-2 align-middle text-center">
-                                    <button @click="toggleDisponible(plato)" 
-                                            class="btn btn-sm border-0 transition-all rounded-lg" 
-                                            :class="plato.disponible ? 'bg-secondary/20 text-secondary hover:bg-secondary/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'"
-                                            :title="plato.disponible ? 'Click para no disponible' : 'Click para disponible'">
-                                        <span class="material-symbols-outlined text-[18px]" x-text="plato.disponible ? 'toggle_on' : 'toggle_off'"></span>
+                                    <button @click="toggleDisponible(plato)"
+                                        class="btn btn-sm border-0 transition-all rounded-lg"
+                                        :class="plato.disponible ? 'bg-secondary/20 text-secondary hover:bg-secondary/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'"
+                                        :title="plato.disponible ? 'Click para no disponible' : 'Click para disponible'">
+                                        <span class="material-symbols-outlined text-[18px]"
+                                            x-text="plato.disponible ? 'toggle_on' : 'toggle_off'"></span>
                                     </button>
                                 </td>
                                 <td class="px-4 py-2 align-middle text-end">
-                                    <button class="btn btn-sm text-secondary hover:bg-secondary/10 rounded-lg border-0" @click="editarPlato(plato)" title="Editar">
+                                    <button class="btn btn-sm text-secondary hover:bg-secondary/10 rounded-lg border-0"
+                                        @click="editarPlato(plato)" title="Editar">
                                         <span class="material-symbols-outlined text-[18px]">edit</span>
                                     </button>
-                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0" @click="abrirConfirmarEliminarPlato(plato)" title="Eliminar">
+                                    <button class="btn btn-sm text-red-400 hover:bg-red-500/10 rounded-lg border-0"
+                                        @click="abrirConfirmarEliminarPlato(plato)" title="Eliminar">
                                         <span class="material-symbols-outlined text-[18px]">delete</span>
                                     </button>
                                 </td>
                             </tr>
                         </template>
-                        <template x-if="platosActuales.length === 0">
+                        <template x-if="platosFiltrados.length === 0">
                             <tr>
-                                <td colspan="7" class="text-center py-8 text-on-surface-variant">No hay platos registrados en esta categoría.</td>
+                                <td colspan="7" class="text-center py-8 text-on-surface-variant">
+                                    No hay platos registrados en esta categoría/búsqueda.
+                                </td>
                             </tr>
                         </template>
                     </tbody>
                 </table>
-                <!-- Paginación -->
                 <template x-if="platosPaginacion.totalPaginas > 1">
                     <div class="d-flex justify-content-center align-items-center gap-2 mt-4 pb-3">
-                        <button @click="platosPaginacion.paginaActual = Math.max(1, platosPaginacion.paginaActual - 1)" 
-                                :disabled="platosPaginacion.paginaActual === 1"
-                                class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0" 
-                                :class="platosPaginacion.paginaActual === 1 ? 'opacity-50 cursor-not-allowed' : ''">Anterior</button>
+                        <button @click="platosPaginacion.paginaActual = Math.max(1, platosPaginacion.paginaActual - 1)"
+                            :disabled="platosPaginacion.paginaActual === 1"
+                            class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0"
+                            :class="platosPaginacion.paginaActual === 1 ? 'opacity-50 cursor-not-allowed' : ''">
+                            Anterior
+                        </button>
                         <template x-for="pag in platosPaginacion.totalPaginas" :key="pag">
-                            <button @click="platosPaginacion.paginaActual = pag" 
-                                    class="btn btn-sm rounded-lg border-0 font-bold"
-                                    :class="platosPaginacion.paginaActual === pag ? 'bg-primary text-[#160066]' : 'bg-surface text-on-surface-variant hover:bg-surface/80'">
+                            <button @click="platosPaginacion.paginaActual = pag"
+                                class="btn btn-sm rounded-lg border-0 font-bold"
+                                :class="platosPaginacion.paginaActual === pag ? 'bg-primary text-[#160066]' : 'bg-surface text-on-surface-variant hover:bg-surface/80'">
                                 <span x-text="pag"></span>
                             </button>
                         </template>
-                        <button @click="platosPaginacion.paginaActual = Math.min(platosPaginacion.totalPaginas, platosPaginacion.paginaActual + 1)" 
-                                :disabled="platosPaginacion.paginaActual === platosPaginacion.totalPaginas"
-                                class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0"
-                                :class="platosPaginacion.paginaActual === platosPaginacion.totalPaginas ? 'opacity-50 cursor-not-allowed' : ''">Siguiente</button>
+                        <button
+                            @click="platosPaginacion.paginaActual = Math.min(platosPaginacion.totalPaginas, platosPaginacion.paginaActual + 1)"
+                            :disabled="platosPaginacion.paginaActual === platosPaginacion.totalPaginas"
+                            class="btn btn-sm bg-primary text-[#160066] font-bold rounded-lg border-0"
+                            :class="platosPaginacion.paginaActual === platosPaginacion.totalPaginas ? 'opacity-50 cursor-not-allowed' : ''">
+                            Siguiente
+                        </button>
                     </div>
                 </template>
             </div>
         </div>
 
-        <!-- Insumos Críticos -->
         <div class="card card-dark shadow-sm">
             <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center p-4">
                 <h3 class="h5 mb-0 font-bold text-white flex items-center gap-2">
-                    <span class="material-symbols-outlined text-warning">warning</span> Insumos Críticos
+                    <span class="material-symbols-outlined text-warning">warning</span>
+                    Insumos Críticos
                 </h3>
                 <div class="flex items-center gap-3">
-                    <a href="/admin-panel/inventario/" class="btn btn-sm text-secondary hover:text-white text-[12px] font-bold flex items-center gap-1 border border-secondary/30 rounded-lg px-3 py-1.5 hover:bg-secondary/10 transition-all">
+                    <a href="/admin-panel/inventario/"
+                        class="btn btn-sm text-secondary hover:text-white text-[12px] font-bold flex items-center gap-1 border border-secondary/30 rounded-lg px-3 py-1.5 hover:bg-secondary/10 transition-all">
                         <span class="material-symbols-outlined text-[14px]">inventory_2</span>
                         Ver inventario completo
                     </a>
-                    <button class="btn btn-sm text-on-surface-variant hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all" @click="fetchInsumoCriticos()" title="Actualizar">
+                    <button
+                        class="btn btn-sm text-on-surface-variant hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all"
+                        @click="fetchInsumoCriticos()" title="Actualizar">
                         <span class="material-symbols-outlined text-[18px]">refresh</span>
                     </button>
                 </div>
@@ -210,46 +259,42 @@
                     <div class="row g-3">
                         <template x-for="insumo in insumosCriticos" :key="insumo.id">
                             <div class="col-12 col-sm-6 col-lg-3">
-                                <div class="rounded-2xl p-3 border transition-all"
-                                     :class="insumo.estado === 'agotado'
+                                <div class="rounded-2xl p-3 border transition-all" :class="insumo.estado === 'agotado'
                                          ? 'bg-red-500/10 border-red-500/40'
                                          : 'bg-amber-500/10 border-amber-500/40'">
-                                    <!-- Header del card -->
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <p class="text-[10px] font-black uppercase tracking-widest mb-0"
-                                           :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
-                                           x-text="insumo.nombre"></p>
-                                        <!-- Ícono de estado -->
+                                            :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
+                                            x-text="insumo.nombre"></p>
                                         <div class="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                                             :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'">
+                                            :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'">
                                             <span class="material-symbols-outlined text-white text-[14px]"
-                                                  x-text="insumo.estado === 'agotado' ? 'error' : 'warning'"></span>
+                                                x-text="insumo.estado === 'agotado' ? 'error' : 'warning'"></span>
                                         </div>
                                     </div>
-                                    <!-- Stock actual -->
                                     <div class="mb-1">
                                         <span class="text-2xl font-black"
-                                              :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
-                                              x-text="insumo.stock_real.toFixed(1)"></span>
-                                        <span class="text-xs text-on-surface-variant font-bold ml-1" x-text="insumo.unidad"></span>
+                                            :class="insumo.estado === 'agotado' ? 'text-red-400' : 'text-amber-400'"
+                                            x-text="insumo.stock_real.toFixed(1)"></span>
+                                        <span class="text-xs text-on-surface-variant font-bold ml-1"
+                                            x-text="insumo.unidad"></span>
                                     </div>
-                                    <!-- Barra de progreso -->
-                                    <div class="w-full bg-white/10 rounded-full mb-2" style="height:4px;">
-                                        <div class="rounded-full transition-all"
-                                             style="height:4px;"
-                                             :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'"
-                                             :style="'width:' + Math.min(100, insumo.stock_minimo > 0 ? (insumo.stock_real / insumo.stock_minimo * 100) : 0) + '%'">
+                                    <div class="w-full bg-white/10 rounded-full mb-2" style="height: 4px">
+                                        <div class="rounded-full transition-all" style="height: 4px"
+                                            :class="insumo.estado === 'agotado' ? 'bg-red-500' : 'bg-amber-500'"
+                                            :style="'width:' + Math.min(100, insumo.stock_minimo > 0 ? (insumo.stock_real / insumo.stock_minimo * 100) : 0) + '%'">
                                         </div>
                                     </div>
-                                    <!-- Detalle min/falta -->
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="text-[10px] text-on-surface-variant">
-                                            Mín: <strong x-text="insumo.stock_minimo.toFixed(1) + ' ' + insumo.unidad"></strong>
+                                            Mín:
+                                            <strong
+                                                x-text="insumo.stock_minimo.toFixed(1) + ' ' + insumo.unidad"></strong>
                                         </span>
                                         <template x-if="insumo.platos_afectados.length > 0">
                                             <span class="text-[9px] font-black px-2 py-0.5 rounded-full"
-                                                  :class="insumo.estado === 'agotado' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'"
-                                                  x-text="insumo.platos_afectados.length + ' plato(s)'"></span>
+                                                :class="insumo.estado === 'agotado' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'"
+                                                x-text="insumo.platos_afectados.length + ' plato(s)'"></span>
                                         </template>
                                     </div>
                                 </div>
@@ -260,382 +305,346 @@
                 <template x-if="insumosCriticos.length === 0">
                     <div class="text-center py-8 text-on-surface-variant">
                         <span class="material-symbols-outlined text-4xl text-secondary block mb-2">check_circle</span>
-                        <p class="mb-0 font-bold text-sm">✓ Todos los insumos tienen stock suficiente</p>
+                        <p class="mb-0 font-bold text-sm">
+                            ✓ Todos los insumos tienen stock suficiente
+                        </p>
                     </div>
                 </template>
             </div>
         </div>
     </div>
 
-    {% include 'admin_panel/menu_modals.html' %}
+    <!-- Modal Categoría -->
+    <div class="modal fade" id="modalCategoria" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-dark border-primary/20 shadow-2xl">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-black text-white"
+                        x-text="categoriaForm.id ? 'Editar Categoría' : 'Nueva Categoría'"></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="guardarCategoria">
+                        <div class="mb-3">
+                            <label
+                                class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre</label>
+                            <input type="text" class="form-control" x-model="categoriaForm.nombre" required
+                                placeholder="Ej: Postres" />
+                        </div>
+                        <div class="row">
+                            <div class="col-8 mb-3">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ícono
+                                    (Material Symbol)</label>
+                                <input type="text" class="form-control" x-model="categoriaForm.icono"
+                                    placeholder="Ej: cake, local_pizza" />
+                                <div class="form-text text-[9px] text-on-surface-variant mt-1">
+                                    Nombres de Google Material Symbols.
+                                </div>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Orden
+                                    (Auto)</label>
+                                <input type="number"
+                                    class="form-control bg-black/40 text-on-surface-variant cursor-not-allowed border-secondary"
+                                    x-model="categoriaForm.orden" readonly />
+                            </div>
+                        </div>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" role="switch" id="catActivo"
+                                x-model="categoriaForm.activo" />
+                            <label class="form-check-label text-sm text-white font-bold ms-2" for="catActivo">Categoría
+                                Activa</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn text-on-surface-variant hover:text-white" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn bg-primary text-[#160066] font-black px-4 rounded-xl"
+                        @click="guardarCategoria">
+                        Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmación Eliminar Categoría -->
+    <div class="modal fade" id="modalEliminarCategoria" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-dark border-red-500/20 shadow-2xl">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-black text-white">
+                        Confirmar eliminación de categoría
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-on-surface-variant">
+                        ¿Estás seguro de que deseas eliminar la categoría
+                        <strong class="text-white" x-text="categoriaEliminarNombre"></strong>?
+                    </p>
+                    <p class="text-sm text-warning mt-3" x-text="categoriaEliminarMensaje"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn text-on-surface-variant hover:text-white" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn bg-red-500 text-white font-black px-4 rounded-xl"
+                        @click="confirmarEliminarCategoria()">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmación Eliminar Plato -->
+    <div class="modal fade" id="modalEliminarPlato" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-dark border-red-500/20 shadow-2xl">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-black text-white">
+                        Confirmar eliminación de plato
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-on-surface-variant">
+                        ¿Estás seguro de que deseas eliminar el plato
+                        <strong class="text-white" x-text="platoEliminarNombre"></strong>?
+                    </p>
+                    <p class="text-sm text-warning mt-3" x-text="platoEliminarMensaje"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn text-on-surface-variant hover:text-white" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn bg-red-500 text-white font-black px-4 rounded-xl"
+                        @click="confirmarEliminarPlato()">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Error/Advertencia -->
+    <div class="modal fade" id="modalError" tabindex="-1" style="z-index: 1075">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content card-dark border-warning/20 shadow-2xl">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-black text-warning flex items-center gap-2">
+                        <span class="material-symbols-outlined">warning</span> Advertencia
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white font-bold" x-text="mensajeError"></p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn bg-warning text-black font-black px-4 rounded-xl"
+                        data-bs-dismiss="modal">
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Plato con Recetas -->
+    <div class="modal fade" id="modalPlato" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content card-dark border-secondary/20 shadow-2xl">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title font-black text-white flex items-center gap-2">
+                        <span class="material-symbols-outlined text-secondary">restaurant</span>
+                        <span x-text="platoForm.id ? 'Editar Plato' : 'Nuevo Plato'"></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="guardarPlato">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre
+                                    del Plato</label>
+                                <input type="text" class="form-control" x-model="platoForm.nombre" required
+                                    placeholder="Ej: Torta de Chocolate" />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Categoría</label>
+                                <select class="form-select" x-model="platoForm.categoria" required>
+                                    <option value="">Seleccionar...</option>
+                                    <template x-for="cat in categorias" :key="cat.id">
+                                        <option :value="cat.id" x-text="cat.nombre"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label
+                                class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Imagen
+                                del Plato</label>
+                            <input type="file" id="imagen_plato_input" class="form-control text-xs" accept="image/*"
+                                @change="platoForm.nueva_imagen = $event.target.files[0]" />
+                            <div class="form-text text-[9px] text-on-surface-variant mt-1">
+                                Formatos: JPG, PNG. Se recomienda imagen cuadrada.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label
+                                class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Descripción
+                                (Opcional)</label>
+                            <textarea class="form-control" x-model="platoForm.descripcion" rows="2"
+                                placeholder="Detalles o ingredientes principales..."></textarea>
+                        </div>
+
+                        <div class="row bg-surface p-3 rounded-2xl border border-white/5 mx-0 mb-3">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-secondary">Precio
+                                    de Venta (S/.)</label>
+                                <div class="input-group">
+                                    <span
+                                        class="input-group-text border-0 bg-black/20 text-secondary font-black">S/.</span>
+                                    <input type="number" step="0.01"
+                                        class="form-control font-black text-lg text-secondary"
+                                        x-model="platoForm.precio_actual" required />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label
+                                    class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-primary">Tiempo
+                                    de Preparación</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control font-black text-lg text-primary text-end"
+                                        x-model="platoForm.tiempo_preparacion_min" required min="0" />
+                                    <span
+                                        class="input-group-text border-0 bg-black/20 text-primary font-black">minutos</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-4 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="platoDisponible"
+                                    x-model="platoForm.disponible" />
+                                <label class="form-check-label text-sm text-white font-bold ms-2"
+                                    for="platoDisponible">Disponible para venta</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="platoActivo"
+                                    x-model="platoForm.activo" />
+                                <label class="form-check-label text-sm text-white font-bold ms-2"
+                                    for="platoActivo">Registro
+                                    Activo</label>
+                            </div>
+                        </div>
+
+                        <!-- Sección de Insumos/Recetas -->
+                        <div class="border-t border-white/10 pt-3 mt-3">
+                            <h6 class="text-white font-bold mb-3 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-warning">inventory_2</span>
+                                Insumos Requeridos
+                            </h6>
+
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-dark mb-0">
+                                    <thead class="bg-black/20 text-[9px] uppercase text-on-surface-variant">
+                                        <tr>
+                                            <th class="px-2 py-2">Insumo</th>
+                                            <th class="px-2 py-2 text-end">Cantidad/Porción</th>
+                                            <th class="px-2 py-2 text-center">Unidad</th>
+                                            <th class="px-2 py-2 text-center">Merma %</th>
+                                            <th class="px-2 py-2 text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="receta in platoForm.recetas || []"
+                                            :key="(receta.id || 0) + '-' + receta.insumo_id">
+                                            <tr class="hover:bg-white/5">
+                                                <td class="px-2 py-2 small text-white" x-text="receta.insumo_nombre">
+                                                </td>
+                                                <td class="px-2 py-2 text-end">
+                                                    <input type="number" step="0.01"
+                                                        class="form-control form-control-sm"
+                                                        style="max-width: 80px; margin-left: auto"
+                                                        x-model="receta.cantidad_por_porcion" min="0" />
+                                                </td>
+                                                <td class="px-2 py-2 text-center text-xs text-on-surface-variant"
+                                                    x-text="receta.insumo_unidad"></td>
+                                                <td class="px-2 py-2 text-center">
+                                                    <input type="number" step="0.1" class="form-control form-control-sm"
+                                                        style="max-width: 60px; margin: 0 auto"
+                                                        x-model="receta.merma_porcentaje" min="0" max="100" />
+                                                </td>
+                                                <td class="px-2 py-2 text-center">
+                                                    <button type="button" class="btn btn-sm text-red-400 border-0"
+                                                        @click="eliminarReceta(receta)" title="Eliminar">
+                                                        <span
+                                                            class="material-symbols-outlined text-[14px]">delete</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <template x-if="(!platoForm.recetas || platoForm.recetas.length === 0)">
+                                            <tr>
+                                                <td colspan="5"
+                                                    class="text-center py-3 text-xs text-on-surface-variant">
+                                                    Sin insumos asignados
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="row gap-2">
+                                <div class="col">
+                                    <select class="form-select form-select-sm text-xs" x-model="newInsumoId">
+                                        <option value="">Agregar insumo...</option>
+                                        <template x-for="insumo in insumosDisponibles" :key="insumo.id">
+                                            <option :value="insumo.id"
+                                                x-text="insumo.nombre + ' (' + (insumo.unidad_abreviatura || '') + ')'">
+                                            </option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="col-auto">
+                                    <button type="button"
+                                        class="btn btn-sm bg-secondary text-[#160066] font-bold rounded-lg"
+                                        @click="agregarInsumo()" :disabled="!newInsumoId">
+                                        <span class="material-symbols-outlined text-[16px]">add</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn text-on-surface-variant hover:text-primary"
+                        data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn bg-primary text-[#160066] font-black px-4 rounded-xl"
+                        @click="guardarPlato">
+                        Guardar Plato
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
 {% block extra_js %}
-<script>
-function menuApp() {
-    return {
-        tab: 'categorias',
-        categorias: [],
-        platos: [],
-        insumosDisponibles: [],
-        insumosCriticos: [],
-        filtroCategoriaPlatos: '',
-        
-        modalCategoriaInst: null,
-        modalPlatoInst: null,
-        modalEliminarCategoriaInst: null,
-        modalEliminarPlatoInst: null,
-        modalErrorInst: null,
-        mensajeError: '',
-        
-        categoriaForm: { id: null, nombre: '', icono: '', orden: 0, activo: true },
-        categoriaEliminarId: null,
-        categoriaEliminarNombre: '',
-        categoriaEliminarMensaje: 'Si tiene platos asociados, no se podrá eliminar.',
-        
-        platoForm: { 
-            id: null, categoria: '', nombre: '', descripcion: '', 
-            precio_actual: 0.00, tiempo_preparacion_min: 0, 
-            disponible: true, activo: true, recetas: []
-        },
-        platoEliminarId: null,
-        platoEliminarNombre: '',
-        platoEliminarMensaje: 'Esta acción no se puede deshacer.',
-        
-        newInsumoId: '',
-        
-        platosPaginacion: {
-            paginaActual: 1,
-            porPagina: 5,
-            totalPaginas: 1
-        },
-
-        get platosActuales() {
-            let filtered = this.platos;
-            if(this.filtroCategoriaPlatos) {
-                filtered = filtered.filter(p => p.categoria == this.filtroCategoriaPlatos);
-            }
-            const inicio = (this.platosPaginacion.paginaActual - 1) * this.platosPaginacion.porPagina;
-            const fin = inicio + this.platosPaginacion.porPagina;
-            this.platosPaginacion.totalPaginas = Math.ceil(filtered.length / this.platosPaginacion.porPagina) || 1;
-            return filtered.slice(inicio, fin);
-        },
-
-        init() {
-            this.modalCategoriaInst = new bootstrap.Modal(document.getElementById('modalCategoria'));
-            this.modalPlatoInst = new bootstrap.Modal(document.getElementById('modalPlato'));
-            this.modalEliminarCategoriaInst = new bootstrap.Modal(document.getElementById('modalEliminarCategoria'));
-            this.modalEliminarPlatoInst = new bootstrap.Modal(document.getElementById('modalEliminarPlato'));
-            this.modalErrorInst = new bootstrap.Modal(document.getElementById('modalError'));
-            this.fetchCategorias();
-            this.fetchPlatos();
-            this.fetchInsumosDisponibles();
-            this.fetchInsumoCriticos();
-        },
-
-        mostrarError(mensaje) {
-            this.mensajeError = mensaje;
-            this.modalErrorInst.show();
-            // Asegurar que el backdrop y el modal estén por encima del modal de platos
-            setTimeout(() => {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                if (backdrops.length > 0) {
-                    backdrops[backdrops.length - 1].style.zIndex = '1074';
-                }
-                const el = document.getElementById('modalError');
-                if (el) el.style.zIndex = '1075';
-            }, 10);
-        },
-
-        getCsrfToken() {
-            return document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
-        },
-
-        // --- Categorías ---
-        async fetchCategorias() {
-            const res = await fetch('/api/menu/categorias/');
-            if(res.ok) this.categorias = await res.json();
-        },
-        
-        abrirModalCategoria() {
-            this.categoriaForm = { id: null, nombre: '', icono: 'restaurant', orden: 0, activo: true };
-            this.modalCategoriaInst.show();
-        },
-        
-        editarCategoria(cat) {
-            this.categoriaForm = { ...cat };
-            this.modalCategoriaInst.show();
-        },
-        
-        async guardarCategoria() {
-            if(!this.categoriaForm.nombre) return this.mostrarError('El nombre es obligatorio');
-            
-            const method = this.categoriaForm.id ? 'PUT' : 'POST';
-            const url = this.categoriaForm.id ? `/api/menu/categorias/${this.categoriaForm.id}/` : '/api/menu/categorias/';
-            
-            try {
-                const res = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCsrfToken()
-                    },
-                    body: JSON.stringify(this.categoriaForm)
-                });
-                
-                if(res.ok) {
-                    this.modalCategoriaInst.hide();
-                    this.fetchCategorias();
-                } else {
-                    this.mostrarError('Error al guardar categoría');
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        },
-        
-        abrirConfirmarEliminarCategoria(cat) {
-            this.categoriaEliminarId = cat.id;
-            this.categoriaEliminarNombre = cat.nombre;
-            this.categoriaEliminarMensaje = 'Si tiene platos asociados, no se podrá eliminar.';
-            this.modalEliminarCategoriaInst.show();
-        },
-
-        async confirmarEliminarCategoria() {
-            if(!this.categoriaEliminarId) return;
-
-            try {
-                const res = await fetch(`/api/menu/categorias/${this.categoriaEliminarId}/`, {
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': this.getCsrfToken() }
-                });
-
-                if(res.ok) {
-                    this.modalEliminarCategoriaInst.hide();
-                    this.fetchCategorias();
-                } else {
-                    const data = await res.json().catch(() => ({}));
-                    this.categoriaEliminarMensaje = data.detail || data.error || 'No se puede eliminar. Verifique que no tenga platos asociados.';
-                }
-            } catch(e) {
-                console.error(e);
-                this.categoriaEliminarMensaje = 'Error de conexión. Revisa la consola del servidor.';
-            }
-        },
-
-        // --- Platos ---
-        async fetchPlatos() {
-            const res = await fetch('/api/menu/platos/');
-            if(res.ok) {
-                this.platos = await res.json();
-                this.platosPaginacion.paginaActual = 1;
-            }
-        },
-
-        async fetchInsumosDisponibles() {
-            try {
-                const res = await fetch('/api/inventario/insumos/', {
-                    credentials: 'same-origin',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if(res.ok) {
-                    this.insumosDisponibles = await res.json();
-                } else {
-                    console.error('Error cargando insumos:', res.status);
-                }
-            } catch(e) {
-                console.error('Error fetching insumos:', e);
-            }
-        },
-
-        async fetchInsumoCriticos() {
-            try {
-                const res = await fetch('/api/menu/platos/insumos_criticos/', {
-                    credentials: 'same-origin',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if(res.ok) {
-                    const data = await res.json();
-                    this.insumosCriticos = data.insumos || [];
-                } else {
-                    const txt = await res.text().catch(() => '');
-                    console.error('fetchInsumoCriticos HTTP', res.status, txt.slice(0, 400));
-                }
-            } catch(e) {
-                console.error('Error fetching insumos críticos:', e);
-            }
-        },
-
-        async toggleDisponible(plato) {
-            try {
-                const res = await fetch(`/api/menu/platos/${plato.id}/`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCsrfToken()
-                    },
-                    body: JSON.stringify({ disponible: !plato.disponible })
-                });
-                if(res.ok) {
-                    const updated = await res.json();
-                    plato.disponible = updated.disponible;
-                } else {
-                    console.error('Error al cambiar disponibilidad');
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        },
-
-        abrirConfirmarEliminarPlato(plato) {
-            this.platoEliminarId = plato.id;
-            this.platoEliminarNombre = plato.nombre;
-            this.platoEliminarMensaje = 'Esta acción no se puede deshacer.';
-            this.modalEliminarPlatoInst.show();
-        },
-
-        async confirmarEliminarPlato() {
-            if(!this.platoEliminarId) return;
-
-            try {
-                const res = await fetch(`/api/menu/platos/${this.platoEliminarId}/`, {
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': this.getCsrfToken() }
-                });
-
-                if(res.ok) {
-                    this.modalEliminarPlatoInst.hide();
-                    this.fetchPlatos();
-                } else {
-                    const data = await res.json().catch(() => ({}));
-                    this.platoEliminarMensaje = data.detail || data.error || 'No se puede eliminar este plato.';
-                }
-            } catch(e) {
-                console.error(e);
-                this.platoEliminarMensaje = 'Error de conexión. Revisa la consola del servidor.';
-            }
-        },
-
-        abrirModalPlato() {
-            this.platoForm = { 
-                id: null, categoria: this.filtroCategoriaPlatos || '', 
-                nombre: '', descripcion: '', 
-                precio_actual: 0.00, tiempo_preparacion_min: 15, 
-                disponible: true, activo: true, nueva_imagen: null, recetas: []
-            };
-            this.newInsumoId = '';
-            const fileInput = document.getElementById('imagen_plato_input');
-            if(fileInput) fileInput.value = '';
-            this.modalPlatoInst.show();
-        },
-        
-        editarPlato(plato) {
-            // La API devuelve 'receta' (singular); el form usa 'recetas' (plural)
-            const recetasMapeadas = (plato.receta || []).map(r => ({
-                id:                  r.id,
-                insumo_id:           r.insumo_id,
-                insumo_nombre:       r.insumo_nombre,
-                insumo_unidad:       r.insumo_unidad,
-                insumo_stock:        r.insumo_stock,
-                cantidad_por_porcion: r.cantidad_por_porcion,
-                merma_porcentaje:    r.merma_porcentaje,
-                activo:              r.activo
-            }));
-            this.platoForm = { ...plato, nueva_imagen: null, recetas: recetasMapeadas };
-            this.newInsumoId = '';
-            const fileInput = document.getElementById('imagen_plato_input');
-            if(fileInput) fileInput.value = '';
-            this.modalPlatoInst.show();
-        },
-
-        agregarInsumo() {
-            if(!this.newInsumoId) return;
-            
-            const insumo = this.insumosDisponibles.find(i => i.id == this.newInsumoId);
-            if(!insumo) return;
-
-            // Inicializar recetas si no existe
-            if(!Array.isArray(this.platoForm.recetas)) {
-                this.platoForm.recetas = [];
-            }
-
-            // Verificar si ya existe
-            if(this.platoForm.recetas.some(r => r.insumo_id == this.newInsumoId)) {
-                this.mostrarError('Este insumo ya está agregado');
-                return;
-            }
-
-            this.platoForm.recetas = [
-                ...this.platoForm.recetas,
-                {
-                    id: null,
-                    insumo_id: insumo.id,
-                    insumo_nombre: insumo.nombre,
-                    insumo_unidad: insumo.unidad_abreviatura || insumo.unidad_nombre || '',
-                    insumo_stock: insumo.stock_real,
-                    cantidad_por_porcion: 1,
-                    merma_porcentaje: 0,
-                    activo: true
-                }
-            ];
-
-            this.newInsumoId = '';
-        },
-
-        eliminarReceta(receta) {
-            if(!Array.isArray(this.platoForm.recetas)) return;
-            this.platoForm.recetas = this.platoForm.recetas.filter(r => r.insumo_id !== receta.insumo_id);
-        },
-        
-        async guardarPlato() {
-            if(!this.platoForm.nombre || !this.platoForm.categoria || !this.platoForm.precio_actual) {
-                return this.mostrarError('Nombre, categoría y precio son obligatorios');
-            }
-            
-            const method = this.platoForm.id ? 'PUT' : 'POST';
-            const url = this.platoForm.id ? `/api/menu/platos/${this.platoForm.id}/` : '/api/menu/platos/';
-            
-            const formData = new FormData();
-            formData.append('nombre', this.platoForm.nombre);
-            formData.append('categoria', this.platoForm.categoria);
-            formData.append('precio_actual', this.platoForm.precio_actual);
-            formData.append('tiempo_preparacion_min', this.platoForm.tiempo_preparacion_min);
-            if (this.platoForm.descripcion) formData.append('descripcion', this.platoForm.descripcion);
-            formData.append('disponible', this.platoForm.disponible);
-            formData.append('activo', this.platoForm.activo);
-            
-            if (this.platoForm.nueva_imagen) {
-                formData.append('imagen', this.platoForm.nueva_imagen);
-            }
-
-            // Agregar recetas
-            this.platoForm.recetas.forEach((receta, idx) => {
-                formData.append(`receta`, JSON.stringify(receta));
-            });
-
-            try {
-                const res = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'X-CSRFToken': this.getCsrfToken()
-                    },
-                    body: formData
-                });
-                
-                if(res.ok) {
-                    this.modalPlatoInst.hide();
-                    this.fetchPlatos();
-                    this.fetchInsumoCriticos();
-                } else {
-                    const error = await res.json();
-                    console.error(error);
-                    this.mostrarError('Error al guardar plato. Verifique los datos.');
-                }
-            } catch(e) {
-                console.error(e);
-            }
-        }
-    }
-}
-</script>
-{% endblock %}
+<script src="{% static 'menu/menu.js' %}"></script>
 {% endblock %}
