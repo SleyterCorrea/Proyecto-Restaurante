@@ -78,7 +78,9 @@ def admin_auditoria(request):
 def _get_base_pagos(request):
     """
     Retorna los pagos filtrados según los parámetros de consulta globales.
-    Si no hay ningún filtro global, se limita por defecto al turno activo o al último turno.
+    Si no se especifican filtros temporales (fecha, mes, anio), se limita
+    por defecto al turno activo o al último turno registrado para evitar
+    mostrar todo el historial de la base de datos.
     """
     cajero_id = request.GET.get('cajero')
     turno_filtro = request.GET.get('turno')
@@ -89,28 +91,11 @@ def _get_base_pagos(request):
     mesa = request.GET.get('mesa')
     estado_pago = request.GET.get('estado_pago')
     
+    tiene_filtros_fecha = any([fecha_exacta, mes, anio])
     tiene_filtros = any([cajero_id, turno_filtro, fecha_exacta, mes, anio, solo_perdidas, mesa, estado_pago])
     
-    if not tiene_filtros:
-        # Default: Turno de caja activo
-        turno_activo = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-        if turno_activo:
-            base = Pago.objects.filter(caja_turno=turno_activo)
-        else:
-            ultimo = CajaTurno.objects.order_by('-fecha_apertura').first()
-            if ultimo:
-                base = Pago.objects.filter(caja_turno=ultimo)
-            else:
-                base = Pago.objects.none()
-    else:
+    if tiene_filtros_fecha:
         base = Pago.objects.all()
-        
-        if cajero_id:
-            base = base.filter(caja_turno__cajero_id=cajero_id)
-            
-        if turno_filtro:
-            base = base.filter(caja_turno__cajero__turno=turno_filtro)
-            
         if fecha_exacta:
             try:
                 dt = timezone.datetime.strptime(fecha_exacta, '%Y-%m-%d').date()
@@ -122,15 +107,33 @@ def _get_base_pagos(request):
                 base = base.filter(fecha_pago__year=int(anio))
             if mes:
                 base = base.filter(fecha_pago__month=int(mes))
+    else:
+        # Si no hay filtros de fecha, acotamos por el turno activo o el último registrado
+        turno_activo = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
+        if turno_activo:
+            base = Pago.objects.filter(caja_turno=turno_activo)
+        else:
+            ultimo = CajaTurno.objects.order_by('-fecha_apertura').first()
+            if ultimo:
+                base = Pago.objects.filter(caja_turno=ultimo)
+            else:
+                base = Pago.objects.none()
                 
-        if solo_perdidas == 'true' or estado_pago == 'PERDIDAS':
-            base = base.filter(estado=Pago.Estado.PERDIDA)
-        elif estado_pago == 'COBRADOS':
-            base = base.filter(estado=Pago.Estado.PAGADO)
-            
-        if mesa:
-            base = base.filter(comanda__mesa__numero=mesa)
-            
+    # Aplicar filtros no temporales de forma acumulativa y estricta
+    if cajero_id:
+        base = base.filter(caja_turno__cajero_id=cajero_id)
+        
+    if turno_filtro:
+        base = base.filter(caja_turno__cajero__turno=turno_filtro)
+        
+    if solo_perdidas == 'true' or estado_pago == 'PERDIDAS':
+        base = base.filter(estado=Pago.Estado.PERDIDA)
+    elif estado_pago == 'COBRADOS':
+        base = base.filter(estado=Pago.Estado.PAGADO)
+        
+    if mesa:
+        base = base.filter(comanda__mesa__numero=mesa)
+        
     return base, tiene_filtros
 
 @api_view(['GET'])

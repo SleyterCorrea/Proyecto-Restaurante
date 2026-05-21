@@ -249,7 +249,12 @@
               : '—'"></span>
           </span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Ventas totales</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Ventas totales</span>
+          <button type="button" @click="abrirInfoModal('Ventas totales')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_ventas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
@@ -270,7 +275,12 @@
               : '—'"></span>
           </span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Comandas cobradas</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Comandas cobradas</span>
+          <button type="button" @click="abrirInfoModal('Comandas cobradas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.cant_comandas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
@@ -291,7 +301,12 @@
               : '—'"></span>
           </span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Tiempo pico prep.</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Tiempo pico prep.</span>
+          <button type="button" @click="abrirInfoModal('Tiempo pico prep.')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.tiempo_maximo_prep ? kpis.tiempo_maximo_prep + ' min' : '0 min'"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">plato que más tardó</div>
       </div>
@@ -312,7 +327,12 @@
               : '—'"></span>
           </span>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">Total Pérdidas</div>
+        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
+          <span>Total Pérdidas</span>
+          <button type="button" @click="abrirInfoModal('Total Pérdidas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
+          </button>
+        </div>
         <div style="font-size:26px;font-weight:800;color:var(--r-orange);font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_perdidas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">cuentas no cobradas</div>
       </div>
@@ -577,6 +597,68 @@
     </div>
   </div>
 
+  <!-- ─── Modal Glassmorphic de Información de KPIs ─── -->
+  <div x-show="infoModal.show" 
+       class="position-fixed top-0 start-0 w-100 h-100"
+       style="z-index: 1050; display: none;"
+       x-transition.opacity>
+    <!-- Fondo de desenfoque oscuro -->
+    <div class="position-absolute w-100 h-100" 
+         @click="infoModal.show = false"
+         style="background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px);"></div>
+    
+    <!-- Contenedor Flex intermedio para centrado perfecto -->
+    <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative" style="pointer-events: none;">
+      <!-- Contenido del modal con Glassmorphism -->
+      <div class="position-relative p-4 r-card" 
+           style="pointer-events: auto; max-width: 500px; width: 90%; background: rgb(var(--surface) / 0.85); backdrop-filter: blur(20px); border: 1px solid rgb(var(--border) / 0.25); box-shadow: 0 20px 40px rgba(0,0,0,0.55);"
+           x-transition.scale.95>
+        
+        <!-- Encabezado del modal -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div class="kpi-icon" :style="`background: ${infoModal.iconBg}; width: 48px; height: 48px; border-radius:12px; display:flex; align-items:center; justify-content:center;`">
+            <span class="material-symbols-outlined" :style="`color: ${infoModal.iconColor}; font-size: 24px;`" x-text="infoModal.icon"></span>
+          </div>
+          <div>
+            <h3 class="m-0" style="font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:17px; color:rgb(var(--on-surface));" x-text="infoModal.title"></h3>
+            <span style="font-size:10px; font-weight:700; color:rgb(var(--on-surface-variant)); text-transform:uppercase; letter-spacing:0.05em;">Detalle del Indicador</span>
+          </div>
+          <button type="button" @click="infoModal.show = false" 
+                  class="ms-auto d-flex align-items-center justify-content-center" 
+                  style="background: rgb(var(--border) / 0.1); border: none; width: 32px; height: 32px; border-radius: 50%; color: rgb(var(--on-surface)); cursor: pointer; transition: all 0.2s;"
+                  onmouseover="this.style.background='rgb(var(--border) / 0.25)'"
+                  onmouseout="this.style.background='rgb(var(--border) / 0.1)'">
+            <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+          </button>
+        </div>
+        
+        <!-- Cuerpo del modal -->
+        <div class="d-flex flex-column gap-3 mb-4 text-start">
+          <div>
+            <h4 style="font-size:11px; font-weight:700; color:rgb(var(--primary)); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">¿Qué significa?</h4>
+            <p style="font-size:13px; color:rgb(var(--on-surface)); line-height:1.6; margin:0;" x-text="infoModal.description"></p>
+          </div>
+          
+          <div style="border-top: 1px solid rgb(var(--border) / 0.1); padding-top: 12px;">
+            <h4 style="font-size:11px; font-weight:700; color:var(--r-green); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">¿Para qué sirve?</h4>
+            <p style="font-size:13px; color:rgb(var(--on-surface-variant)); line-height:1.6; margin:0;" x-text="infoModal.utility"></p>
+          </div>
+        </div>
+        
+        <!-- Pie del modal -->
+        <div class="d-flex justify-content-end">
+          <button type="button" @click="infoModal.show = false" 
+                  class="px-4 py-2"
+                  style="background: linear-gradient(90deg, rgb(var(--primary)), #c084fc); border: none; border-radius: 10px; color: #fff; font-size:12px; font-weight:700; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 12px rgb(var(--primary) / 0.3);"
+                  onmouseover="this.style.transform='scale(1.03)'"
+                  onmouseout="this.style.transform='scale(1)'">
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Chart.js (UMD explícito; el entry "module" no expone Chart en window) -->
@@ -603,20 +685,31 @@ function analyticsApp() {
     historial: [],
     
     // Filtros
-    filterAnio: '',
-    filterMes: '',
     filterFechaGlobal: '',
     filterTurno: '',
     filterCajero: '',
     filterMesa: '',
     filterSearch: '',
     filterEstadoHistorial: 'TODOS',
-    aniosDisponibles: [2024, 2025, 2026, 2027, 2028],
+    
+    // Modal interactivo de información de KPIs
+    infoModal: {
+      show: false,
+      title: '',
+      icon: '',
+      iconColor: '',
+      iconBg: '',
+      description: '',
+      utility: ''
+    },
     
     loadingHistorial: true,
     lineChart: null,
     doughnutChart: null,
     gaugeChart: null,
+    barChartTimeout: null,
+    doughnutChartTimeout: null,
+    gaugeChartTimeout: null,
 
     async init() {
       try {
@@ -627,6 +720,8 @@ function analyticsApp() {
         } else {
           this.turnoCodigo = 'Sin turno activo';
         }
+        // Wait for Alpine to remove x-cloak (display:none) before loading charts
+        await this.$nextTick();
         await this.cargarTodo();
       } catch (e) {
         this.turnoCodigo = 'Error de conexión';
@@ -636,8 +731,6 @@ function analyticsApp() {
 
     getQueryParams() {
       const params = new URLSearchParams();
-      if (this.filterAnio) params.set('anio', this.filterAnio);
-      if (this.filterMes) params.set('mes', this.filterMes);
       if (this.filterFechaGlobal) params.set('fecha', this.filterFechaGlobal);
       if (this.filterTurno) params.set('turno', this.filterTurno);
       if (this.filterCajero) params.set('cajero', this.filterCajero);
@@ -650,8 +743,6 @@ function analyticsApp() {
     },
 
     limpiarFiltros() {
-      this.filterAnio = '';
-      this.filterMes = '';
       this.filterFechaGlobal = '';
       this.filterTurno = '';
       this.filterCajero = '';
@@ -659,6 +750,54 @@ function analyticsApp() {
       this.filterSearch = '';
       this.filterEstadoHistorial = 'TODOS';
       this.cargarTodo();
+    },
+
+    abrirInfoModal(kpiName) {
+      const modalData = {
+        'Ventas totales': {
+          title: 'Ventas Totales',
+          icon: 'payments',
+          iconColor: '#8b7cf8',
+          iconBg: 'rgba(139,124,248,0.12)',
+          description: 'Representa la suma acumulada de todos los montos de comandas que han sido cobradas exitosamente en el periodo seleccionado (excluyendo pérdidas y comandas pendientes).',
+          utility: 'Te sirve para conocer la facturación real y neta del negocio, medir el rendimiento comercial y verificar los ingresos financieros en caja para el cuadre diario.'
+        },
+        'Comandas cobradas': {
+          title: 'Comandas Cobradas',
+          icon: 'receipt_long',
+          iconColor: '#22c55e',
+          iconBg: 'rgba(34,197,94,0.12)',
+          description: 'Es el número total de comandas únicas o mesas que completaron su proceso de pago de forma exitosa durante el tiempo filtrado.',
+          utility: 'Te sirve para medir el volumen de transacciones y el flujo de clientes que consumieron en el salón, lo cual ayuda a dimensionar la operatividad y capacidad de atención del restaurante.'
+        },
+        'Tiempo pico prep.': {
+          title: 'Tiempo Pico Prep.',
+          icon: 'timer',
+          iconColor: '#06b6d4',
+          iconBg: 'rgba(6,182,212,0.12)',
+          description: 'Indica el tiempo máximo de preparación (en minutos) que registró el plato que más demoró en salir de cocina desde que se mandó la comanda hasta que estuvo listo.',
+          utility: 'Te sirve para identificar cuellos de botella en la cocina, evaluar la eficiencia del equipo de chefs y supervisar que los tiempos de espera no perjudiquen la experiencia del comensal.'
+        },
+        'Total Pérdidas': {
+          title: 'Total Pérdidas',
+          icon: 'warning',
+          iconColor: '#f97316',
+          iconBg: 'rgba(249,115,22,0.12)',
+          description: 'Muestra la suma monetaria de aquellas comandas que fueron marcadas como "Pérdida" (por ejemplo, clientes que se retiraron sin pagar, platos mal preparados que se desecharon o errores operativos).',
+          utility: 'Te permite auditar las mermas o fugas de dinero en el restaurante, ayudándote a tomar medidas correctivas en seguridad, atención al cliente o procesos en cocina para proteger el margen de ganancia.'
+        }
+      };
+
+      const data = modalData[kpiName];
+      if (data) {
+        this.infoModal.title = data.title;
+        this.infoModal.icon = data.icon;
+        this.infoModal.iconColor = data.iconColor;
+        this.infoModal.iconBg = data.iconBg;
+        this.infoModal.description = data.description;
+        this.infoModal.utility = data.utility;
+        this.infoModal.show = true;
+      }
     },
 
     async cargarTodo() {
@@ -695,7 +834,11 @@ function analyticsApp() {
           this.topPlatos = data.top_platos || [];
           this.peoresPlatos = data.peores_platos || [];
           this.distribucion = data.distribucion || { alta: 0, media: 0, baja: 0 };
-          requestAnimationFrame(() => this.renderDoughnutChart(this.distribucion));
+          
+          if (this.doughnutChartTimeout) clearTimeout(this.doughnutChartTimeout);
+          this.doughnutChartTimeout = setTimeout(() => {
+            this.renderDoughnutChart(this.distribucion);
+          }, 50);
         }
       } catch(e) { console.error('Top platos error', e); }
     },
@@ -708,7 +851,11 @@ function analyticsApp() {
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
-        requestAnimationFrame(() => this.renderBarChart(data.top_platos || []));
+        
+        if (this.barChartTimeout) clearTimeout(this.barChartTimeout);
+        this.barChartTimeout = setTimeout(() => {
+          this.renderBarChart(data.top_platos || []);
+        }, 50);
       } catch(e) { console.error('Top platos chart error', e); }
     },
 
@@ -720,7 +867,11 @@ function analyticsApp() {
         if (res.ok) {
           const data = await res.json();
           this.historial = data.results || [];
-          requestAnimationFrame(() => this.renderGaugeChart());
+          
+          if (this.gaugeChartTimeout) clearTimeout(this.gaugeChartTimeout);
+          this.gaugeChartTimeout = setTimeout(() => {
+            this.renderGaugeChart();
+          }, 100);
         }
       } catch(e) {
         console.error('Historial error', e);
@@ -743,14 +894,19 @@ function analyticsApp() {
         console.error('Chart.js no está cargado');
         return;
       }
+
       const canvas = document.getElementById('chartVentasHora');
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
 
-      if (this.lineChart) {
-        this.lineChart.destroy();
-        this.lineChart = null;
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
       }
 
       const colorPrimary = this._rgbCsv(this._cssVar('--primary', '139 124 248'));
@@ -769,7 +925,7 @@ function analyticsApp() {
       gradient.addColorStop(0, `rgba(${colorPrimary}, 0.85)`);
       gradient.addColorStop(1, `rgba(${colorPrimary}, 0.15)`);
 
-      this.lineChart = new Chart(ctx, {
+      this.lineChart = new Chart(canvas, {
         type: 'bar',
         data: {
           labels,
@@ -830,24 +986,26 @@ function analyticsApp() {
           }
         }
       });
-      requestAnimationFrame(() => {
-        if (this.lineChart) this.lineChart.resize();
-      });
     },
 
     renderDoughnutChart(distribucion) {
       if (typeof Chart === 'undefined') return;
+
       const canvas = document.getElementById('chartDoughnut');
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
 
-      if (this.doughnutChart) {
-        this.doughnutChart.destroy();
-        this.doughnutChart = null;
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
       }
 
-      this.doughnutChart = new Chart(ctx, {
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
+      }
+
+      this.doughnutChart = new Chart(canvas, {
         type: 'doughnut',
         data: {
           labels: ['Estrellas', 'Regulares', 'Rezagados'],
@@ -876,21 +1034,26 @@ function analyticsApp() {
 
     renderGaugeChart() {
       if (typeof Chart === 'undefined') return;
+
       const canvas = document.getElementById('chartGauge');
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
 
-      if (this.gaugeChart) {
-        this.gaugeChart.destroy();
-        this.gaugeChart = null;
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.save !== 'function') {
+        console.error('Canvas 2D context no disponible');
+        return;
       }
 
       const cobradas = this.historial.filter(v => v.estado === 'COBRADA').length;
       const perdidas = this.historial.filter(v => v.estado === 'PERDIDA').length;
       const total = cobradas + perdidas;
 
-      this.gaugeChart = new Chart(ctx, {
+      this.gaugeChart = new Chart(canvas, {
         type: 'doughnut',
         data: {
           labels: ['Cobradas', 'Pérdidas'],
