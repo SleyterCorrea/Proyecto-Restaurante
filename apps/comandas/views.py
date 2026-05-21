@@ -6,8 +6,12 @@ API Endpoints:
   PATCH /api/comandas/linea/<id>/editar/ → Edita una LineaComanda (ej. cancelada)
   POST  /api/mesas/<id>/liberar/       → Cierra comanda y libera la mesa
 """
+from __future__ import annotations
 import json
+import logging
 from django.http import JsonResponse
+
+logger = logging.getLogger(__name__)
 from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
@@ -507,10 +511,12 @@ def api_linea_estado(request, pk):
 
         if nuevo_estado == LineaComanda.Estado.LISTO:
             try:
-                from apps.inventario.services import descontar_stock_por_plato
-                descontar_stock_por_plato(linea.plato, linea.cantidad, request.user)
+                from apps.inventario.services import descontar_inventario_al_marcar_listo
+                descontar_inventario_al_marcar_listo(linea, request.user)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             except Exception:
-                pass
+                logger.exception('Error al descontar inventario para línea %s', pk)
             linea.comanda.marcar_como_lista()
 
     return Response({'ok': True, 'id': linea.id, 'estado': linea.estado})
@@ -721,14 +727,15 @@ def api_cocina_cambiar_estado(request, pk):
             origen=ComandaHistorialEstado.Origen.KDS,
         )
 
-        # Descuento de inventario al marcar LISTO (si está disponible el servicio)
-        # El módulo de inventario puede no estar activo — se llama de forma defensiva
+        # Descontar inventario al marcar LISTO
         if nuevo_estado == LineaComanda.Estado.LISTO:
+            from apps.inventario.services import descontar_inventario_al_marcar_listo
             try:
-                from apps.inventario.services import descontar_stock_por_plato
-                descontar_stock_por_plato(linea.plato, linea.cantidad, request.user)
-            except (ImportError, AttributeError, Exception):
-                pass  # El módulo inventario es opcional
+                descontar_inventario_al_marcar_listo(linea, request.user)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                logger.exception('Error al descontar inventario para línea %s (KDS)', pk)
 
         # Verificar si la comanda completa está lista
         linea.comanda.marcar_como_lista()

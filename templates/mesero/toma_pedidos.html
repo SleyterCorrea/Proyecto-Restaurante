@@ -501,7 +501,7 @@
         }
         if (this.busqueda.trim()) {
           const q = this.busqueda.toLowerCase();
-          resultado = resultado.filter(p => p.nombre.toLowerCase().includes(q));
+          resultado = resultado.filter(p => (p.nombre || '').toLowerCase().includes(q));
         }
         this.platosFiltrados = resultado;
       },

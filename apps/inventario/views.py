@@ -23,7 +23,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     """Paginación estándar para listados."""
     page_size = 20
     page_size_query_param = 'page_size'
-    max_page_size = 100
+    max_page_size = 500
 
 class UnidadMedidaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UnidadMedida.objects.filter(activo=True).order_by('nombre')
