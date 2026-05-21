@@ -53,7 +53,7 @@ class InsumoViewSet(viewsets.ModelViewSet):
     filterset_fields = ['activo', 'unidad_medida', 'categoria']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'disponibles']:
+        if self.action in ['list', 'retrieve', 'disponibles', 'criticos', 'stock_bajo', 'historial']:
             return [IsAuthenticated()]
         return [EsAdmin()]
 
@@ -372,6 +372,8 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
                 except (Insumo.DoesNotExist, KeyError):
                     return Response({'error': f'Insumo inválido en ítem: {item}'}, status=status.HTTP_400_BAD_REQUEST)
                 cantidad = Decimal(str(item.get('cantidad_solicitada', 0)))
+                if cantidad <= 0:
+                    return Response({'error': f'La cantidad solicitada para el insumo {insumo.nombre} debe ser mayor a 0.'}, status=status.HTTP_400_BAD_REQUEST)
                 costo = Decimal(str(item.get('costo_unitario', insumo.costo_unitario or 0)))
                 subtotal = cantidad * costo
                 total += subtotal
@@ -458,11 +460,20 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
             if orden.estado in (OrdenCompra.Estado.RECIBIDA, OrdenCompra.Estado.CANCELADA):
                 return Response({'error': f'Orden ya está {orden.get_estado_display()}'}, status=status.HTTP_400_BAD_REQUEST)
 
-            for item in orden.items.select_related('insumo').select_for_update():
+            # Ordenar IDs para prevenir deadlocks en transacciones concurrentes
+            item_insumo_ids = sorted([item.insumo_id for item in orden.items.all()])
+            insumos_bloqueados = {
+                insumo.id: insumo 
+                for insumo in Insumo.objects.select_for_update().filter(id__in=item_insumo_ids)
+            }
+
+            for item in orden.items.select_related('insumo'):
                 cant_recibida = recepciones.get(item.id, item.cantidad_solicitada)
                 if cant_recibida <= 0:
                     continue
-                insumo = Insumo.objects.select_for_update().get(pk=item.insumo_id)
+                insumo = insumos_bloqueados.get(item.insumo_id)
+                if not insumo:
+                    continue
                 stock_anterior = insumo.stock_real
                 insumo.stock_real += cant_recibida
                 insumo.stock_actual += cant_recibida

@@ -4,451 +4,278 @@
 
 {% block extra_css %}
 <style>
-/* ── Inventario: Obsidian Metric design system ── */
-.inv-page        { background: rgb(var(--bg)); border-radius: 1.25rem; padding: 1.5rem; min-height: 80vh; }
-.inv-text-muted  { color: rgb(var(--on-surface-variant)); }
-.inv-text-label  { color: rgb(var(--on-surface-variant)); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
-.inv-text-main   { color: rgb(var(--on-surface)); }
-
-/* Títulos con Hanken Grotesk + valores numéricos con JetBrains Mono */
-.inv-page h2, .inv-page .display-6 { font-family: 'Hanken Grotesk', 'Inter', sans-serif !important; font-weight: 800 !important; letter-spacing: -0.02em !important; }
-.inv-num, .inv-table .num, [data-inv-num] {
-    font-family: 'JetBrains Mono', ui-monospace, monospace !important;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
-    font-weight: 600;
-}
-/* KPI values: usar JetBrains Mono — destaca jerarquía técnica */
-.inv-metric .fw-black { font-family: 'JetBrains Mono', ui-monospace, monospace !important; font-variant-numeric: tabular-nums; }
-.inv-bg-subtle   { background: rgb(var(--on-surface) / 0.05); border-radius: .75rem; }
-.inv-input       { background: rgb(var(--surface)) !important; border: 1.5px solid rgb(var(--border) / 0.2) !important; color: rgb(var(--on-surface)) !important; border-radius: .6rem !important; }
-.inv-input:focus { border-color: rgb(var(--primary) / 0.6) !important; box-shadow: 0 0 0 3px rgb(var(--primary) / 0.12) !important; }
-.inv-badge-unit  { background: rgb(var(--on-surface) / 0.1); color: rgb(var(--on-surface-variant)); font-size: .7rem; font-weight: 600; border-radius: .4rem; }
-.inv-progress-bg { height: 6px; background: rgb(var(--on-surface) / 0.1); border-radius: 99px; overflow: hidden; }
-.inv-thead       { font-size: .76rem; color: rgb(var(--on-surface-variant)); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-.inv-thead tr    { border-bottom: 2px solid rgb(var(--border) / 0.12); }
-.inv-card        { background: rgb(var(--surface)); border: 1px solid rgb(var(--border) / 0.12); border-radius: 1rem; }
-html:not(.light) .inv-card { box-shadow: 0 2px 12px rgba(0,0,0,.35); }
-html.light       .inv-card { box-shadow: 0 1px 8px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04); }
-.inv-empty       { color: rgb(var(--on-surface-variant)); }
-
-/* Tabla: filas con separadores sutiles */
-html.light .inv-table tbody tr { border-bottom: 1px solid rgba(0,0,0,.055); }
-html.light .inv-table tbody tr:hover { background: rgba(var(--primary), .035) !important; }
-html:not(.light) .inv-table tbody tr { border-bottom: 1px solid rgba(255,255,255,.06); }
-html:not(.light) .inv-table tbody tr:hover { background: rgba(255,255,255,.03) !important; }
-
-/* Card métricas hover */
-.inv-metric { transition: transform .18s ease, box-shadow .18s ease; }
-.inv-metric:hover { transform: translateY(-2px); }
-html.light  .inv-metric:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1) !important; }
-html:not(.light) .inv-metric:hover { box-shadow: 0 4px 20px rgba(0,0,0,.5) !important; }
-
-/* ─── Visibilidad de texto adaptativa (oscuro y claro) ─── */
-/* Texto muted más legible en ambos modos */
-html:not(.light) .inv-text-muted { color: rgb(220 222 235 / 0.78) !important; }
-html.light       .inv-text-muted { color: rgb(55 65 81 / 0.85) !important; }
-html:not(.light) .inv-text-label { color: rgb(220 222 235 / 0.85) !important; }
-html.light       .inv-text-label { color: rgb(55 65 81 / 0.9)  !important; }
-.inv-text-main { color: rgb(var(--on-surface)) !important; }
-
-/* Títulos y headers de tabla */
-.inv-page h2, .inv-page h3, .inv-page h4, .inv-page h5 { color: rgb(var(--on-surface)) !important; }
-/* Encabezados de tabla — contraste fuerte y barra de fondo */
-.inv-thead { font-weight: 800 !important; letter-spacing: .08em !important; }
-.inv-thead th { padding-top: .85rem !important; padding-bottom: .85rem !important; }
-html:not(.light) .inv-thead,
-html:not(.light) .inv-thead th { color: #f1f3f9 !important; background: rgb(255 255 255 / 0.06) !important; }
-html.light .inv-thead,
-html.light .inv-thead th       { color: rgb(17 24 39) !important; background: rgb(0 0 0 / 0.05) !important; }
-html:not(.light) .inv-thead tr { border-bottom: 2px solid rgb(255 255 255 / 0.18) !important; }
-html.light       .inv-thead tr { border-bottom: 2px solid rgb(0 0 0 / 0.15) !important; }
-/* Iconos de orden (chevrons) heredan el color del header */
-.inv-thead th .material-symbols-outlined,
-.inv-thead .bi,
-.inv-thead svg { color: inherit !important; opacity: .85; }
-
-/* Celdas de tabla con buen contraste */
-.inv-table tbody td { color: rgb(var(--on-surface)); }
-
-/* Inputs: placeholder visible en ambos modos */
-.inv-input::placeholder { opacity: 1 !important; }
-html:not(.light) .inv-input::placeholder { color: rgb(220 222 235 / 0.55) !important; }
-html.light       .inv-input::placeholder { color: rgb(55 65 81 / 0.55) !important; }
-
-/* Botón "+ Nuevo Insumo" (btn-accent) — contraste fuerte */
-.btn-accent {
-    background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary) / 0.85) 100%) !important;
-    color: #fff !important;
-    border: none !important;
-    font-weight: 600 !important;
-    box-shadow: 0 2px 10px rgb(var(--primary) / 0.35);
-}
-.btn-accent:hover { filter: brightness(1.08); color: #fff !important; }
-
-/* Filtros: btn-outline-secondary visibles en oscuro y claro */
-html:not(.light) .inv-page .btn-outline-secondary,
-html:not(.light) .modal .btn-outline-secondary {
-    color: rgb(230 232 245 / 0.92) !important;
-    border-color: rgb(255 255 255 / 0.22) !important;
-    background: rgb(255 255 255 / 0.04) !important;
-}
-html:not(.light) .inv-page .btn-outline-secondary:hover,
-html:not(.light) .modal .btn-outline-secondary:hover {
-    background: rgb(255 255 255 / 0.10) !important;
-    color: #fff !important;
-    border-color: rgb(255 255 255 / 0.35) !important;
-}
-html.light .inv-page .btn-outline-secondary,
-html.light .modal .btn-outline-secondary {
-    color: rgb(31 41 55) !important;
-    border-color: rgb(0 0 0 / 0.18) !important;
-    background: #fff !important;
-}
-html.light .inv-page .btn-outline-secondary:hover,
-html.light .modal .btn-outline-secondary:hover {
-    background: rgb(0 0 0 / 0.05) !important;
-    color: rgb(17 24 39) !important;
+/* ── Inventario: Rediseño Oscuro (Mockup) ── */
+:root {
+    --inv-bg: #141722;
+    --inv-surface: #1E2230;
+    --inv-surface-alt: #161A26;
+    --inv-border: #2B3041;
+    --inv-text: #F1F5F9;
+    --inv-text-muted: #94A3B8;
+    
+    --inv-green: #34D399;
+    --inv-orange: #FBBF24;
+    --inv-red: #F87171;
+    --inv-pink: #F472B6;
+    --inv-gray: #94A3B8;
 }
 
-/* Iconos material symbols dentro de muted: mismo color que texto */
-.inv-text-muted .material-symbols-outlined,
-.material-symbols-outlined.inv-text-muted { color: inherit !important; }
-
-/* Badge de unidad */
-html:not(.light) .inv-badge-unit { background: rgb(255 255 255 / 0.10) !important; color: rgb(230 232 245 / 0.9) !important; }
-html.light       .inv-badge-unit { background: rgb(0 0 0 / 0.06) !important; color: rgb(31 41 55) !important; }
-
-/* ═══ MEJORAS DE UX/UI ═══ */
-
-/* Sticky header de tabla (se queda al scrollear) */
-.inv-table { border-collapse: separate; border-spacing: 0; }
-.inv-thead th { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px); }
-
-/* Zebra striping sutil para escaneo rápido */
-html:not(.light) .inv-table tbody tr:nth-child(even) { background: rgb(255 255 255 / 0.015); }
-html.light       .inv-table tbody tr:nth-child(even) { background: rgb(0 0 0 / 0.015); }
-
-/* Filas con transición y leve hover lift */
-.inv-table tbody tr { transition: background .15s ease, transform .15s ease; }
-.inv-table tbody td { padding-top: .9rem !important; padding-bottom: .9rem !important; vertical-align: middle; }
-
-/* Resaltar filas con bajo stock / agotadas */
-html:not(.light) .inv-row-warning { background: linear-gradient(90deg, rgb(245 158 11 / 0.08) 0%, transparent 60%) !important; }
-html:not(.light) .inv-row-danger  { background: linear-gradient(90deg, rgb(239 68 68  / 0.10) 0%, transparent 60%) !important; }
-html.light .inv-row-warning { background: linear-gradient(90deg, rgb(245 158 11 / 0.12) 0%, transparent 60%) !important; }
-html.light .inv-row-danger  { background: linear-gradient(90deg, rgb(239 68 68  / 0.14) 0%, transparent 60%) !important; }
-
-/* Barra de progreso con altura mayor y borde sutil */
-.inv-progress-bg { height: 8px !important; box-shadow: inset 0 0 0 1px rgb(var(--on-surface) / 0.06); }
-.inv-progress-bg .progress-bar { box-shadow: 0 0 8px currentColor; opacity: .85; }
-
-/* Atenuar el botón "+ Nuevo Insumo" — menos brillo, igual de visible */
-.btn-accent {
-    box-shadow: 0 1px 4px rgb(var(--primary) / 0.18) !important;
+html.light {
+    --inv-bg: #F8FAFC;
+    --inv-surface: #FFFFFF;
+    --inv-surface-alt: #F1F5F9;
+    --inv-border: #E2E8F0;
+    --inv-text: #0F172A;
+    --inv-text-muted: #64748B;
+    
+    --inv-green: #10B981;
+    --inv-orange: #F59E0B;
+    --inv-red: #EF4444;
+    --inv-pink: #EC4899;
+    --inv-gray: #64748B;
 }
 
-/* Estado: badges más consistentes (Obsidian Metric: mono uppercase) */
-.badge.rounded-pill {
-    font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+.inv-page { 
+    background: var(--inv-bg); 
+    padding: 1.5rem; 
+    min-height: 80vh; 
+    color: var(--inv-text);
+    font-family: 'Inter', sans-serif;
+}
+
+.inv-page h2, .inv-page h5 { font-weight: 600; color: var(--inv-text); }
+.inv-text-muted { color: var(--inv-text-muted); }
+.inv-text-main { color: var(--inv-text); }
+.inv-num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+/* Tarjetas KPI */
+.inv-card { 
+    background: var(--inv-surface); 
+    border-radius: 0.5rem; 
+    border: none;
+    position: relative;
+    overflow: hidden;
+    padding: 1.25rem;
+}
+
+.inv-metric-card { border-left: 4px solid var(--inv-gray); }
+.inv-metric-ok { border-left-color: var(--inv-green); }
+.inv-metric-warn { border-left-color: var(--inv-orange); }
+.inv-metric-danger { border-left-color: var(--inv-red); }
+.inv-metric-value { border-left-color: var(--inv-pink); }
+
+.inv-metric-title {
+    font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: .08em;
-    min-width: 72px;
-    padding: .4rem .7rem !important;
-    font-size: .68rem;
+    letter-spacing: 0.05em;
+    color: var(--inv-text);
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-/* KPI cards: tipografía jerarquizada */
-.inv-metric .display-6 { font-weight: 800 !important; line-height: 1; }
-
-/* Botones de acción más compactos */
-.inv-page td:last-child .btn-sm { padding: .28rem .45rem !important; border-radius: .5rem !important; }
-.inv-page td:last-child .btn-sm:hover { transform: translateY(-1px); }
-
-/* Scrollbar discreto en la tabla */
-.inv-table-wrapper { max-height: 65vh; overflow-y: auto; border-radius: .75rem; }
-.inv-table-wrapper::-webkit-scrollbar { width: 8px; }
-.inv-table-wrapper::-webkit-scrollbar-thumb {
-    background: rgb(var(--on-surface) / 0.15); border-radius: 4px;
-}
-.inv-table-wrapper::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--on-surface) / 0.25);
-}
-
-/* ═══ FIX MODO CLARO ═══ */
-
-/* Botón Editar — adaptativo (antes btn-outline-light era invisible en claro) */
-.inv-btn-edit {
-    border: 1px solid rgb(var(--on-surface) / 0.25) !important;
-    color: rgb(var(--on-surface)) !important;
-    background: transparent !important;
-}
-.inv-btn-edit:hover {
-    background: rgb(var(--on-surface) / 0.08) !important;
-    border-color: rgb(var(--on-surface) / 0.4) !important;
-    color: rgb(var(--on-surface)) !important;
-}
-
-/* Bordes y contornos de botones outline en modo claro: más visibles */
-html.light .inv-page .btn-outline-secondary,
-html.light .inv-page .btn-outline-info,
-html.light .inv-page .btn-outline-danger,
-html.light .inv-page .btn-outline-warning {
-    background: #fff !important;
-    border-width: 1.5px !important;
-}
-html.light .inv-page .btn-outline-info    { border-color: #0dcaf0 !important; color: #0aa3c2 !important; }
-html.light .inv-page .btn-outline-info:hover { background: #cff4fc !important; color: #0aa3c2 !important; }
-html.light .inv-page .btn-outline-danger  { border-color: #dc3545 !important; color: #b02a37 !important; }
-html.light .inv-page .btn-outline-danger:hover { background: #f8d7da !important; color: #b02a37 !important; }
-html.light .inv-page .btn-outline-warning { border-color: #ffc107 !important; color: #997404 !important; }
-
-/* Buscador y filtros: contorno más nítido en claro */
-html.light .inv-input {
-    background: #fff !important;
-    border: 1.5px solid rgb(0 0 0 / 0.18) !important;
-    color: rgb(17 24 39) !important;
-}
-html.light .inv-input:focus {
-    border-color: rgb(var(--primary)) !important;
-    box-shadow: 0 0 0 3px rgb(var(--primary) / 0.18) !important;
-}
-
-/* Cards KPI en claro: borde sutil + sombra suave */
-html.light .inv-card,
-html.light .inv-metric {
-    background: #fff !important;
-    border: 1px solid rgb(0 0 0 / 0.08) !important;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.06) !important;
-}
-
-/* Zebra stripes apenas perceptibles en claro */
-html.light .inv-table tbody tr:nth-child(even) { background: rgb(0 0 0 / 0.022) !important; }
-html.light .inv-table tbody tr:hover { background: rgb(var(--primary) / 0.06) !important; }
-html.light .inv-table tbody tr { border-bottom: 1px solid rgb(0 0 0 / 0.06) !important; }
-
-/* Header sticky: en claro con fondo sólido para que no se transparente al scrollear */
-html.light .inv-thead th {
-    background: #f3f4f6 !important;
-    color: rgb(17 24 39) !important;
-    border-bottom: 2px solid rgb(0 0 0 / 0.12) !important;
-}
-
-/* Stock real text-info: el cyan claro casi no se ve en fondo blanco — usar tono más oscuro */
-html.light .inv-table .text-info { color: #0aa3c2 !important; }
-
-/* Badge OK / Bajo / Agotado mejor contraste en claro */
-html.light .badge.bg-success { background: #198754 !important; color: #fff !important; }
-html.light .badge.bg-warning { background: #ffc107 !important; color: #1f2937 !important; }
-html.light .badge.bg-danger  { background: #dc3545 !important; color: #fff !important; }
-
-/* "10x+", "6.3x mín" — etiqueta del nivel: legible en claro */
-html.light .inv-text-muted { color: rgb(55 65 81 / 0.95) !important; }
-
-/* Botón "+ Nuevo Insumo" en claro: borde implícito por el color primary */
-html.light .btn-accent {
-    color: #fff !important;
-    box-shadow: 0 1px 6px rgb(var(--primary) / 0.35) !important;
-}
-
-/* Resaltado de filas warning/danger en claro: más contraste */
-html.light .inv-row-warning {
-    background: linear-gradient(90deg, rgb(245 158 11 / 0.18) 0%, rgb(245 158 11 / 0.03) 70%) !important;
-}
-html.light .inv-row-danger {
-    background: linear-gradient(90deg, rgb(239 68 68 / 0.18) 0%, rgb(239 68 68 / 0.03) 70%) !important;
-}
-
-/* ═══ Modal Nuevo / Editar Insumo ═══ */
-.inv-modal-insumo .modal-header { padding-top: 1.25rem; padding-left: 1.5rem; padding-right: 1.5rem; }
-.inv-modal-insumo .modal-body   { padding-left: 1.5rem; padding-right: 1.5rem; }
-.inv-modal-insumo .modal-footer { padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 1.25rem; }
-
-.inv-modal-icon {
-    width: 44px; height: 44px;
-    border-radius: .75rem;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-}
-.inv-modal-icon-new {
-    background: rgb(var(--primary) / 0.15);
-    color: rgb(var(--primary));
-}
-.inv-modal-icon-edit {
-    background: rgb(34 197 94 / 0.15);
-    color: #22c55e;
-}
-
-/* Addons del input-group */
-.inv-input-addon {
-    background: rgb(var(--on-surface) / 0.08) !important;
-    border: 1.5px solid rgb(var(--border) / 0.2) !important;
-    color: rgb(var(--on-surface) / 0.85) !important;
+.inv-metric-number {
+    font-size: 1.75rem;
     font-weight: 700;
-    font-size: .9rem;
-    min-width: 56px;
-    justify-content: center;
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
 }
-html.light .inv-input-addon {
-    background: rgb(243 244 246) !important;
-    border-color: rgb(0 0 0 / 0.18) !important;
-    color: rgb(55 65 81) !important;
-}
-/* Border-radius correcto dentro de input-group (override del global) */
-.input-group > .inv-input:not(:first-child),
-.input-group > .inv-input-addon:not(:first-child) {
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-}
-.input-group > .inv-input:not(:last-child),
-.input-group > .inv-input-addon:not(:last-child) {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-}
-.input-group > .inv-input:focus { z-index: 3; }
+.inv-metric-ok .inv-metric-number { color: var(--inv-green); }
+.inv-metric-warn .inv-metric-number { color: var(--inv-orange); }
+.inv-metric-danger .inv-metric-number { color: var(--inv-red); }
+.inv-metric-value .inv-metric-number { color: var(--inv-pink); }
 
-/* Estado inválido (bloqueante) */
-.inv-input.is-invalid {
-    border-color: #ef4444 !important;
-    box-shadow: 0 0 0 3px rgb(239 68 68 / 0.15) !important;
-}
-.invalid-feedback {
-    color: #ef4444 !important;
-    font-size: .8rem;
-    display: block;
-}
-/* Estado de advertencia (no bloqueante) */
-.inv-input.is-warning {
-    border-color: #f59e0b !important;
-    box-shadow: 0 0 0 3px rgb(245 158 11 / 0.15) !important;
-    background-image: none !important;
-}
-.inv-warning-feedback {
-    color: #f59e0b !important;
-    font-size: .8rem;
+.inv-metric-sub {
+    font-size: 0.7rem;
     font-weight: 600;
-    display: block;
-    margin-top: .25rem;
+    text-transform: uppercase;
+    color: var(--inv-text-muted);
 }
 
-/* Preview dentro del modal */
-.inv-form-preview {
-    border-radius: .75rem;
-    border: 1.5px dashed rgb(var(--on-surface) / 0.15);
-    background: rgb(var(--on-surface) / 0.03);
+/* Buscador y Filtros */
+.inv-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
-/* Botón disabled con mejor visibilidad */
-.btn-accent:disabled {
-    opacity: .45 !important;
-    cursor: not-allowed !important;
-    box-shadow: none !important;
-}
-
-/* ═══ Dropdown "Acciones" ═══ */
-.inv-dropdown {
-    background: rgb(var(--surface)) !important;
-    border: 1px solid rgb(var(--on-surface) / 0.12) !important;
-    border-radius: .75rem !important;
-    padding: .35rem !important;
-    min-width: 260px;
-}
-.inv-dropdown .dropdown-item {
-    color: rgb(var(--on-surface)) !important;
-    border-radius: .5rem !important;
-    padding: .55rem .75rem !important;
-    font-size: .9rem;
-    transition: background .12s ease;
-}
-.inv-dropdown .dropdown-item:hover:not(:disabled) {
-    background: rgb(var(--on-surface) / 0.08) !important;
-}
-.inv-dropdown .dropdown-item:disabled {
-    opacity: .45;
-    cursor: not-allowed;
-}
-.inv-dropdown .dropdown-item .material-symbols-outlined {
-    color: rgb(var(--on-surface) / 0.7);
-}
-.inv-dropdown .dropdown-divider {
-    border-color: rgb(var(--on-surface) / 0.1) !important;
-    margin: .35rem 0 !important;
-}
-
-/* Badge flotante en el botón Acciones */
-.inv-badge-floating {
+.inv-search-wrap { position: relative; min-width: 250px; flex-grow: 1; max-width: 400px;}
+.inv-search-icon {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    font-size: .65rem;
-    padding: .15rem .4rem !important;
-    border-radius: 999px;
-    box-shadow: 0 0 0 2px rgb(var(--surface));
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--inv-text-muted);
+    font-size: 20px;
+    pointer-events: none;
 }
+.inv-search-input {
+    background: var(--inv-surface-alt);
+    border: 1px solid var(--inv-border);
+    color: var(--inv-text);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem 0.5rem 2.5rem;
+    width: 100%;
+}
+.inv-search-input:focus { outline: none; border-color: var(--inv-green); }
 
-/* ═══ Filtros sticky ═══ */
-.inv-filters-sticky {
-    position: sticky;
-    top: 0.5rem;
-    z-index: 20;
-    backdrop-filter: blur(10px);
-}
-html:not(.light) .inv-filters-sticky { background: rgb(var(--surface) / 0.96) !important; }
-html.light       .inv-filters-sticky { background: rgb(255 255 255 / 0.96) !important; }
+.inv-filters { display: flex; gap: 0.5rem; background: var(--inv-surface); padding: 0.25rem; border-radius: 0.5rem; }
 
-/* ═══ Bulk actions toolbar ═══ */
-.inv-bulk-bar {
-    border: 1.5px solid rgb(var(--primary) / 0.5) !important;
-    background: rgb(var(--primary) / 0.08) !important;
-    animation: invBulkIn .25s ease;
-}
-@keyframes invBulkIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.inv-row-selected { background: rgb(var(--primary) / 0.10) !important; }
-.inv-row-selected:hover { background: rgb(var(--primary) / 0.14) !important; }
-
-/* Atajo visual: kbd styles */
-kbd.inv-kbd {
-    background: rgb(var(--on-surface) / 0.12);
-    color: rgb(var(--on-surface));
-    border: 1px solid rgb(var(--on-surface) / 0.18);
-    border-radius: .35rem;
-    padding: .1rem .45rem;
-    font-size: .78rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+.inv-filter-btn {
+    background: transparent;
+    border: none;
+    color: var(--inv-text-muted);
+    padding: 0.4rem 1rem;
+    border-radius: 0.35rem;
     font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+.inv-filter-btn:hover { color: var(--inv-text); }
+.inv-filter-btn.active { background: var(--inv-green); color: #000; }
+
+.inv-btn-outline {
+    background: transparent;
+    border: 1px solid var(--inv-border);
+    color: var(--inv-text-muted);
+    padding: 0.4rem 1rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.inv-btn-outline:hover { background: var(--inv-surface-alt); color: var(--inv-text); }
+
+.inv-btn-primary {
+    background: var(--inv-green);
+    color: #000;
+    border: none;
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-/* ═══ Banner de alerta de stock crítico ═══ */
-.inv-alert-banner {
-    border-radius: 1rem;
-    border: 1.5px solid transparent;
-    backdrop-filter: blur(6px);
-    animation: invAlertIn .35s ease;
+/* Tabla */
+.inv-table-card { background: var(--inv-surface); border-radius: 0.5rem; padding: 1rem; }
+
+.inv-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.inv-table th {
+    color: var(--inv-text-muted);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--inv-border);
 }
-@keyframes invAlertIn {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
+.inv-table td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    color: var(--inv-text);
+    font-size: 0.9rem;
 }
-.inv-alert-warning {
-    background: rgb(245 158 11 / 0.10) !important;
-    border-color: rgb(245 158 11 / 0.45) !important;
-    color: #fbbf24;
+.inv-table tr:hover td { background: rgba(255,255,255,0.02); }
+.inv-table tr:last-child td { border-bottom: none; }
+
+/* Checkbox */
+.inv-checkbox {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--inv-border);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
 }
-.inv-alert-warning .material-symbols-outlined { color: #fbbf24; }
-.inv-alert-danger {
-    background: rgb(239 68 68 / 0.12) !important;
-    border-color: rgb(239 68 68 / 0.5) !important;
-    color: #f87171;
+.inv-checkbox:checked { background: var(--inv-green); border-color: var(--inv-green); }
+.inv-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 1px;
+    width: 4px; height: 8px;
+    border: solid black;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
 }
-.inv-alert-danger .material-symbols-outlined { color: #f87171; }
-html.light .inv-alert-warning { background: rgb(255 251 235) !important; border-color: rgb(245 158 11 / 0.7) !important; }
-html.light .inv-alert-warning .material-symbols-outlined { color: #b45309; }
-html.light .inv-alert-danger  { background: rgb(254 242 242) !important; border-color: rgb(239 68 68  / 0.7) !important; }
-html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
+
+/* Barra de progreso */
+.inv-progress-wrapper { width: 140px; }
+.inv-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+.inv-progress-meta span:first-child { color: var(--inv-text); }
+.inv-progress-meta span:last-child { color: var(--inv-text-muted); }
+.inv-progress-bar-bg {
+    background: var(--inv-surface-alt);
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.inv-progress-fill { height: 100%; border-radius: 2px; }
+
+/* Badges */
+.inv-status-badge {
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid transparent;
+    display: inline-block;
+    text-align: center;
+    min-width: 80px;
+}
+.inv-status-ok { background: rgba(52, 211, 153, 0.1); color: var(--inv-green); border-color: rgba(52, 211, 153, 0.2); }
+.inv-status-warn { background: rgba(251, 191, 36, 0.1); color: var(--inv-orange); border-color: rgba(251, 191, 36, 0.2); }
+.inv-status-danger { background: rgba(248, 113, 113, 0.1); color: var(--inv-red); border-color: rgba(248, 113, 113, 0.2); }
+
+/* Acciones */
+.inv-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--inv-text-muted);
+    padding: 0.25rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.inv-action-btn:hover { color: var(--inv-text); }
+
+/* Modales heredados - overrides */
+.modal-content.inv-card { background: var(--inv-surface) !important; border: 1px solid var(--inv-border); }
+.modal-header, .modal-footer, .modal-body { border-color: var(--inv-border) !important; }
+.inv-input.form-control, .inv-input.form-select { background: var(--inv-surface-alt) !important; border-color: var(--inv-border) !important; color: var(--inv-text) !important; }
+.btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+.text-dark { color: var(--inv-text) !important; }
+
+/* Dropdown custom */
+.dropdown-menu-dark-custom {
+    background-color: var(--inv-surface) !important;
+    border: 1px solid var(--inv-border) !important;
+}
+.dropdown-menu-dark-custom .dropdown-item {
+    color: var(--inv-text-muted) !important;
+}
+.dropdown-menu-dark-custom .dropdown-item:hover {
+    background-color: var(--inv-surface-alt) !important;
+    color: var(--inv-text) !important;
+}
 </style>
 {% endblock %}
 
@@ -462,332 +289,199 @@ html.light .inv-alert-danger  .material-symbols-outlined { color: #b91c1c; }
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
-            <h2 class="mb-0 fw-black inv-text-main" style="font-size:1.5rem">Gestión de Inventario</h2>
-            <p class="mb-0 small inv-text-muted">Control de insumos, stock y movimientos</p>
+            <h2 class="mb-0">Gestión de Inventario</h2>
+            <p class="mb-0 small inv-text-muted">Control total de insumos, niveles de stock y movimientos de almacén en tiempo real.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <!-- Dropdown único de acciones (consolida Exportar / Orden de compra / Movimientos) -->
+            <button class="inv-btn-outline" @click="fetchInsumos()" title="Recargar datos (F5)">
+                <span class="material-symbols-outlined" style="font-size:18px">refresh</span>
+                REFRESCAR
+            </button>
+            <button class="inv-btn-primary" @click="nuevoInsumo()" title="Crear insumo (Ctrl+N)">
+                <span class="material-symbols-outlined" style="font-size:18px">add_circle</span>
+                NUEVO INSUMO
+            </button>
             <div class="dropdown">
-                <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1 px-3 position-relative"
-                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <span class="material-symbols-outlined" style="font-size:17px">more_horiz</span>
-                    Acciones
-                    <span class="badge bg-warning text-dark inv-badge-floating"
-                          x-show="insumosBajos + insumosAgotados > 0"
-                          x-text="insumosBajos + insumosAgotados"></span>
+                <button class="inv-btn-outline" type="button" data-bs-toggle="dropdown" style="padding: 0.4rem;">
+                    <span class="material-symbols-outlined">more_vert</span>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end inv-dropdown shadow">
-                    <li>
-                        <button class="dropdown-item d-flex align-items-center gap-2" @click="exportarCSV()">
-                            <span class="material-symbols-outlined" style="font-size:18px">download</span>
-                            Exportar inventario (CSV)
-                        </button>
-                    </li>
-                    <li>
-                        <button class="dropdown-item d-flex align-items-center gap-2"
-                                :disabled="insumosBajos === 0 && insumosAgotados === 0"
-                                @click="generarOrdenCompra()">
-                            <span class="material-symbols-outlined" style="font-size:18px">shopping_cart</span>
-                            <span>Generar orden de compra</span>
-                            <span class="badge bg-warning text-dark ms-auto"
-                                  x-show="insumosBajos + insumosAgotados > 0"
-                                  x-text="insumosBajos + insumosAgotados"></span>
-                        </button>
-                    </li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <button class="dropdown-item d-flex align-items-center gap-2" @click="verMovimientosGlobales()">
-                            <span class="material-symbols-outlined" style="font-size:18px">history</span>
-                            Ver movimientos globales
-                        </button>
-                    </li>
-                    <li>
-                        <button class="dropdown-item d-flex align-items-center gap-2" @click="mostrarAtajos()">
-                            <span class="material-symbols-outlined" style="font-size:18px">keyboard</span>
-                            Atajos de teclado
-                        </button>
-                    </li>
+                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark-custom">
+                    <li><button class="dropdown-item d-flex align-items-center gap-2" @click="exportarCSV()"><span class="material-symbols-outlined" style="font-size:18px">download</span>Exportar CSV</button></li>
+                    <li><button class="dropdown-item d-flex align-items-center gap-2" @click="generarOrdenCompra()"><span class="material-symbols-outlined" style="font-size:18px">shopping_cart</span>Orden de compra</button></li>
+                    <li><button class="dropdown-item d-flex align-items-center gap-2" @click="verMovimientosGlobales()"><span class="material-symbols-outlined" style="font-size:18px">history</span>Movimientos globales</button></li>
+                    <li><button class="dropdown-item d-flex align-items-center gap-2" @click="mostrarAtajos()"><span class="material-symbols-outlined" style="font-size:18px">keyboard</span>Atajos teclado</button></li>
                 </ul>
             </div>
-            <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1 px-3" @click="fetchInsumos()" title="Recargar datos (F5)">
-                <span class="material-symbols-outlined" style="font-size:17px">refresh</span>
-                Refrescar
-            </button>
-            <button class="btn btn-accent d-flex align-items-center gap-2 px-3" @click="nuevoInsumo()" title="Crear insumo (Ctrl+N)">
-                <span class="material-symbols-outlined" style="font-size:18px">add</span>
-                Nuevo Insumo
-            </button>
         </div>
-    </div>
-
-    <!-- Banner de alerta cuando hay stock crítico -->
-    <div x-show="insumosBajos > 0 || insumosAgotados > 0"
-         x-transition
-         class="inv-alert-banner mb-4 p-3 d-flex align-items-center gap-3"
-         :class="insumosAgotados > 0 ? 'inv-alert-danger' : 'inv-alert-warning'">
-        <div class="d-flex align-items-center gap-2">
-            <span class="pulse-dot"
-                  :class="insumosAgotados > 0 ? '' : 'pulse-warning'"></span>
-            <span class="material-symbols-outlined" style="font-size:28px"
-                  x-text="insumosAgotados > 0 ? 'error' : 'warning'"></span>
-        </div>
-        <div class="flex-grow-1">
-            <div class="fw-bold inv-text-main" x-show="insumosAgotados > 0">
-                <span x-text="insumosAgotados"></span> insumo<span x-show="insumosAgotados !== 1">s</span> sin stock
-                <span x-show="insumosBajos > 0">y <span x-text="insumosBajos"></span> con stock bajo</span>
-            </div>
-            <div class="fw-bold inv-text-main" x-show="insumosAgotados === 0 && insumosBajos > 0">
-                <span x-text="insumosBajos"></span> insumo<span x-show="insumosBajos !== 1">s</span> requiere<span x-show="insumosBajos !== 1">n</span> reposición
-            </div>
-            <div class="small inv-text-muted">Filtra por "Bajo" o "Agotado" para reabastecer.</div>
-        </div>
-        <button class="btn btn-sm inv-btn-edit"
-                @click="filtroEstado = insumosAgotados > 0 ? 'agotado' : 'bajo'">
-            Ver afectados →
-        </button>
     </div>
 
     <!-- Cards métricas -->
     <div class="row g-3 mb-4">
         <!-- Total -->
-        <div class="col-6 col-md col-lg">
-            <div class="inv-card inv-metric p-3 h-100">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-symbols-outlined inv-text-muted" style="font-size:18px">inventory_2</span>
-                    <span class="inv-text-label">Total</span>
+        <div class="col-12 col-md-4 col-lg">
+            <div class="inv-card inv-metric-card">
+                <div class="inv-metric-title">
+                    <span>TOTAL</span>
+                    <span class="material-symbols-outlined inv-text-muted" style="font-size:20px">inventory_2</span>
                 </div>
-                <div class="fw-black inv-text-main" style="font-size:1.8rem;line-height:1" x-text="insumos.length">—</div>
-                <div class="small mt-1 inv-text-muted">insumos registrados</div>
+                <div class="inv-metric-number inv-num" x-text="insumos.length">—</div>
+                <div class="inv-metric-sub">INSUMOS REGISTRADOS</div>
             </div>
         </div>
         <!-- OK -->
-        <div class="col-6 col-md col-lg">
-            <div class="inv-card p-3 h-100" style="border-color:rgba(34,197,94,0.35);background:rgba(34,197,94,0.06)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-symbols-outlined text-success" style="font-size:18px">check_circle</span>
-                    <span class="inv-text-label text-success">Stock OK</span>
+        <div class="col-12 col-md-4 col-lg" style="cursor:pointer" @click="filtroEstado='ok'">
+            <div class="inv-card inv-metric-card inv-metric-ok">
+                <div class="inv-metric-title">
+                    <span>STOCK OK</span>
+                    <span class="material-symbols-outlined" style="font-size:20px; color:var(--inv-green)">check_circle</span>
                 </div>
-                <div class="fw-black text-success" style="font-size:1.8rem;line-height:1" x-text="insumos.filter(i=>pf(i.stock_real)>pf(i.stock_minimo)).length">—</div>
-                <div class="small mt-1 text-success" style="opacity:.6">en nivel correcto</div>
+                <div class="inv-metric-number inv-num" x-text="insumos.filter(i=>pf(i.stock_real)>pf(i.stock_minimo)).length">—</div>
+                <div class="inv-metric-sub">EN NIVEL CORRECTO</div>
             </div>
         </div>
         <!-- Bajo -->
-        <div class="col-6 col-md col-lg" @click="filtroEstado='bajo'" style="cursor:pointer">
-            <div class="inv-card p-3 h-100" style="border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.06)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-symbols-outlined text-warning" style="font-size:18px">warning</span>
-                    <span class="inv-text-label text-warning">Bajo Stock</span>
+        <div class="col-12 col-md-4 col-lg" style="cursor:pointer" @click="filtroEstado='bajo'">
+            <div class="inv-card inv-metric-card inv-metric-warn">
+                <div class="inv-metric-title">
+                    <span>BAJO STOCK</span>
+                    <span class="material-symbols-outlined" style="font-size:20px; color:var(--inv-orange)">warning_amber</span>
                 </div>
-                <div class="fw-black text-warning" style="font-size:1.8rem;line-height:1" x-text="insumosBajos">—</div>
-                <div class="small mt-1 text-warning" style="opacity:.6"
-                     x-text="insumosBajos === 1 ? 'requiere reposición' : 'requieren reposición'"></div>
+                <div class="inv-metric-number inv-num" x-text="insumosBajos">—</div>
+                <div class="inv-metric-sub">REQUIERE ATENCIÓN</div>
             </div>
         </div>
         <!-- Sin stock -->
-        <div class="col-6 col-md col-lg" @click="filtroEstado='agotado'" style="cursor:pointer">
-            <div class="inv-card p-3 h-100" style="border-color:rgba(239,68,68,0.35);background:rgba(239,68,68,0.06)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-symbols-outlined text-danger" style="font-size:18px">remove_shopping_cart</span>
-                    <span class="inv-text-label text-danger">Sin Stock</span>
+        <div class="col-12 col-md-6 col-lg" style="cursor:pointer" @click="filtroEstado='agotado'">
+            <div class="inv-card inv-metric-card inv-metric-danger">
+                <div class="inv-metric-title">
+                    <span>SIN STOCK</span>
+                    <span class="material-symbols-outlined" style="font-size:20px; color:var(--inv-red)">error_outline</span>
                 </div>
-                <div class="fw-black text-danger" style="font-size:1.8rem;line-height:1" x-text="insumosAgotados">—</div>
-                <div class="small mt-1 text-danger" style="opacity:.6"
-                     x-text="insumosAgotados === 1 ? 'agotado' : 'agotados'"></div>
+                <div class="inv-metric-number inv-num" x-text="insumosAgotados">—</div>
+                <div class="inv-metric-sub">AGOTADOS</div>
             </div>
         </div>
         <!-- Valor total -->
-        <div class="col-12 col-md col-lg">
-            <div class="inv-card p-3 h-100" style="border-color:rgba(139,92,246,0.35);background:rgba(139,92,246,0.06)">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-symbols-outlined" style="font-size:18px;color:#8b5cf6">monetization_on</span>
-                    <span class="inv-text-label" style="color:#8b5cf6">Valor en Stock</span>
+        <div class="col-12 col-md-6 col-lg">
+            <div class="inv-card inv-metric-card inv-metric-value">
+                <div class="inv-metric-title">
+                    <span>VALOR STOCK</span>
+                    <span class="material-symbols-outlined" style="font-size:20px; color:var(--inv-pink)">payments</span>
                 </div>
-                <div class="fw-black inv-num" style="font-size:1.4rem;line-height:1;color:#8b5cf6"
-                    x-text="'S/. ' + insumosFiltrados.reduce((s,i)=>s+pf(i.stock_real)*pf(i.costo_unitario),0).toFixed(2)">—</div>
-                <div class="small mt-1 inv-text-muted"
-                    x-text="filtroEstado==='todos' ? 'stock real × costo unit.' : 'del filtro actual'"></div>
+                <div class="inv-metric-number inv-num" x-text="'$' + insumosFiltrados.reduce((s,i)=>s+pf(i.stock_real)*pf(i.costo_unitario),0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})">—</div>
+                <div class="inv-metric-sub">COSTO ACUMULADO</div>
             </div>
         </div>
     </div>
 
-    <!-- Buscador y filtros (sticky al scrollear) -->
-    <div class="inv-card mb-3 px-3 py-2 inv-filters-sticky">
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-            <div class="position-relative" style="min-width:220px;max-width:320px;flex:1">
-                <span class="material-symbols-outlined position-absolute inv-text-muted" style="left:10px;top:50%;transform:translateY(-50%);font-size:17px;pointer-events:none">search</span>
-                <input type="text" class="form-control inv-input ps-5" placeholder="Buscar insumo…" x-model="busqueda" style="height:36px">
-            </div>
-            <div class="d-flex gap-1 flex-wrap">
-                <button class="btn btn-sm px-3" style="height:36px"
-                    :class="filtroEstado==='todos'?'btn-accent':'btn-outline-secondary'"
-                    @click="filtroEstado='todos'">Todos</button>
-                <button class="btn btn-sm px-3" style="height:36px"
-                    :class="filtroEstado==='ok'?'btn-success':'btn-outline-secondary'"
-                    @click="filtroEstado='ok'">OK</button>
-                <button class="btn btn-sm px-3" style="height:36px"
-                    :class="filtroEstado==='bajo'?'btn-warning text-dark':'btn-outline-secondary'"
-                    @click="filtroEstado='bajo'">
-                    <span class="material-symbols-outlined me-1" style="font-size:14px;vertical-align:middle">warning</span>Bajo
-                </button>
-                <button class="btn btn-sm px-3" style="height:36px"
-                    :class="filtroEstado==='agotado'?'btn-danger':'btn-outline-secondary'"
-                    @click="filtroEstado='agotado'">Agotado</button>
-            </div>
-            <span class="ms-auto small inv-text-muted inv-num"
-                x-text="insumosFiltrados.length + ' de ' + insumos.length + (insumos.length === 1 ? ' insumo' : ' insumos')"></span>
+    <!-- Buscador y filtros -->
+    <div class="inv-toolbar">
+        <div class="inv-search-wrap">
+            <span class="material-symbols-outlined inv-search-icon">search</span>
+            <input type="text" class="inv-search-input" placeholder="Buscar insumo..." x-model="busqueda">
         </div>
-    </div>
-
-    <!-- Bulk actions toolbar (aparece cuando hay seleccionados) -->
-    <div x-show="seleccionados.length > 0"
-         x-transition
-         class="inv-bulk-bar inv-card p-3 mb-3 d-flex align-items-center gap-3 flex-wrap">
-        <span class="material-symbols-outlined" style="font-size:22px;color:rgb(var(--primary))">check_box</span>
-        <div class="flex-grow-1">
-            <div class="fw-bold inv-text-main">
-                <span x-text="seleccionados.length"></span>
-                <span x-text="seleccionados.length === 1 ? 'insumo seleccionado' : 'insumos seleccionados'"></span>
+        
+        <div class="d-flex align-items-center gap-3">
+            <div class="inv-filters">
+                <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'todos' }" @click="filtroEstado='todos'">Todos</button>
+                <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'ok' }" @click="filtroEstado='ok'">Stock OK</button>
+                <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'bajo' }" @click="filtroEstado='bajo'">Bajo Stock</button>
+                <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'agotado' }" @click="filtroEstado='agotado'">Agotado</button>
             </div>
-            <div class="small inv-text-muted">Aplica una acción masiva o limpia la selección.</div>
+            <button class="inv-btn-outline">
+                <span class="material-symbols-outlined" style="font-size:18px">filter_list</span>
+                Filtros
+            </button>
         </div>
-        <button class="btn btn-sm inv-btn-edit d-flex align-items-center gap-1" @click="exportarSeleccionados()">
-            <span class="material-symbols-outlined" style="font-size:16px">download</span>
-            Exportar selección
-        </button>
-        <button class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1" @click="desactivarSeleccionados()">
-            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
-            Desactivar todos
-        </button>
-        <button class="btn btn-sm inv-btn-edit" @click="seleccionados = []">
-            Cancelar
-        </button>
     </div>
 
     <!-- Tabla -->
-    <div class="inv-card shadow-sm overflow-hidden">
-        <div class="table-responsive inv-table-wrapper">
-            <table class="table table-hover mb-0 inv-table" style="--bs-table-bg:transparent">
-                <thead class="inv-thead">
+    <div class="inv-table-card">
+        <div class="table-responsive">
+            <table class="inv-table">
+                <thead>
                     <tr>
-                        <th class="ps-3 text-center" style="width:40px">
-                            <input type="checkbox" class="form-check-input"
+                        <th style="width: 40px;" class="text-center">
+                            <input type="checkbox" class="inv-checkbox"
                                    :checked="seleccionados.length > 0 && seleccionados.length === insumosFiltrados.length"
-                                   :indeterminate="seleccionados.length > 0 && seleccionados.length < insumosFiltrados.length"
-                                   @change="toggleSeleccionarTodos($event.target.checked)"
-                                   title="Seleccionar todos los visibles">
+                                   @change="toggleSeleccionarTodos($event.target.checked)">
                         </th>
-                        <th class="ps-2 fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('nombre')">
-                            <div class="d-flex align-items-center gap-1">
-                                Insumo
-                                <span class="material-symbols-outlined" style="font-size:14px"
-                                    x-text="sortCol==='nombre'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
-                            </div>
-                        </th>
-                        <th class="fw-semibold">Unidad</th>
-                        <th class="text-center fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('stock_real')">
-                            <div class="d-flex align-items-center justify-content-center gap-1">
-                                Stock Real
-                                <span class="material-symbols-outlined" style="font-size:14px"
-                                    x-text="sortCol==='stock_real'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
-                            </div>
-                        </th>
-                        <th class="text-center fw-semibold" style="min-width:170px">Nivel de Stock</th>
-                        <th class="text-center fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('stock_minimo')">
-                            <div class="d-flex align-items-center justify-content-center gap-1">
-                                Mínimo
-                                <span class="material-symbols-outlined" style="font-size:14px"
-                                    x-text="sortCol==='stock_minimo'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
-                            </div>
-                        </th>
-                        <th class="text-end fw-semibold" style="cursor:pointer;user-select:none" @click="ordenar('costo_unitario')">
-                            <div class="d-flex align-items-center justify-content-end gap-1">
-                                Costo unit.
-                                <span class="material-symbols-outlined" style="font-size:14px"
-                                    x-text="sortCol==='costo_unitario'?(sortDir==='asc'?'arrow_upward':'arrow_downward'):'unfold_more'"></span>
-                            </div>
-                        </th>
-                        <th class="text-center fw-semibold">Estado</th>
-                        <th class="text-end pe-4 fw-semibold">Acciones</th>
+                        <th>Insumo</th>
+                        <th>Unidad</th>
+                        <th>Stock Real</th>
+                        <th>Nivel</th>
+                        <th>Mínimo</th>
+                        <th>Costo Unit.</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-if="insumosFiltrados.length === 0">
                         <tr>
-                            <td colspan="9" class="text-center py-5 inv-empty">
-                                <span class="material-symbols-outlined d-block mb-2" style="font-size:40px;opacity:.3">inventory_2</span>
+                            <td colspan="9" class="text-center py-5 inv-text-muted">
                                 No se encontraron insumos
                             </td>
                         </tr>
                     </template>
                     <template x-for="insumo in insumosFiltrados" :key="insumo.id">
-                        <tr :class="(pf(insumo.stock_real)<=0
-                                ? 'inv-row-danger'
-                                : (pf(insumo.stock_real)<=pf(insumo.stock_minimo)
-                                    ? 'inv-row-warning'
-                                    : '')) + (seleccionados.includes(insumo.id) ? ' inv-row-selected' : '')"
-                            :style="pf(insumo.stock_real)<=0
-                                ? 'border-left:3px solid #ef4444'
-                                : (pf(insumo.stock_real)<=pf(insumo.stock_minimo)
-                                    ? 'border-left:3px solid #f59e0b'
-                                    : 'border-left:3px solid transparent')">
-                            <td class="ps-3 text-center">
-                                <input type="checkbox" class="form-check-input"
+                        <tr>
+                            <td class="text-center">
+                                <input type="checkbox" class="inv-checkbox"
                                        :checked="seleccionados.includes(insumo.id)"
                                        @change="toggleSeleccion(insumo.id)">
                             </td>
-                            <td class="ps-2">
+                            <td>
                                 <span class="fw-semibold inv-text-main" x-text="insumo.nombre"></span>
                             </td>
                             <td>
-                                <span class="badge inv-badge-unit px-2 py-1"
-                                    x-text="insumo.unidad_abreviatura"></span>
-                            </td>
-                            <td class="text-center">
-                                <span class="fw-bold inv-num"
-                                    :class="pf(insumo.stock_real)<=0?'text-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'text-warning':'text-info')"
-                                    x-text="pf(insumo.stock_real).toFixed(2)"></span>
+                                <span class="inv-text-muted" x-text="insumo.unidad_abreviatura"></span>
                             </td>
                             <td>
-                                <div class="d-flex align-items-center gap-2 px-2">
-                                    <div class="flex-grow-1 inv-progress-bg">
-                                        <div class="progress-bar"
-                                            :class="pf(insumo.stock_real)<=0?'bg-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'bg-warning':'bg-success')"
-                                            :style="'width:'+nivelStock(insumo)+'%;height:6px;border-radius:99px;transition:width .4s'">
+                                <span class="inv-num fw-bold text-white" x-text="pf(insumo.stock_real).toFixed(2)"></span>
+                            </td>
+                            <td>
+                                <div class="inv-progress-wrapper">
+                                    <div class="inv-progress-meta">
+                                        <span x-text="Math.min(100, nivelStock(insumo)).toFixed(0) + '%'"></span>
+                                        <span x-text="'META: ' + pf(insumo.stock_minimo).toFixed(0) + insumo.unidad_abreviatura"></span>
+                                    </div>
+                                    <div class="inv-progress-bar-bg">
+                                        <div class="inv-progress-fill"
+                                             :class="pf(insumo.stock_real)<=0?'bg-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'bg-warning':'bg-success')"
+                                             :style="'width:'+Math.min(100, nivelStock(insumo))+'%'">
                                         </div>
                                     </div>
-                                    <span class="inv-text-muted" style="font-size:.7rem;min-width:52px;text-align:right"
-                                        :class="pf(insumo.stock_real)<=0?'text-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'text-warning':'')"
-                                        x-text="etiquetaNivel(insumo)"></span>
                                 </div>
                             </td>
-                            <td class="text-center fw-semibold inv-text-muted inv-num" x-text="pf(insumo.stock_minimo).toFixed(2)"></td>
-                            <td class="text-end fw-semibold inv-text-muted inv-num" x-text="'S/. '+pf(insumo.costo_unitario).toFixed(2)"></td>
-                            <td class="text-center">
-                                <span class="badge rounded-pill px-3"
-                                    :class="pf(insumo.stock_real)<=0?'bg-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'bg-warning text-dark':'bg-success')"
-                                    x-text="pf(insumo.stock_real)<=0?'Agotado':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'Bajo':'OK')">
+                            <td>
+                                <span class="inv-num inv-text-main" x-text="pf(insumo.stock_minimo).toFixed(2)"></span>
+                            </td>
+                            <td>
+                                <span class="inv-num inv-text-main" x-text="'$' + pf(insumo.costo_unitario).toFixed(2)"></span>
+                            </td>
+                            <td>
+                                <span class="inv-status-badge"
+                                      :class="pf(insumo.stock_real)<=0?'inv-status-danger':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'inv-status-warn':'inv-status-ok')"
+                                      x-text="pf(insumo.stock_real)<=0?'AGOTADO':(pf(insumo.stock_real)<=pf(insumo.stock_minimo)?'BAJO STOCK':'ÓPTIMO')">
                                 </span>
                             </td>
-                            <td class="text-end pe-4">
-                                <div class="d-flex justify-content-end gap-1">
-                                    <button class="btn btn-sm btn-outline-secondary" title="Historial de movimientos" @click="verHistorial(insumo)">
-                                        <span class="material-symbols-outlined" style="font-size:15px">history</span>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-info" title="Ajustar stock" @click="ajustarStock(insumo)">
-                                        <span class="material-symbols-outlined" style="font-size:15px">swap_vert</span>
-                                    </button>
-                                    <button class="btn btn-sm inv-btn-edit" title="Editar insumo" @click="editarInsumo(insumo)">
-                                        <span class="material-symbols-outlined" style="font-size:15px">edit</span>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" title="Desactivar insumo" @click="desactivarInsumo(insumo)">
-                                        <span class="material-symbols-outlined" style="font-size:15px">delete</span>
-                                    </button>
-                                </div>
+                            <td class="text-end">
+                                <button class="inv-action-btn" title="Editar insumo" @click="editarInsumo(insumo)">
+                                    <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+                                </button>
                             </td>
                         </tr>
                     </template>
                 </tbody>
             </table>
+        </div>
+        
+        <!-- Paginación -->
+        <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top" style="border-color:var(--inv-border)!important">
+            <span class="small inv-text-muted">
+                Mostrando <span x-text="insumosFiltrados.length"></span> de <span x-text="insumos.length"></span> insumos
+            </span>
         </div>
     </div>
 </div>
