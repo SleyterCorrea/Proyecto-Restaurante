@@ -314,11 +314,11 @@ def notificar_stock_critico_si_aplica(insumo):
         f'Genera una orden de compra desde el panel de inventario para reponer.\n'
     )
 
-    # Buscar admins activos con email
+    # Buscar admins activos con email (usando is_superuser)
     try:
         admins_emails = list(User.objects.filter(
             is_active=True,
-            rol__nombre__in=['ADMIN'],
+            is_superuser=True
         ).exclude(email='').values_list('email', flat=True))
     except Exception:
         logger.exception('Error al consultar admins para alerta de stock del insumo %s', insumo.nombre)
