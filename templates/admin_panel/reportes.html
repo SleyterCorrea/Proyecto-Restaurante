@@ -557,8 +557,8 @@
                 </td>
                 <td>
                   <div class="d-flex align-items-center gap-2">
-                    <span :class="v.estado === 'COBRADA' ? 'badge-pagado' : (v.estado === 'PERDIDA' ? 'badge-perdida' : (v.estado === 'ANULADA' ? 'badge-anulado' : 'badge-otro'))"
-                          x-text="v.estado === 'COBRADA' ? 'COBRADA' : (v.estado === 'PERDIDA' ? 'PERDIDA' : v.estado)"></span>
+                    <span :class="v.estado === 'PAGADO' ? 'badge-pagado' : (v.estado === 'PERDIDA' ? 'badge-perdida' : (v.estado === 'ANULADA' ? 'badge-anulado' : 'badge-otro'))"
+                          x-text="v.estado === 'PAGADO' ? 'COBRADO' : (v.estado === 'PERDIDA' ? 'PERDIDA' : v.estado)"></span>
                     <span x-show="v.es_multi && v.estado !== 'PERDIDA'" 
                           style="color:#d97706; background:rgba(217,119,6,0.12); border-radius:6px; padding:3px 8px; font-size:11px; font-weight:700;"
                           x-text="'DIVIDIDA'"></span>
@@ -589,25 +589,19 @@
       <div class="col-md-6 position-relative d-flex justify-content-center">
         <!-- Contenedor del Gauge -->
         <div style="position: relative; height: 180px; width: 260px;">
-          <canvas id="chartGauge"></canvas>
-          <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
-            <div class="fw-bold" style="font-size: 24px; color: rgb(var(--on-surface));" x-text="historial.filter(v => v.estado === 'COBRADA' || v.estado === 'PERDIDA').length">0</div>
-            <div style="font-size: 10px; color: rgb(var(--on-surface-variant)); font-weight: 600; text-transform: uppercase;">Total Transacciones</div>
-          </div>
-        </div>
+  <canvas id="chartGauge"></canvas>
+  <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
+    <div class="d-flex gap-4 justify-content-center">
+      <div class="badge-pagado" x-show="filterEstadoHistorial !== 'PERDIDAS'" x-text="historial.filter(v => v.estado === 'PAGADO').length"></div>
+      <div class="badge-perdida" x-show="filterEstadoHistorial !== 'COBRADOS'" x-text="historial.filter(v => v.estado === 'PERDIDA').length"></div>
+    </div>
+    <div style="font-size: 10px; color: rgb(var(--on-surface-variant)); font-weight: 600; text-transform: uppercase;">Total Transacciones</div>
+  </div>
+</div>
       </div>
       <div class="col-md-6">
         <div class="d-flex justify-content-around">
-          <div class="text-center">
-            <div style="font-size: 11px; font-weight: 700; color: rgb(var(--on-surface-variant)); text-transform: uppercase; letter-spacing: 0.05em;">Cobradas</div>
-            <div class="fw-extrabold mt-1" style="font-size: 28px; color: #22c55e;" x-text="historial.filter(v => v.estado === 'COBRADA').length">0</div>
-            <div class="mt-1" style="color: #22c55e; font-size: 12px; font-weight: 700;" x-text="((historial.filter(v => v.estado === 'COBRADA').length / (historial.filter(v => v.estado === 'COBRADA' || v.estado === 'PERDIDA').length || 1)) * 100).toFixed(0) + '%'">0%</div>
-          </div>
-          <div class="text-center">
-            <div style="font-size: 11px; font-weight: 700; color: rgb(var(--on-surface-variant)); text-transform: uppercase; letter-spacing: 0.05em;">Pérdidas</div>
-            <div class="fw-extrabold mt-1" style="font-size: 28px; color: #ef4444;" x-text="historial.filter(v => v.estado === 'PERDIDA').length">0</div>
-            <div class="mt-1" style="color: #ef4444; font-size: 12px; font-weight: 700;" x-text="((historial.filter(v => v.estado === 'PERDIDA').length / (historial.filter(v => v.estado === 'COBRADA' || v.estado === 'PERDIDA').length || 1)) * 100).toFixed(0) + '%'">0%</div>
-          </div>
+
         </div>
       </div>
     </div>
@@ -1096,7 +1090,7 @@ function analyticsApp() {
         return;
       }
 
-      const cobradas = this.historial.filter(v => v.estado === 'COBRADA').length;
+      const cobradas = this.historial.filter(v => v.estado === 'PAGADO').length;
       const perdidas = this.historial.filter(v => v.estado === 'PERDIDA').length;
       const total = cobradas + perdidas;
 
