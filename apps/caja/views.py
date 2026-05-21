@@ -151,12 +151,44 @@ def cierre_caja_view(request):
         ).aggregate(total=models.Sum('monto'))['total'] or 0
         resumen_pagos.append({'nombre': metodo.nombre, 'total': float(total)})
 
+    # Calcular Pérdidas
+    perdidas_qs = Pago.objects.filter(
+        caja_turno=turno_activo,
+        estado=Pago.Estado.PERDIDA
+    )
+    total_perdidas = perdidas_qs.aggregate(total=models.Sum('monto'))['total'] or 0
+    cantidad_perdidas = perdidas_qs.count()
+
+    # Contar platos pendientes en cocina (PENDIENTE o EN_PREP)
+    pendientes_cocina = LineaComanda.objects.filter(
+        estado__in=[LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP],
+        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
+    # Contar platos listos por servir (LISTO)
+    pendientes_servicio = LineaComanda.objects.filter(
+        estado=LineaComanda.Estado.LISTO,
+        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
+    # Contar comandas sin cobrar (ABIERTA, EN_PREPARACION, LISTA)
+    comandas_no_cobradas = Comanda.objects.filter(
+        estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
     efectivo_esperado = float(turno_activo.saldo_inicial) + float(turno_activo.total_efectivo)
+    cajero_turno_nombre = turno_activo.cajero.get_turno_display()
 
     return render(request, 'caja/cierre.html', {
         'turno': turno_activo,
         'resumen_pagos': resumen_pagos,
         'efectivo_esperado': efectivo_esperado,
+        'total_perdidas': float(total_perdidas),
+        'cantidad_perdidas': cantidad_perdidas,
+        'cajero_turno_nombre': cajero_turno_nombre,
+        'pendientes_cocina': pendientes_cocina,
+        'pendientes_servicio': pendientes_servicio,
+        'comandas_no_cobradas': comandas_no_cobradas,
     })
 
 
@@ -219,6 +251,33 @@ def api_cerrar_turno(request):
     turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
     if not turno:
         return Response({'error': 'No hay un turno abierto para cerrar.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validar si existen pedidos o platos pendientes
+    pendientes_cocina = LineaComanda.objects.filter(
+        estado__in=[LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP],
+        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
+    pendientes_servicio = LineaComanda.objects.filter(
+        estado=LineaComanda.Estado.LISTO,
+        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
+    comandas_no_cobradas = Comanda.objects.filter(
+        estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
+    ).count()
+
+    if pendientes_cocina > 0 or pendientes_servicio > 0 or comandas_no_cobradas > 0:
+        razones = []
+        if pendientes_cocina > 0:
+            razones.append(f"{pendientes_cocina} platos pendientes o cocinándose en cocina")
+        if pendientes_servicio > 0:
+            razones.append(f"{pendientes_servicio} platos por servir en salón")
+        if comandas_no_cobradas > 0:
+            razones.append(f"{comandas_no_cobradas} comandas activas sin cobrar")
+        
+        error_msg = f"No se puede cerrar la caja. Aún existen actividades pendientes en el restaurante: {', '.join(razones)}. Por favor, culmínelas antes de proceder."
+        return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
     turno.saldo_final = saldo_final
     turno.observacion = observacion

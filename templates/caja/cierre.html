@@ -5,206 +5,398 @@
 {% block extra_css %}
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
 <style>
-    .glass-card {
-        background: rgb(var(--surface) / 0.85);
-        backdrop-filter: blur(24px);
-        border: 1px solid rgb(var(--border) / 0.1);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
-    }
-    [x-cloak] { display: none !important; }
+.glass-card {
+    background: rgb(var(--surface));
+    border: 1px solid rgb(var(--border) / 0.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+
+[x-cloak] {
+    display: none !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container py-8" x-data="cierreApp()" x-cloak>
+
     <div class="row justify-content-center">
         <div class="col-md-9">
+
             <div class="glass-card rounded-[40px] p-8 relative overflow-hidden">
-                
-                <!-- Header -->
+
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between align-items-center mb-8 border-b border-white/5 pb-6">
+
                     <div class="flex items-center gap-4">
                         <div class="bg-primary/10 text-primary w-14 h-14 rounded-2xl flex items-center justify-center">
-                            <span class="material-symbols-outlined text-3xl font-bold">account_balance_wallet</span>
+                            <span class="material-symbols-outlined text-3xl font-bold">
+                                account_balance_wallet
+                            </span>
                         </div>
+
                         <div>
-                            <h2 class="text-white font-black text-2xl mb-0">Resumen de Cierre</h2>
-                            <p class="text-on-surface-variant text-sm font-medium">Finalizando jornada operativa</p>
+                            <h2 class="text-white font-black text-2xl mb-0">
+                                Resumen de Cierre
+                            </h2>
+
+                            <p class="text-on-surface-variant text-sm font-medium">
+                                Finalizando jornada operativa
+                            </p>
                         </div>
                     </div>
-                    <div class="bg-surface-container-high border border-white/5 px-4 py-2 rounded-2xl">
-                        <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest leading-none mb-1">ID Turno</p>
-                        <p class="text-white font-bold leading-none mb-0 text-sm">{{ turno.codigo_turno }}</p>
+
+                    <div class="bg-surface-container-high border border-white/5 px-4 py-3 rounded-2xl text-right">
+                        <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest leading-none mb-1.5 flex items-center gap-1.5 justify-end">
+
+                            <span class="material-symbols-outlined text-xs text-primary" style="font-size:12px;">
+                                schedule
+                            </span>
+
+                            <span>{{ cajero_turno_nombre }}</span>
+                        </p>
+
+                        <p class="text-white font-extrabold leading-none mb-0 text-xs text-on-surface-variant">
+                            ID: {{ turno.codigo_turno }}
+                        </p>
                     </div>
+
                 </div>
 
-                <div class="row g-4 mb-8">
-                    <div class="col-md-4">
-                        <div class="bg-black/20 rounded-3xl p-5 border border-white/5 text-center">
-                            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1 d-block">Total Ventas</span>
-                            <h3 class="text-primary font-black text-2xl mb-0">S/. {{ turno.total_ventas }}</h3>
+                <!-- CARDS -->
+                <div class="row g-3 mb-8">
+
+                    <div class="col-6 col-lg-3">
+                        <div class="bg-black/20 rounded-3xl p-4 border border-white/5 text-center h-100 flex flex-col justify-center">
+
+                            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">
+                                Total Ventas
+                            </span>
+
+                            <h3 class="text-primary font-black text-xl mb-0">
+                                S/. {{ turno.total_ventas }}
+                            </h3>
+
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="bg-black/20 rounded-3xl p-5 border border-white/5 text-center">
-                            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1 d-block">Saldo Inicial</span>
-                            <h3 class="text-white font-black text-2xl mb-0">S/. {{ turno.saldo_inicial }}</h3>
+
+                    <div class="col-6 col-lg-3">
+                        <div class="bg-black/20 rounded-3xl p-4 border border-white/5 text-center h-100 flex flex-col justify-center">
+
+                            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">
+                                Saldo Inicial
+                            </span>
+
+                            <h3 class="text-white font-black text-xl mb-0">
+                                S/. {{ turno.saldo_inicial }}
+                            </h3>
+
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="bg-secondary/10 rounded-3xl p-5 border border-secondary/20 text-center">
-                            <span class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1 d-block">Efectivo Esperado</span>
-                            <h3 class="text-white font-black text-2xl mb-0">S/. {{ turno.total_efectivo|add:turno.saldo_inicial }}</h3>
+
+                    <div class="col-6 col-lg-3">
+                        <div class="bg-secondary/10 rounded-3xl p-4 border border-secondary/20 text-center h-100 flex flex-col justify-center">
+
+                            <span class="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1.5">
+                                Efectivo Esperado
+                            </span>
+
+                            <h3 class="text-white font-black text-xl mb-0">
+                                S/. {{ turno.total_efectivo|add:turno.saldo_inicial }}
+                            </h3>
+
                         </div>
                     </div>
+
+                    <div class="col-6 col-lg-3">
+                        <div class="bg-red-500/10 rounded-3xl p-4 border border-red-500/20 text-center h-100 flex flex-col justify-center">
+
+                            <span class="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1.5">
+                                Pérdidas (Día)
+                            </span>
+
+                            <h3 class="text-red-400 font-black text-xl mb-0">
+                                S/. {{ total_perdidas|floatformat:2 }}
+                            </h3>
+
+                            <span class="text-[9px] text-red-300/60 font-semibold mt-0.5" style="display:block;">
+                                {{ cantidad_perdidas }} transacciones
+                            </span>
+
+                        </div>
+                    </div>
+
                 </div>
 
+                <!-- CONTENIDO -->
                 <div class="row g-8">
-                    <!-- Detalle por Método -->
+
+                    <!-- TABLA -->
                     <div class="col-lg-6">
+
                         <h5 class="text-white font-bold mb-4 px-2 flex items-center gap-2">
-                            <span class="material-symbols-outlined text-primary">analytics</span>
+                            <span class="material-symbols-outlined text-primary">
+                                analytics
+                            </span>
+
                             Detalle por Métodos
                         </h5>
+
                         <div class="bg-black/20 rounded-[32px] overflow-hidden border border-white/5">
+
                             <table class="w-full text-sm">
+
                                 <thead>
                                     <tr class="bg-white/5 text-on-surface-variant text-[10px] uppercase font-bold tracking-widest">
-                                        <th class="px-6 py-4 text-left">Método</th>
-                                        <th class="px-6 py-4 text-right">Monto</th>
+
+                                        <th class="px-6 py-4 text-left">
+                                            Método
+                                        </th>
+
+                                        <th class="px-6 py-4 text-right">
+                                            Monto
+                                        </th>
+
                                     </tr>
                                 </thead>
+
                                 <tbody class="divide-y divide-white/5">
+
                                     {% for r in resumen_pagos %}
                                     <tr class="hover:bg-white/5 transition-colors">
-                                        <td class="px-6 py-4 text-white font-medium">{{ r.nombre }}</td>
-                                        <td class="px-6 py-4 text-right text-primary font-black">S/. {{ r.total }}</td>
+
+                                        <td class="px-6 py-4 text-white font-medium">
+                                            {{ r.nombre }}
+                                        </td>
+
+                                        <td class="px-6 py-4 text-right text-primary font-black">
+                                            S/. {{ r.total }}
+                                        </td>
+
                                     </tr>
                                     {% endfor %}
+
                                 </tbody>
+
                             </table>
+
                         </div>
+
                     </div>
 
-                    <!-- Formulario de Cierre -->
+                    <!-- FORM -->
                     <div class="col-lg-6">
+
                         <div class="space-y-6">
+
                             <div class="bg-primary/5 rounded-[32px] p-6 border border-primary/20">
+
                                 <div class="space-y-4">
+
                                     <div class="flex items-center gap-3">
-                                        <span class="material-symbols-outlined text-primary">draw</span>
-                                        <h5 class="text-white font-bold mb-0">Arqueo Físico de Caja</h5>
+                                        <span class="material-symbols-outlined text-primary">
+                                            draw
+                                        </span>
+
+                                        <h5 class="text-white font-bold mb-0">
+                                            Arqueo Físico de Caja
+                                        </h5>
                                     </div>
+
                                     <div class="relative">
-                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold">S/.</span>
-                                        <input type="number" step="0.10" class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface text-3xl font-black text-right focus:border-primary focus:ring-0 transition-all" 
-                                               x-model="arqueo_fisico" placeholder="0.00">
+
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold">
+                                            S/.
+                                        </span>
+
+                                        <input
+                                            type="number"
+                                            step="0.10"
+                                            class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-4 pl-12 pr-4 text-on-surface text-3xl font-black text-right focus:border-primary focus:ring-0 transition-all"
+                                            x-model="arqueo_fisico"
+                                            placeholder="0.00"
+                                        >
+
                                     </div>
-                                    <p class="text-[10px] text-on-surface-variant text-center font-bold uppercase tracking-widest">Cuenta el efectivo físico y colócalo aquí</p>
+
                                 </div>
+
                             </div>
 
-                            <!-- Diferencia Calculator -->
-                            <div class="text-center p-4 bg-black/20 rounded-3xl border border-white/5" x-show="arqueo_fisico > 0">
-                                <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2 d-block">Balance de Caja</span>
-                                <div class="text-4xl font-black mb-2" :class="diferencia < 0 ? 'text-danger' : (diferencia > 0 ? 'text-warning' : 'text-secondary')">
+                            <!-- BALANCE -->
+                            <div class="text-center p-4 bg-black/20 rounded-3xl border border-white/5"
+                                 x-show="arqueo_fisico > 0">
+
+                                <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2 d-block">
+                                    Balance de Caja
+                                </span>
+
+                                <div class="text-4xl font-black mb-2"
+                                     :class="diferencia < 0 ? 'text-danger' : (diferencia > 0 ? 'text-warning' : 'text-secondary')">
+
                                     S/. <span x-text="diferencia.toFixed(2)"></span>
+
                                 </div>
-                                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest" 
-                                     :class="diferencia < 0 ? 'bg-danger/10 text-danger' : (diferencia > 0 ? 'bg-warning/10 text-warning' : 'bg-secondary/10 text-secondary')">
-                                    <span class="material-symbols-outlined text-xs" x-text="diferencia < 0 ? 'warning' : (diferencia > 0 ? 'add_circle' : 'check_circle')"></span>
-                                    <span x-text="diferencia < 0 ? 'Faltante en caja' : (diferencia > 0 ? 'Sobrante en caja' : 'Caja cuadrada')"></span>
-                                </div>
+
                             </div>
 
+                            <!-- OBS -->
                             <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">Observaciones</label>
-                                <textarea class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-3 px-4 text-on-surface focus:border-primary focus:ring-0 transition-all text-sm" 
-                                          x-model="observacion" rows="3" placeholder="Ej: Hubo un error de conteo inicial..."></textarea>
+
+                                <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">
+                                    Observaciones
+                                </label>
+
+                                <textarea
+                                    class="w-full bg-surface/50 border border-on-surface/10 rounded-2xl py-3 px-4 text-on-surface focus:border-primary focus:ring-0 transition-all text-sm"
+                                    x-model="observacion"
+                                    rows="3"
+                                    placeholder="Ej: Hubo un error de conteo inicial..."
+                                ></textarea>
+
                             </div>
 
-                            <!-- Botón doble confirmación -->
-                            <button type="button" @click="confirmarCierre()"
-                                    class="w-full py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 disabled:opacity-50"
-                                    :class="confirmando ? 'bg-red-500 text-white shadow-red-500/20 animate-pulse' : 'bg-primary hover:bg-primary/90 text-[#160066] shadow-primary/20'"
-                                    :disabled="loading">
+                            <!-- BOTON -->
+                            <button
+                                type="button"
+                                @click="confirmarCierre()"
+                                class="w-full py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95"
+                                :class="confirmando ? 'bg-red-500 text-white' : 'bg-primary text-[#160066]'"
+                            >
+
                                 <template x-if="!loading">
                                     <div class="flex items-center gap-2">
-                                        <span class="material-symbols-outlined font-bold" x-text="confirmando ? 'warning' : 'lock_clock'"></span>
+
+                                        <span class="material-symbols-outlined font-bold"
+                                              x-text="confirmando ? 'warning' : 'lock_clock'">
+                                        </span>
+
                                         <span x-text="confirmando ? '¡Clic de nuevo para CERRAR el turno!' : 'Confirmar Cierre de Turno'"></span>
+
                                     </div>
                                 </template>
+
                                 <template x-if="loading">
-                                    <span class="animate-spin material-symbols-outlined">progress_activity</span>
+                                    <span class="animate-spin material-symbols-outlined">
+                                        progress_activity
+                                    </span>
                                 </template>
+
                             </button>
+
                         </div>
+
                     </div>
+
                 </div>
+
             </div>
+
         </div>
     </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+
 function cierreApp() {
+
     return {
-        saldo_inicial: parseFloat("{{ turno.saldo_inicial|default:0|stringformat:'.2f' }}") || 0,
+
         efectivo_esperado: parseFloat("{{ efectivo_esperado|default:0|stringformat:'.2f' }}") || 0,
+
         arqueo_fisico: 0,
+
         observacion: '',
+
         loading: false,
+
         confirmando: false,
+
         _confirmTimer: null,
+
         get diferencia() {
             return parseFloat(this.arqueo_fisico || 0) - this.efectivo_esperado;
         },
+
         async confirmarCierre() {
-            // Validar que el arqueo no supere el efectivo esperado
+
             const arqueo = parseFloat(this.arqueo_fisico) || 0;
+
             if (arqueo > this.efectivo_esperado && this.efectivo_esperado > 0) {
-                alert(`❌ El monto ingresado (S/. ${arqueo.toFixed(2)}) supera el efectivo esperado en caja (S/. ${this.efectivo_esperado.toFixed(2)}).\n\nVerifica el conteo antes de cerrar.`);
-                this.confirmando = false;
-                clearTimeout(this._confirmTimer);
+
+                alert(`❌ El monto ingresado supera el efectivo esperado.`);
+
                 return;
             }
+
             if (!this.confirmando) {
+
                 this.confirmando = true;
-                this._confirmTimer = setTimeout(() => { this.confirmando = false; }, 5000);
+
+                this._confirmTimer = setTimeout(() => {
+                    this.confirmando = false;
+                }, 5000);
+
                 return;
             }
+
             clearTimeout(this._confirmTimer);
+
             this.confirmando = false;
+
             this.loading = true;
+
             try {
+
                 const response = await fetch('{% url "api_caja_cierre" %}', {
+
                     method: 'POST',
+
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token }}'
                     },
+
                     body: JSON.stringify({
                         saldo_final: parseFloat(this.arqueo_fisico) || 0,
                         arqueo_fisico: parseFloat(this.arqueo_fisico) || 0,
                         observacion: this.observacion
                     })
+
                 });
+
                 const data = await response.json();
+
                 if (response.ok && data.ok) {
+
                     window.location.href = '{% url "caja_apertura" %}';
+
                 } else {
-                    alert(data.error || 'Error al cerrar caja. Intenta de nuevo.');
+
+                    alert(data.error || 'Error al cerrar caja.');
+
                 }
+
             } catch (e) {
+
                 alert('Error de conexión con el servidor.');
+
             } finally {
+
                 this.loading = false;
+
             }
+
         }
+
     }
+
 }
+
 </script>
 {% endblock %}
