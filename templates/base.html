@@ -22,26 +22,28 @@
   <style>
     :root {
       color-scheme: dark;
-      /* Colores RGB para compatibilidad total con Tailwind y Opacidades */
-      --primary: 198 191 255; /* #c6bfff */
-      --secondary: 78 222 163; /* #4edea3 */
-      --bg: 12 14 20; /* #0c0e14 */
-      --surface: 26 29 39; /* #1a1d27 */
-      --border: 255 255 255; /* Usado con opacidad */
+      --primary: 198 191 255;
+      --secondary: 78 222 163;
+      --bg: 12 14 20;
+      --surface: 26 29 39;
+      --border: 255 255 255;
       --on-surface: 255 255 255;
       --on-surface-variant: 165 165 177;
+      --sidebar-width: 260px;
     }
 
     html.light {
       color-scheme: light;
-      --primary: 67 56 202; /* #4338ca Indigo */
-      --secondary: 16 185 129; /* #10b981 Emerald */
-      --bg: 243 244 246; /* #f3f4f6 */
-      --surface: 255 255 255; /* #ffffff */
-      --border: 0 0 0; 
-      --on-surface: 17 24 39; /* #111827 */
-      --on-surface-variant: 75 85 99; /* #4b5563 */
+      --primary: 67 56 202;
+      --secondary: 16 185 129;
+      --bg: 243 244 246;
+      --surface: 255 255 255;
+      --border: 0 0 0;
+      --on-surface: 17 24 39;
+      --on-surface-variant: 75 85 99;
     }
+
+    * { box-sizing: border-box; }
 
     body {
       font-family: 'Inter', sans-serif;
@@ -49,66 +51,278 @@
       color: rgb(var(--on-surface));
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
+      display: flex;
+      overflow-x: hidden;
     }
 
-    .glass-nav {
-      background: rgb(var(--surface) / 0.85);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgb(var(--border) / 0.08);
+    /* ═══════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════ */
+    #sidebar {
+      width: var(--sidebar-width);
+      min-height: 100vh;
+      background: rgb(var(--surface));
+      border-right: 1px solid rgb(var(--border) / 0.08);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 200;
+      transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
-    /* Sobrescribir glass-card en todas las vistas para que respete el tema */
-    .glass-card {
-      background: rgb(var(--surface) / 0.85) !important;
-      border: 1px solid rgb(var(--border) / 0.1) !important;
+    #sidebar .sidebar-header {
+      padding: 1.25rem 1.25rem 1rem;
+      border-bottom: 1px solid rgb(var(--border) / 0.07);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
     }
 
-    .nav-link-custom {
-      @apply flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all duration-200;
+    #sidebar .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      text-decoration: none;
+    }
+
+    #sidebar .sidebar-logo .logo-icon {
+      background: linear-gradient(135deg, rgb(var(--primary)), rgb(var(--secondary)));
+      padding: 0.45rem;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    #sidebar .sidebar-logo span.logo-text {
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: rgb(var(--on-surface));
+      white-space: nowrap;
+    }
+
+    #sidebar .sidebar-nav {
+      flex: 1;
+      padding: 1rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    #sidebar .nav-section-label {
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgb(var(--on-surface-variant) / 0.6);
+      padding: 0.75rem 0.75rem 0.3rem;
+    }
+
+    #sidebar .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.6rem 0.9rem;
+      border-radius: 0.75rem;
+      font-size: 0.78rem;
+      font-weight: 700;
       color: rgb(var(--on-surface-variant));
+      text-decoration: none;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
-    .nav-link-custom:hover,
-    .nav-link-custom.active {
+    #sidebar .nav-item:hover {
       background: rgb(var(--on-surface) / 0.05);
       color: rgb(var(--on-surface));
     }
 
-    .nav-link-custom.active {
-      @apply shadow-lg shadow-white/5;
-      background: rgb(var(--primary) / 0.1);
+    #sidebar .nav-item.active {
+      background: rgb(var(--primary) / 0.12);
       color: rgb(var(--primary));
+      box-shadow: inset 0 0 0 1px rgb(var(--primary) / 0.15);
     }
 
-    /* Override Bootstrap defaults for legibility */
-    .text-muted {
-      color: rgb(var(--on-surface-variant)) !important;
-      font-weight: 500;
+    #sidebar .nav-item .material-symbols-outlined {
+      font-size: 1.15rem;
+      flex-shrink: 0;
     }
 
-    .card-dark {
-      background: rgb(var(--surface));
-      border: 1px solid rgb(var(--border) / 0.1);
-      border-radius: 24px;
+    #sidebar .sidebar-footer {
+      padding: 1rem 0.75rem;
+      border-top: 1px solid rgb(var(--border) / 0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
-    [x-cloak] {
-      display: none !important;
+    #sidebar .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.65rem 0.75rem;
+      background: rgb(var(--on-surface) / 0.04);
+      border-radius: 0.75rem;
+      border: 1px solid rgb(var(--border) / 0.07);
     }
 
-    /* Better contrast for table text */
-    .table-dark {
-      --bs-table-bg: transparent;
+    #sidebar .user-avatar {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: rgb(var(--primary) / 0.15);
+      border: 1px solid rgb(var(--primary) / 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    #sidebar .sidebar-actions {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    #sidebar .icon-btn {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      border: none;
+      background: transparent;
+      color: rgb(var(--on-surface-variant));
+      flex: 1;
+    }
+
+    #sidebar .icon-btn:hover {
+      background: rgb(var(--on-surface) / 0.07);
       color: rgb(var(--on-surface));
     }
 
-    .table td,
-    .table th {
-      border-color: rgb(var(--border) / 0.1);
-      vertical-align: middle;
+    #sidebar .icon-btn.danger:hover {
+      background: rgba(239,68,68,0.1);
+      color: #f87171;
     }
 
-    /* ── Lógica Inversa: Modo Claro cubre TODOS los utilitarios oscuros ── */
+    #sidebar .icon-btn.primary-btn {
+      background: rgb(var(--primary) / 0.12);
+      color: rgb(var(--primary));
+    }
+
+    #sidebar .icon-btn.primary-btn:hover {
+      background: rgb(var(--primary) / 0.22);
+    }
+
+    /* ═══════════════════════════════════
+       OVERLAY MOBILE
+    ═══════════════════════════════════ */
+    #sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(2px);
+      z-index: 199;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #sidebar-overlay.active {
+      opacity: 1;
+    }
+
+    /* ═══════════════════════════════════
+       TOPBAR MOBILE
+    ═══════════════════════════════════ */
+    #mobile-topbar {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      height: 56px;
+      background: rgb(var(--surface));
+      border-bottom: 1px solid rgb(var(--border) / 0.08);
+      padding: 0 1rem;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    #mobile-topbar .hamburger {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.6rem;
+      border: none;
+      background: rgb(var(--on-surface) / 0.06);
+      color: rgb(var(--on-surface));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ═══════════════════════════════════
+       MAIN CONTENT
+    ═══════════════════════════════════ */
+    #main-wrapper {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* ═══════════════════════════════════
+       RESPONSIVE — ≤ 1024px
+    ═══════════════════════════════════ */
+    @media (max-width: 1024px) {
+      #sidebar {
+        transform: translateX(-100%);
+      }
+
+      #sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 30px rgba(0,0,0,0.4);
+      }
+
+      #sidebar-overlay {
+        display: block;
+        pointer-events: none;
+      }
+
+      #sidebar-overlay.active {
+        pointer-events: all;
+      }
+
+      #mobile-topbar {
+        display: flex;
+      }
+
+      #main-wrapper {
+        margin-left: 0;
+        padding-top: 56px;
+      }
+    }
+
+    /* ═══════════════════════════════════
+       MODO CLARO — overrides
+    ═══════════════════════════════════ */
     html.light .bg-white\/5  { background-color: rgba(0,0,0,0.04) !important; }
     html.light .bg-white\/10 { background-color: rgba(0,0,0,0.08) !important; }
     html.light .bg-white\/20 { background-color: rgba(0,0,0,0.12) !important; }
@@ -120,10 +334,8 @@
     html.light .border-white\/20 { border-color: rgba(0,0,0,0.15) !important; }
     html.light .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.06) !important; }
     html.light .btn-close-white  { filter: invert(1); }
-    /* Corrige tablas Bootstrap que heredan color blanco */
     html.light .table         { color: rgb(var(--on-surface)) !important; }
     html.light .table-dark    {
-      /* Bootstrap `.table-dark` define texto blanco por variables; en claro lo invertimos */
       --bs-table-color: rgb(var(--on-surface));
       --bs-table-bg: transparent;
       --bs-table-border-color: rgb(var(--border) / 0.12);
@@ -136,44 +348,51 @@
       color: rgb(var(--on-surface)) !important;
       background: transparent !important;
     }
-    /* Fondo de hover en filas de tabla */
     html.light .hover\:bg-white\/5:hover { background-color: rgba(0,0,0,0.04) !important; }
 
-    /* ── Mejoras de Contraste para Inputs y Formularios ── */
+    /* ═══════════════════════════════════
+       FORMS
+    ═══════════════════════════════════ */
+    .glass-card {
+      background: rgb(var(--surface) / 0.85) !important;
+      border: 1px solid rgb(var(--border) / 0.1) !important;
+    }
+
+    .card-dark {
+      background: rgb(var(--surface));
+      border: 1px solid rgb(var(--border) / 0.1);
+      border-radius: 24px;
+    }
+
+    [x-cloak] { display: none !important; }
+
+    .table-dark { --bs-table-bg: transparent; color: rgb(var(--on-surface)); }
+    .table td, .table th { border-color: rgb(var(--border) / 0.1); vertical-align: middle; }
+    .text-muted { color: rgb(var(--on-surface-variant)) !important; font-weight: 500; }
+
     .form-control, .form-select {
       background-color: rgb(var(--surface) / 0.5) !important;
       border: 1px solid rgb(var(--border) / 0.1) !important;
       color: rgb(var(--on-surface)) !important;
       transition: all 0.2s ease;
     }
-
     .form-control:focus, .form-select:focus {
       background-color: rgb(var(--surface) / 0.8) !important;
       border-color: rgb(var(--primary)) !important;
       color: rgb(var(--on-surface)) !important;
       box-shadow: 0 0 0 4px rgb(var(--primary) / 0.15) !important;
     }
-
-    .form-control::placeholder {
-      color: rgb(var(--on-surface-variant)) !important;
-      opacity: 0.8;
-    }
-
+    .form-control::placeholder { color: rgb(var(--on-surface-variant)) !important; opacity: 0.8; }
     .input-group-text {
       background-color: rgb(var(--surface) / 0.5) !important;
       border: 1px solid rgb(var(--border) / 0.1) !important;
       color: rgb(var(--on-surface-variant)) !important;
     }
-
-    /* Estilos específicos para inputs de fecha */
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: {% if config_global.tema_oscuro %}invert(1){% else %}none{% endif %};
-      opacity: 0.7;
-      cursor: pointer;
+      opacity: 0.7; cursor: pointer;
     }
-    input[type="date"]::-webkit-calendar-picker-indicator:hover {
-      opacity: 1;
-    }
+    input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
   </style>
 
   <script id="tailwind-config">
@@ -199,114 +418,153 @@
 
 <body class="antialiased">
 
-  <!-- Navbar -->
-  <nav class="glass-nav sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-10">
-      <a href="{% url 'index' %}" class="flex items-center gap-3 no-underline">
-        <div class="bg-gradient-to-br from-primary to-secondary p-2 rounded-xl">
-          <span class="material-symbols-outlined text-background font-bold text-xl">restaurant</span>
-        </div>
-        <span class="text-xl font-black tracking-tight text-white">RestaurantOS</span>
-      </a>
-
-      {% if user.is_authenticated %}
-      <div class="hidden xl:flex items-center gap-2">
-        {% if user.rol.nombre == 'MOZO' or user.rol.nombre == 'ADMIN' %}
-        <a href="/mesero/mesas/" class="nav-link-custom {% block nav_mesas %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">grid_view</span> Plano
-        </a>
-        <a href="/mesero/nueva-comanda/" class="nav-link-custom {% block nav_comanda %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">add_circle</span> Nueva Comanda
-        </a>
-        {% endif %}
-
-        {% if user.rol.nombre == 'COCINERO' or user.rol.nombre == 'ADMIN' %}
-        <a href="/cocina/kds/" class="nav-link-custom {% block nav_cocina %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">oven_gen</span> Cocina
-        </a>
-        {% endif %}
-
-        {% if user.rol.nombre == 'CAJERO' or user.rol.nombre == 'ADMIN' %}
-        <a href="{% url 'caja_apertura' %}" class="nav-link-custom">
-          <span class="material-symbols-outlined text-lg">key</span> Apertura
-        </a>
-        <a href="{% url 'caja_cobrar' %}" class="nav-link-custom {% block nav_caja %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">payments</span> Caja
-        </a>
-        <a href="{% url 'caja_cierre' %}" class="nav-link-custom">
-          <span class="material-symbols-outlined text-lg">lock_clock</span> Cierre
-        </a>
-        {% endif %}
-
-        {% if user.rol.nombre == 'ADMIN' %}
-        <a href="{% url 'admin_reportes' %}" class="nav-link-custom {% block nav_admin %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">dashboard</span> Dashboard
-        </a>
-        <a href="{% url 'admin_menu' %}" class="nav-link-custom {% block nav_menu %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">restaurant_menu</span> Menú
-        </a>
-        <a href="/admin-panel/inventario/" class="nav-link-custom {% block nav_inventario %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">inventory_2</span> Stock
-        </a>
-        <a href="/admin-panel/trabajadores/" class="nav-link-custom {% block nav_trabajadores %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">badge</span> Personal
-        </a>
-        <a href="/admin-panel/auditoria/" class="nav-link-custom {% block nav_auditoria %}{% endblock %}">
-          <span class="material-symbols-outlined text-lg">policy</span> Auditoría
-        </a>
-        {% endif %}
+  <!-- ══════════════════════════════════════
+       TOPBAR MOBILE (solo ≤1024px)
+  ══════════════════════════════════════ -->
+  <div id="mobile-topbar">
+    <button class="hamburger" id="sidebar-toggle" aria-label="Abrir menú">
+      <span class="material-symbols-outlined" style="font-size:1.25rem">menu</span>
+    </button>
+    <a href="{% url 'index' %}" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
+      <div style="background:linear-gradient(135deg,rgb(var(--primary)),rgb(var(--secondary)));padding:0.35rem;border-radius:0.6rem;display:flex;">
+        <span class="material-symbols-outlined" style="font-size:1.1rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
       </div>
-      {% endif %}
-    </div>
-
-    <div class="flex items-center gap-6">
-      {% if user.is_authenticated %}
+      <span style="font-size:0.95rem;font-weight:900;color:rgb(var(--on-surface));">RestaurantOS</span>
+    </a>
+    {% if user.is_authenticated %}
+    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
       {% if user.rol.nombre == 'ADMIN' %}
-      <button onclick="toggleTemaGlobal()" 
-              class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all shadow-lg"
-              title="Cambiar Tema Global del Sistema">
-        <span class="material-symbols-outlined" id="theme-icon">
-          {% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}
-        </span>
+      <button onclick="toggleTemaGlobal()" class="hamburger" title="Cambiar tema" style="background:rgb(var(--primary)/0.12);color:rgb(var(--primary));">
+        <span class="material-symbols-outlined" style="font-size:1.1rem;">{% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}</span>
       </button>
       {% endif %}
+    </div>
+    {% endif %}
+  </div>
 
-      <div class="hidden md:flex items-center gap-4 px-4 py-2 bg-white/5 rounded-2xl border border-white/5">
-        <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/20">
-          <span class="material-symbols-outlined text-primary text-sm font-bold">person</span>
-        </div>
-        <div class="flex flex-col">
-          <span class="text-xs font-black text-white leading-tight">{{ user.username }}</span>
-          <span class="text-[9px] font-bold text-primary uppercase tracking-widest">{{ user.rol.nombre }}</span>
-        </div>
-      </div>
+  <!-- Overlay oscuro (mobile) -->
+  <div id="sidebar-overlay"></div>
 
-      <a href="{% url 'documentacion' %}" 
-         class="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary/10 hover:bg-secondary/20 text-secondary transition-all shadow-lg"
-         title="Documentación y Ayuda">
-        <span class="material-symbols-outlined">help</span>
+  <!-- ══════════════════════════════════════
+       SIDEBAR LATERAL
+  ══════════════════════════════════════ -->
+  <aside id="sidebar">
+
+    <!-- Header / Logo -->
+    <div class="sidebar-header">
+      <a href="{% url 'index' %}" class="sidebar-logo">
+        <div class="logo-icon">
+          <span class="material-symbols-outlined" style="font-size:1.15rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
+        </div>
+        <span class="logo-text">RestaurantOS</span>
       </a>
+    </div>
 
-      <form action="{% url 'logout' %}" method="post" class="m-0">
-        {% csrf_token %}
-        <button type="submit"
-          class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-red-500/10 text-on-surface-variant hover:text-red-400 transition-all"
-          title="Cerrar Sesión">
-          <span class="material-symbols-outlined">logout</span>
-        </button>
-      </form>
-      {% else %}
-      <a href="{% url 'login' %}" class="nav-pill-link active">
-        <i class="bi bi-box-arrow-in-right"></i> Ingresar
+    <!-- Nav Links -->
+    <nav class="sidebar-nav">
+      {% if user.is_authenticated %}
+
+      {% if user.rol.nombre == 'MOZO' or user.rol.nombre == 'ADMIN' %}
+      <span class="nav-section-label">Salón</span>
+      <a href="/mesero/mesas/" class="nav-item {% block nav_mesas %}{% endblock %}">
+        <span class="material-symbols-outlined">grid_view</span> Plano de Mesas
+      </a>
+      <a href="/mesero/nueva-comanda/" class="nav-item {% block nav_comanda %}{% endblock %}">
+        <span class="material-symbols-outlined">add_circle</span> Nueva Comanda
       </a>
       {% endif %}
-    </div>
-  </nav>
-  <!-- ═══════════════════════════════════════════════════════════════════════════ -->
 
-  <main class="{% block main_class %}container-fluid py-4{% endblock %}">
-    {% block content %}{% endblock %}
-  </main>
+      {% if user.rol.nombre == 'COCINERO' or user.rol.nombre == 'ADMIN' %}
+      <span class="nav-section-label">Cocina</span>
+      <a href="/cocina/kds/" class="nav-item {% block nav_cocina %}{% endblock %}">
+        <span class="material-symbols-outlined">oven_gen</span> Pantalla KDS
+      </a>
+      {% endif %}
+
+      {% if user.rol.nombre == 'CAJERO' or user.rol.nombre == 'ADMIN' %}
+      <span class="nav-section-label">Caja</span>
+      <a href="{% url 'caja_apertura' %}" class="nav-item">
+        <span class="material-symbols-outlined">key</span> Apertura de Caja
+      </a>
+      <a href="{% url 'caja_cobrar' %}" class="nav-item {% block nav_caja %}{% endblock %}">
+        <span class="material-symbols-outlined">payments</span> Cobrar
+      </a>
+      <a href="{% url 'caja_cierre' %}" class="nav-item">
+        <span class="material-symbols-outlined">lock_clock</span> Cierre de Caja
+      </a>
+      {% endif %}
+
+      {% if user.rol.nombre == 'ADMIN' %}
+      <span class="nav-section-label">Administración</span>
+      <a href="{% url 'admin_reportes' %}" class="nav-item {% block nav_admin %}{% endblock %}">
+        <span class="material-symbols-outlined">dashboard</span> Dashboard
+      </a>
+      <a href="{% url 'admin_menu' %}" class="nav-item {% block nav_menu %}{% endblock %} {% block nav_menu_sidebar %}{% endblock %}">
+        <span class="material-symbols-outlined">restaurant_menu</span> Gestión de Menú
+      </a>
+      <a href="/admin-panel/inventario/" class="nav-item {% block nav_inventario %}{% endblock %}">
+        <span class="material-symbols-outlined">inventory_2</span> Stock / Inventario
+      </a>
+      <a href="/admin-panel/trabajadores/" class="nav-item {% block nav_trabajadores %}{% endblock %}">
+        <span class="material-symbols-outlined">badge</span> Personal
+      </a>
+      <a href="/admin-panel/auditoria/" class="nav-item {% block nav_auditoria %}{% endblock %}">
+        <span class="material-symbols-outlined">policy</span> Auditoría
+      </a>
+      {% endif %}
+
+      <span class="nav-section-label">Ayuda</span>
+      <a href="{% url 'documentacion' %}" class="nav-item">
+        <span class="material-symbols-outlined">help</span> Documentación
+      </a>
+
+      {% else %}
+      <a href="{% url 'login' %}" class="nav-item">
+        <span class="material-symbols-outlined">login</span> Ingresar
+      </a>
+      {% endif %}
+    </nav>
+
+    <!-- Footer: usuario + acciones -->
+    {% if user.is_authenticated %}
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <div class="user-avatar">
+          <span class="material-symbols-outlined" style="font-size:0.95rem;color:rgb(var(--primary));">person</span>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.75rem;font-weight:800;color:rgb(var(--on-surface));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user.username }}</div>
+          <div style="font-size:0.58rem;font-weight:700;color:rgb(var(--primary));text-transform:uppercase;letter-spacing:0.1em;">{{ user.rol.nombre }}</div>
+        </div>
+      </div>
+      <div class="sidebar-actions">
+        {% if user.rol.nombre == 'ADMIN' %}
+        <button onclick="toggleTemaGlobal()" class="icon-btn primary-btn" title="Cambiar tema">
+          <span class="material-symbols-outlined" style="font-size:1.05rem;" id="theme-icon">
+            {% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}
+          </span>
+        </button>
+        {% endif %}
+        <form action="{% url 'logout' %}" method="post" style="flex:1;margin:0;">
+          {% csrf_token %}
+          <button type="submit" class="icon-btn danger" title="Cerrar sesión" style="width:100%;">
+            <span class="material-symbols-outlined" style="font-size:1.05rem;">logout</span>
+            <span style="font-size:0.7rem;font-weight:700;margin-left:0.3rem;">Salir</span>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </aside>
+
+  <!-- ══════════════════════════════════════
+       CONTENIDO PRINCIPAL
+  ══════════════════════════════════════ -->
+  <div id="main-wrapper">
+    <main class="{% block main_class %}container-fluid py-4{% endblock %}">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 
   <!-- Bootstrap 5 JS (Bundle con Popper) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -434,6 +692,37 @@
       })
       .catch(e => console.error('Error cambiando tema:', e));
     }
+  </script>
+
+  <script>
+    // ── Sidebar toggle (mobile) ──────────────────────────────────
+    (function() {
+      const toggle   = document.getElementById('sidebar-toggle');
+      const sidebar  = document.getElementById('sidebar');
+      const overlay  = document.getElementById('sidebar-overlay');
+
+      function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      if (toggle) toggle.addEventListener('click', openSidebar);
+      if (overlay) overlay.addEventListener('click', closeSidebar);
+
+      // Cerrar también si se navega a otro enlace en mobile
+      document.querySelectorAll('#sidebar .nav-item').forEach(function(link) {
+        link.addEventListener('click', function() {
+          if (window.innerWidth <= 1024) closeSidebar();
+        });
+      });
+    })();
   </script>
 
   {% block extra_js %}{% endblock %}
