@@ -117,10 +117,10 @@ import json
 def api_toggle_tema(request):
     """
     Endpoint para alternar entre modo claro y oscuro.
-    Solo puede ser ejecutado por un usuario con rol ADMIN.
+    Puede ser ejecutado por usuarios con rol ADMIN o MOZO.
     """
     if request.method == 'POST':
-        if request.user.rol.nombre != 'ADMIN':
+        if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
             return JsonResponse({'ok': False, 'error': 'No tienes permisos para cambiar el tema global.'}, status=403)
         
         config = ConfiguracionSistema.get_instancia()

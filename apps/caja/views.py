@@ -128,7 +128,6 @@ def cobrar_view(request):
         c.total_pendiente = sum(l.subtotal for l in lineas_activas)
         # lineas_json ya es @property del modelo Comanda — no necesita reasignarse
 
-
     metodos_pago = MetodoPago.objects.filter(activo=True)
 
     return render(request, 'caja/cobrar.html', {
