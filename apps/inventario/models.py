@@ -1,6 +1,7 @@
 from django.db import models
 from apps.menu.models import Plato
 from django.conf import settings
+from .managers import InsumoManager
 
 class UnidadMedida(models.Model):
     nombre = models.CharField(max_length=60, unique=True)
@@ -40,6 +41,8 @@ class Insumo(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = InsumoManager()
+
     class Meta:
         db_table = 'insumo'
         verbose_name = 'Insumo'
@@ -57,12 +60,12 @@ class Insumo(models.Model):
 
     @property
     def nivel_stock(self):
-        """Retorna el nivel de stock: 'critico', 'bajo', 'normal'."""
+        """Retorna el nivel de stock: 'agotado', 'bajo', 'optimo'."""
         if self.stock_real <= 0:
-            return 'critico'
+            return 'agotado'
         if self.stock_real <= self.stock_minimo:
             return 'bajo'
-        return 'normal'
+        return 'optimo'
 
     @property
     def necesita_reposicion(self):

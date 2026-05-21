@@ -27,12 +27,21 @@ def _stash_stock_anterior(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Insumo)
-def auto_desactivar_platos(sender, instance, created=False, **kwargs):
+def auto_desactivar_platos(sender, instance, created=False, update_fields=None, **kwargs):
     """
-    Cuando un insumo cambia su stock, actualiza disponibilidad de platos.
+    Cuando un insumo cambia su stock o estado activo, actualiza disponibilidad de platos.
     Si cruzó la línea OK → BAJO/AGOTADO, dispara alerta por email a admins.
+
+    Nota: bulk_update() no dispara post_save por defecto. Si un script o vista
+    necesita saltar este recalculo al usar save() individual, debe proveer un
+    update_fields que no incluya 'stock_real', 'activo' o 'stock_minimo'.
     """
     if created:
+        return
+
+    # Solo recalcular si cambió stock_real, activo o stock_minimo
+    campos_relevantes = {'stock_real', 'activo', 'stock_minimo'}
+    if update_fields is not None and not campos_relevantes.intersection(set(update_fields)):
         return
 
     actualizar_disponibilidad_platos(instance)

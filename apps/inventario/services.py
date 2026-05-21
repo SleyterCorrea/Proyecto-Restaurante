@@ -4,7 +4,6 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F
 
 from apps.comandas.models import LineaComanda
 from apps.inventario.models import Insumo, MovimientoInventario, RecetaInsumo
@@ -15,7 +14,9 @@ logger = logging.getLogger(__name__)
 def descontar_inventario_al_marcar_listo(linea: LineaComanda, usuario):
     """
     Descuenta insumos según receta cuando una línea pasa a LISTO (cocina terminó).
-    Optimizado con bulk_create y bulk_update para evitar N+1.
+    Lanza ValueError si no hay stock suficiente para algún insumo.
+    Usa bulk_create / bulk_update para evitar N+1, y recalcula disponibilidad
+    de platos afectados porque bulk_update no dispara señales Django.
     """
     if linea.estado != LineaComanda.Estado.LISTO:
         return
@@ -25,37 +26,43 @@ def descontar_inventario_al_marcar_listo(linea: LineaComanda, usuario):
         return
 
     insumo_ids = [r.insumo_id for r in recetas]
-    insumos_a_actualizar = {i.id: i for i in Insumo.objects.select_for_update().filter(pk__in=insumo_ids)}
+    insumos_map = {i.id: i for i in Insumo.objects.select_for_update().filter(pk__in=insumo_ids)}
     movimientos_a_crear = []
 
     for receta in recetas:
-        insumo = insumos_a_actualizar.get(receta.insumo_id)
+        insumo = insumos_map.get(receta.insumo_id)
         if not insumo:
             continue
 
-        cantidad = Decimal(str(receta.cantidad_por_porcion * linea.cantidad))
+        cantidad = Decimal(str(receta.cantidad_por_porcion)) * Decimal(str(linea.cantidad))
+
+        if insumo.stock_real < cantidad:
+            raise ValueError(
+                f'Stock insuficiente para "{insumo.nombre}": '
+                f'disponible {insumo.stock_real}, requerido {cantidad}'
+            )
+
         stock_anterior = insumo.stock_real
-
-        nuevo_stock = insumo.stock_real - cantidad
-        if nuevo_stock < 0:
-            nuevo_stock = Decimal('0')
-
-        insumo.stock_real = nuevo_stock
+        insumo.stock_real -= cantidad
 
         movimientos_a_crear.append(MovimientoInventario(
             insumo=insumo,
             tipo_movimiento=MovimientoInventario.TipoMovimiento.CONSUMO,
             cantidad=cantidad,
             stock_anterior=stock_anterior,
-            stock_nuevo=nuevo_stock,
+            stock_nuevo=insumo.stock_real,
             usuario=usuario,
             referencia_tipo='LINEA_COMANDA',
             referencia_id=linea.id,
-            observacion=f'Consumo por preparación (línea {linea.id}, {linea.plato.nombre})',
+            observacion=f'Consumo cocina — línea {linea.id} ({linea.plato.nombre})',
         ))
 
-    Insumo.objects.bulk_update(insumos_a_actualizar.values(), ['stock_real'])
+    Insumo.objects.bulk_update(insumos_map.values(), ['stock_real'])
     MovimientoInventario.objects.bulk_create(movimientos_a_crear)
+
+    # bulk_update no dispara post_save, así que recalculamos disponibilidad manualmente
+    for insumo in insumos_map.values():
+        actualizar_disponibilidad_platos(insumo)
 
 
 def obtener_insumos_criticos():
@@ -66,10 +73,7 @@ def obtener_insumos_criticos():
     # Importación diferida para evitar circular imports
     from apps.menu.models import Plato
 
-    criticos = Insumo.objects.filter(
-        stock_real__lte=F('stock_minimo'),  # stock_real <= stock_minimo
-        activo=True
-    ).select_related('unidad_medida')
+    criticos = Insumo.objects.criticos().select_related('unidad_medida')
 
     resultado = []
     for insumo in criticos:
@@ -100,20 +104,25 @@ def obtener_insumos_criticos():
 
 def verificar_disponibilidad_plato(plato):
     """
-    Verifica si un plato tiene suficientes insumos en stock.
-    Retorna (disponible: bool, motivo: str)
+    Verifica si un plato puede prepararse al menos una vez con el stock actual.
+    Retorna (disponible: bool, motivo: str).
+
+    Un plato se bloquea solo cuando el stock real es insuficiente para cubrir
+    una porción completa — no cuando llega al mínimo de reposición.
     """
     if not plato.activo:
         return False, "Plato desactivado"
 
     recetas = RecetaInsumo.objects.filter(plato=plato, activo=True).select_related('insumo')
+    if not recetas.exists():
+        return True, "Sin receta definida"
 
     for receta in recetas:
         insumo = receta.insumo
-        if insumo.stock_real <= 0:
-            return False, f"Sin stock: {insumo.nombre}"
-        if insumo.stock_real <= insumo.stock_minimo:
-            return False, f"Stock crítico: {insumo.nombre}"
+        if not insumo.activo:
+            return False, f"Insumo inactivo: {insumo.nombre}"
+        if insumo.stock_real < receta.cantidad_por_porcion:
+            return False, f"Stock insuficiente: {insumo.nombre}"
 
     return True, "Disponible"
 
@@ -146,11 +155,7 @@ def obtener_stock_bajo():
     """
     Retorna insumos con stock bajo (entre 0 y stock_minimo exclusive).
     """
-    bajo = Insumo.objects.filter(
-        stock_real__gt=0,
-        stock_real__lt=F('stock_minimo'),
-        activo=True
-    ).select_related('unidad_medida')
+    bajo = Insumo.objects.bajo_stock().select_related('unidad_medida')
 
     resultado = []
     for insumo in bajo:
@@ -309,13 +314,14 @@ def notificar_stock_critico_si_aplica(insumo):
         f'Genera una orden de compra desde el panel de inventario para reponer.\n'
     )
 
-    # Buscar admins activos con email
+    # Buscar admins activos con email (usando is_superuser)
     try:
         admins_emails = list(User.objects.filter(
             is_active=True,
-            rol__nombre__in=['ADMIN'],
+            is_superuser=True
         ).exclude(email='').values_list('email', flat=True))
     except Exception:
+        logger.exception('Error al consultar admins para alerta de stock del insumo %s', insumo.nombre)
         admins_emails = []
 
     if not admins_emails:
