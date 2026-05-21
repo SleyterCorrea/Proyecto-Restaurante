@@ -93,6 +93,20 @@
         </div>
         <div class="kds-modal__body">
             <p class="kds-modal__plato" id="modal-plato-nombre"></p>
+
+            <!-- Cantidad parcial -->
+            <div class="kds-modal__parcial" id="modal-parcial-wrapper" style="display:none;">
+                <label class="kds-modal__label" for="modal-cantidad-parcial">
+                    ¿Cuántas unidades deseas cancelar/cocinar?
+                </label>
+                <select id="modal-cantidad-parcial" class="kds-modal__select">
+                    <option value="0">Cancelar todo — No cocinar ninguno</option>
+                </select>
+                <p class="kds-modal__parcial-info">
+                    Se cancelarán todas las unidades. No se cocinará ninguna.
+                </p>
+            </div>
+
             <label class="kds-modal__label" for="modal-motivo">
                 Motivo de anulación <span class="kds-modal__required">*obligatorio</span>
             </label>
