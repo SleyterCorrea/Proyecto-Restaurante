@@ -28,3 +28,15 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'cliente': event['cliente'],
             'plato': event['plato']
         }))
+
+    # Handler para cancelación parcial desde cocina
+    async def cancelacion_parcial(self, event):
+        """Notifica al mesero que un plato fue cancelado parcialmente en cocina."""
+        await self.send(text_data=json.dumps({
+            'type': 'cancelacion_parcial',
+            'mesa': event['mesa'],
+            'plato': event['plato'],
+            'cantidad_original': event['cantidad_original'],
+            'cantidad_preparable': event['cantidad_preparable'],
+            'motivo': event['motivo'],
+        }))

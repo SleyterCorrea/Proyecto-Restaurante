@@ -25,8 +25,23 @@ def _obtener_turno_activo():
 
 
 def _liberar_mesas_comanda(comanda):
-    """Cambia todas las mesas de la comanda a estado LIMPIEZA."""
-    for m in comanda.todas_las_mesas:
+    """Cambia todas las mesas de la comanda a estado LIMPIEZA y disuelve sus uniones."""
+    from apps.mesas.models import UnionMesas
+    from django.db.models import Q
+    
+    mesas = list(comanda.todas_las_mesas)
+    
+    # Buscar y eliminar uniones activas que incluyan a cualquiera de estas mesas
+    uniones_activas = UnionMesas.objects.filter(
+        Q(mesa_principal__in=mesas) | Q(mesas_secundarias__in=mesas),
+        activa=True
+    ).distinct()
+    
+    for union in uniones_activas:
+        union.delete()
+        
+    # Cambiar estado de todas las mesas a LIMPIEZA
+    for m in mesas:
         m.estado = Mesa.Estado.LIMPIEZA
         m.save(update_fields=['estado'])
 

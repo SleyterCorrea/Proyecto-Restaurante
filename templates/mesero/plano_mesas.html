@@ -797,7 +797,7 @@
 
     <!-- ── MODAL: Confirmar Unión de Mesas ── -->
     <div class="modal fade" id="modalConfirmarUnion" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
             <div class="modal-content glass-card rounded-[32px] border-white/10 overflow-hidden">
                 <div class="modal-header border-white/5 p-6 bg-white/5">
                     <div class="flex items-center gap-4">
@@ -811,13 +811,13 @@
                     </div>
                     <button type="button" class="btn-close btn-close-white opacity-40" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-6 space-y-5">
+                <div class="modal-body p-5 space-y-4">
 
                     <!-- Vista previa de las mesas a unir -->
                     <template x-if="unionPendiente">
                         <div>
                             <!-- Fila de mesas visuales -->
-                            <div class="flex items-center justify-center gap-3 py-2 flex-wrap">
+                            <div class="flex items-center justify-center gap-3 py-1 flex-wrap">
                                 <!-- Mesa origen (principal) -->
                                 <div class="text-center">
                                     <div class="w-16 h-16 rounded-2xl bg-secondary/10 border-2 border-secondary/30 flex items-center justify-center mx-auto mb-1">
@@ -855,7 +855,7 @@
                             </div>
 
                             <!-- Capacidad total editable -->
-                            <div class="text-center mt-4 mb-3">
+                            <div class="text-center mt-2 mb-1">
                                 <label class="text-[10px] font-black text-on-surface-variant uppercase tracking-widest block mb-2">Capacidad Total de la Unión</label>
                                 <div class="flex items-center justify-center gap-3">
                                     <button class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white border border-white/10 transition-colors" @click="if(unionPendiente.capacidad_personalizada > 1) unionPendiente.capacidad_personalizada--">
@@ -868,20 +868,55 @@
                                 </div>
                             </div>
 
-                            <!-- Selector de 3a mesa (opcional) -->
+                            <!-- Selector de 3a mesa (opcional) — custom dropdown -->
                             <template x-if="!unionPendiente.mesa_extra">
-                                <div class="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                <div class="bg-white/5 border border-white/10 rounded-2xl p-3"
+                                     x-data="{ open: false, label: '— Sin 3ª mesa —' }">
                                     <p class="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2">
                                         <span class="material-symbols-outlined text-[12px] align-middle">add_circle</span>
                                         Agregar 3ª mesa (opcional)
                                     </p>
-                                    <select class="w-full bg-white/5 border border-white/10 rounded-xl text-white text-sm font-bold px-3 py-2 focus:outline-none focus:border-orange-500/50"
-                                            @change="seleccionarTerceraMesa($event.target.value); $event.target.value=''">
-                                        <option value="">— Sin 3ª mesa —</option>
-                                        <template x-for="m in mesasParaTercera" :key="m.id">
-                                            <option :value="m.id" x-text="'Mesa ' + m.numero + ' (' + m.capacidad + ' pers.) - ' + m.piso_label"></option>
-                                        </template>
-                                    </select>
+                                    <!-- Trigger button -->
+                                    <div class="relative">
+                                        <button type="button"
+                                                class="w-full flex items-center justify-between gap-2 rounded-xl border border-white/20 px-3 py-2 text-sm font-bold transition-colors"
+                                                style="background-color:#1e2235;color:#e2e8f0;"
+                                                @click="open = !open"
+                                                @keydown.escape="open = false">
+                                            <span x-text="label"></span>
+                                            <span class="material-symbols-outlined text-[16px] transition-transform" :class="open ? 'rotate-180' : ''">expand_more</span>
+                                        </button>
+
+                                        <!-- Dropdown list -->
+                                        <div x-show="open"
+                                             x-transition:enter="transition ease-out duration-100"
+                                             x-transition:enter-start="opacity-0 translate-y-1"
+                                             x-transition:enter-end="opacity-100 translate-y-0"
+                                             x-transition:leave="transition ease-in duration-75"
+                                             x-transition:leave-start="opacity-100 translate-y-0"
+                                             x-transition:leave-end="opacity-0 translate-y-1"
+                                             @click.outside="open = false"
+                                             class="absolute z-50 left-0 right-0 mt-1 rounded-xl border border-white/20 shadow-2xl overflow-y-auto"
+                                             style="background-color:#1e2235; top: calc(100% + 4px); max-height:200px;">
+                                            <!-- Opción: sin mesa -->
+                                            <button type="button"
+                                                    class="w-full text-left px-3 py-2 text-sm font-bold transition-colors hover:bg-orange-500/20"
+                                                    style="color:#94a3b8;"
+                                                    @click="label = '— Sin 3ª mesa —'; open = false;">
+                                                — Sin 3ª mesa —
+                                            </button>
+                                            <!-- Opciones dinámicas -->
+                                            <template x-for="m in mesasParaTercera" :key="m.id">
+                                                <button type="button"
+                                                        class="w-full text-left px-3 py-2 text-sm font-bold transition-colors hover:bg-orange-500/20"
+                                                        style="color:#e2e8f0; border-top: 1px solid rgba(255,255,255,0.06);"
+                                                        @click="label = 'Mesa ' + m.numero + ' (' + m.capacidad + ' pers.)'; seleccionarTerceraMesa(m.id); open = false;">
+                                                    <span class="text-orange-400 font-black" x-text="'Mesa ' + m.numero"></span>
+                                                    <span class="text-white/50 ml-1" x-text="'(' + m.capacidad + ' pers.) · ' + m.piso_label"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
@@ -895,7 +930,7 @@
                         </p>
                     </div>
                 </div>
-                <div class="modal-footer border-white/5 p-6 bg-white/5 gap-3">
+                <div class="modal-footer border-white/5 p-4 bg-white/5 gap-3">
                     <button class="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-2xl font-black text-sm transition-all border border-white/5" data-bs-dismiss="modal">
                         Cancelar
                     </button>

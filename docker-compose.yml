@@ -39,14 +39,14 @@ services:
         python manage.py migrate --noinput &&
         python manage.py collectstatic --noinput --clear &&
         python seed_data.py &&
-        daphne -b 0.0.0.0 -p 8000 restaurant.asgi:application
+        daphne -b 0.0.0.0 -p 8002 restaurant.asgi:application
       "
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
-      - "8000:8000"
+      - "8002:8002"
     env_file:
       - .env
     environment:
