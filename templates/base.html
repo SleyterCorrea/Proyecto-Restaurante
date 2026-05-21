@@ -433,7 +433,7 @@
     </a>
     {% if user.is_authenticated %}
     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
-      {% if user.rol.nombre == 'ADMIN' %}
+      {% if user.rol.nombre == 'ADMIN' or user.rol.nombre == 'MOZO' %}
       <button onclick="toggleTemaGlobal()" class="hamburger" title="Cambiar tema" style="background:rgb(var(--primary)/0.12);color:rgb(var(--primary));">
         <span class="material-symbols-outlined" style="font-size:1.1rem;">{% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}</span>
       </button>
@@ -538,7 +538,7 @@
         </div>
       </div>
       <div class="sidebar-actions">
-        {% if user.rol.nombre == 'ADMIN' %}
+        {% if user.rol.nombre == 'ADMIN' or user.rol.nombre == 'MOZO' %}
         <button onclick="toggleTemaGlobal()" class="icon-btn primary-btn" title="Cambiar tema">
           <span class="material-symbols-outlined" style="font-size:1.05rem;" id="theme-icon">
             {% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}
