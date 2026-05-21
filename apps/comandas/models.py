@@ -112,6 +112,22 @@ class LineaComanda(models.Model):
     fecha_listo = models.DateTimeField(null=True, blank=True)
     fecha_entregado = models.DateTimeField(null=True, blank=True)
     
+    # Auditoría: tiempo real de preparación (segundos) — se calcula al marcar LISTO
+    tiempo_real_preparacion_seg = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Segundos reales de cocción (fecha_listo - fecha_inicio_prep). Disponible para auditoría.'
+    )
+    # Cancelación parcial: cantidad que el cocinero SÍ puede cocinar
+    cantidad_parcial_cocina = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text='En cancelación parcial, cantidad que el cocinero indica que puede preparar.'
+    )
+    # Motivo de anulación persistido en la línea
+    motivo_anulacion = models.CharField(
+        max_length=255, blank=True, null=True,
+        help_text='Motivo de anulación del plato.'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

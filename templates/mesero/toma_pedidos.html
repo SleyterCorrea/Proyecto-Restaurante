@@ -71,14 +71,7 @@
                     </template>
                 </button>
 
-                <div class="hidden md:block h-10 w-px bg-white/10"></div>
-                
-                <div class="flex gap-2" x-show="mesasSeleccionadas.length > 0">
-                    <span class="bg-secondary/10 text-secondary px-3 py-1.5 rounded-full text-[12px] font-medium flex items-center gap-1.5 border border-secondary/20">
-                        <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-                        <span x-text="capacidadTotal + ' Comensales'"></span>
-                    </span>
-                </div>
+
             </div>
 
             <div class="flex items-center gap-2">
@@ -389,27 +382,12 @@
                     </template>
                 </div>
                 
-                <!-- Campo: Nombre del Cliente -->
-                <div class="space-y-2">
-                    <label class="text-[10px] font-black text-on-surface-variant uppercase tracking-widest flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[14px]">person</span>
-                        Nombre del cliente
-                        <span class="text-primary">*</span>
-                    </label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">badge</span>
-                        <input type="text" x-model="nombreCliente"
-                               class="w-full bg-on-surface/5 border border-on-surface/10 rounded-2xl py-3 pl-11 pr-4 text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:ring-0 transition-all font-bold text-sm"
-                               placeholder="Ej: Juan Pérez..."
-                               @keydown.enter.prevent=""/>
-                    </div>
-                    <p class="text-[10px] text-on-surface-variant px-1">Este nombre aparecerá en el pedido para identificar la mesa.</p>
-                </div>
+
 
                 <!-- Botón Confirmar Selección -->
                 <div class="flex justify-end pt-2">
                     <button @click="confirmarSeleccionMesa()" 
-                            :disabled="mesasSeleccionadas.length === 0 || !nombreCliente.trim()"
+                            :disabled="mesasSeleccionadas.length === 0"
                             class="bg-primary text-[#160066] px-8 py-3 rounded-2xl font-black text-sm uppercase tracking-widest disabled:opacity-40 transition-all flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">check_circle</span>
                         Confirmar
@@ -578,7 +556,6 @@
 
       confirmarSeleccionMesa() {
         if (this.mesasSeleccionadas.length === 0) return;
-        if (!this.nombreCliente.trim()) return;
         this.mostrarSelectorMesa = false;
       },
 
