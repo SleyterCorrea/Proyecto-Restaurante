@@ -28,11 +28,7 @@
         </select>
     </div>
     <div class="kds-header__right">
-        <span class="kds-header__user">{{ user.username }}</span>
-        <form action="{% url 'logout' %}" method="post" class="m-0 d-inline">
-            {% csrf_token %}
-            <button type="submit" class="kds-header__btn-logout">Salir</button>
-        </form>
+        <span class="kds-ws-indicator kds-ws-indicator--off" style="font-size:0.7rem;opacity:0.6;" id="ws-indicator-right" title="Estado WebSocket">●&nbsp;En vivo</span>
     </div>
 </div>
 
