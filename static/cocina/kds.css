@@ -6,9 +6,10 @@
 /* ========= VARIABLES ========= */
 :root {
     /* Colores primarios */
-    --kds-primary: #C0392B;
-    --kds-primary-dark: #A93226;
-    --kds-primary-light: #E74C3C;
+    --kds-primary: #c6bfff;
+    --kds-primary-dark: #1a1d27;
+    --kds-primary-light: #4edea3;
+    --kds-undo-color: #C0392B;
 
     /* Estados */
     --color-pendiente: #95A5A6;
@@ -681,17 +682,17 @@
 }
 
 .kds-undo__seconds {
-    color: var(--kds-primary);
+    color: var(--kds-undo-color);
     font-weight: 800;
     font-size: 12px;
 }
 
 .kds-undo__btn {
     padding: 3px 10px;
-    border: 2px solid var(--kds-primary);
+    border: 2px solid var(--kds-undo-color);
     border-radius: 5px;
     background: transparent;
-    color: var(--kds-primary);
+    color: var(--kds-undo-color);
     font-size: 11px;
     font-weight: 700;
     font-family: inherit;
@@ -701,7 +702,7 @@
 }
 
 .kds-undo__btn:hover {
-    background: var(--kds-primary);
+    background: var(--kds-undo-color);
     color: var(--text-white);
     transform: scale(1.05);
 }
