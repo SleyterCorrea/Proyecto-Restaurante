@@ -284,18 +284,46 @@ def api_top_platos(request):
         dia_num = (pico_dia['dia'] if pico_dia and pico_dia['dia'] is not None else None)
         item['dia_pico'] = weekday_es.get(dia_num) if dia_num else None
 
-    # Distribución de rotación (Alta, Media, Baja) basada en porcentaje del plato más vendido
-    alta_count = 0
-    media_count = 0
-    baja_count = 0
+    # Distribución de rotación (Alta, Media, Baja) y clasificación detallada de platos
+    from apps.menu.models import Plato
+    from django.db.models import Value, IntegerField
+
+    platos_alta = []
+    platos_media = []
+    platos_baja_rotacion = []
+
+    # Platos que se han vendido en el periodo filtrado
     for item in qs_all:
         qty = item['cantidad']
+        item['porcentaje'] = round(item['cantidad'] / max_cantidad * 100) if max_cantidad > 0 else 0
         if qty >= max_cantidad * 0.6:
-            alta_count += 1
+            platos_alta.append(item)
         elif qty >= max_cantidad * 0.2:
-            media_count += 1
+            platos_media.append(item)
         else:
-            baja_count += 1
+            platos_baja_rotacion.append(item)
+
+    # Identificar platos activos que NO se vendieron en absoluto durante este periodo (0 ventas)
+    platos_vendidos_ids = [item['plato_id'] for item in qs_all]
+    platos_no_vendidos = list(Plato.objects.filter(activo=True).exclude(id__in=platos_vendidos_ids).values('id', 'nombre'))
+    
+    platos_no_vendidos_mapped = []
+    for p in platos_no_vendidos:
+        platos_no_vendidos_mapped.append({
+            'plato_id': p['id'],
+            'plato__nombre': p['nombre'],
+            'cantidad': 0,
+            'porcentaje': 0,
+            'hora_pico': None,
+            'dia_pico': None
+        })
+
+    # Platos Rezagados/Baja demanda incluye los que se vendieron poco + los que NO se vendieron nada (0 uds)
+    platos_baja = platos_no_vendidos_mapped + platos_baja_rotacion
+
+    alta_count = len(platos_alta)
+    media_count = len(platos_media)
+    baja_count = len(platos_baja)
 
     return Response({
         'top_platos': top_platos,
@@ -304,6 +332,11 @@ def api_top_platos(request):
             'alta': alta_count,
             'media': media_count,
             'baja': baja_count,
+        },
+        'categorizados': {
+            'alta': platos_alta,
+            'media': platos_media,
+            'baja': platos_baja,
         }
     })
 

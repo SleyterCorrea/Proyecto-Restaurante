@@ -174,6 +174,16 @@
   @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
   .skeleton { background: rgb(var(--border) / 0.15); border-radius: 8px; animation: skeleton-pulse 1.6s ease-in-out infinite; }
 
+  /* ── Clickable Rotation Columns ── */
+  .rotacion-col {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .rotacion-col:hover {
+    opacity: 0.9;
+    background: rgb(var(--border) / 0.05);
+    border-radius: 12px;
+  }
+
   [x-cloak] { display: none !important; }
 </style>
 {% endblock %}
@@ -409,21 +419,27 @@
           <canvas id="chartDoughnut"></canvas>
         </div>
         <div class="row text-center mt-3" style="font-size:12px;">
-          <div class="col">
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'alta' ? 'background: rgba(34, 197, 94, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(34, 197, 94, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'alta'">
             <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Estrellas</div>
             <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
               <span style="color:#22c55e; font-size:12px; line-height: 1;">●</span>
               <span class="fw-bold" style="font-size: 14px; color:rgb(var(--on-surface));" x-text="distribucion.alta || 0"></span>
             </div>
           </div>
-          <div class="col">
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'media' ? 'background: rgba(234, 196, 8, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(234, 196, 8, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'media'">
             <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Regulares</div>
             <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
               <span style="color:#eab308; font-size:12px; line-height: 1;">●</span>
               <span class="fw-bold" style="font-size: 14px; color:rgb(var(--on-surface));" x-text="distribucion.media || 0"></span>
             </div>
           </div>
-          <div class="col">
+          <div class="col rotacion-col cursor-pointer"
+               :style="rotacionFiltro === 'baja' ? 'background: rgba(239, 68, 68, 0.08); border-radius: 12px; padding: 10px 4px; border: 1px solid rgba(239, 68, 68, 0.25); transform: translateY(-2px);' : 'padding: 10px 4px; border: 1px solid transparent;'"
+               @click="rotacionFiltro = 'baja'">
             <div class="text-muted" style="font-size: 9px; font-weight: 700; text-transform: uppercase;">Rezagados</div>
             <div class="d-flex align-items-center justify-content-center gap-1 mt-1">
               <span style="color:#ef4444; font-size:12px; line-height: 1;">●</span>
@@ -434,20 +450,20 @@
       </div>
       <div class="r-card p-4">
         <div class="d-flex align-items-center gap-2 mb-3">
-          <span class="material-symbols-outlined" style="color:var(--r-red);font-size:18px;">trending_down</span>
+          <span class="material-symbols-outlined" :style="'color:' + rotacionCardInfo.color + ';font-size:18px;'" x-text="rotacionCardInfo.icon"></span>
           <div>
-            <div class="r-section-title">Menos vendidos</div>
-            <div class="r-section-sub">Platos con baja demanda</div>
+            <div class="r-section-title" x-text="rotacionCardInfo.title"></div>
+            <div class="r-section-sub" x-text="rotacionCardInfo.sub"></div>
           </div>
         </div>
-        <template x-if="peoresPlatos.length === 0">
+        <template x-if="activeRotacionList.length === 0">
           <div class="empty-state" style="padding:20px 0;"><span class="material-symbols-outlined">restaurant_menu</span><p style="font-size:12px;">Sin datos</p></div>
         </template>
-        <div class="d-flex flex-column gap-2">
-          <template x-for="(item, idx) in peoresPlatos" :key="idx">
+        <div class="d-flex flex-column gap-2" style="max-height: 250px; overflow-y: auto; padding-right: 4px;">
+          <template x-for="(item, idx) in activeRotacionList" :key="idx">
             <div class="d-flex justify-content-between align-items-center" style="padding:6px 0;border-bottom:1px solid rgb(var(--border)/0.07);">
               <span style="font-size:12px;color:rgb(var(--on-surface));" x-text="item.plato__nombre"></span>
-              <span style="font-size:11px;font-weight:700;color:var(--r-red);" x-text="item.cantidad + ' uds'"></span>
+              <span :style="'color:' + rotacionCardInfo.color + ';font-weight:700;font-size:11px;'" x-text="item.cantidad + ' uds'"></span>
             </div>
           </template>
         </div>
@@ -710,6 +726,8 @@ function analyticsApp() {
     barChartTimeout: null,
     doughnutChartTimeout: null,
     gaugeChartTimeout: null,
+    categorizados: { alta: [], media: [], baja: [] },
+    rotacionFiltro: 'baja',
 
     async init() {
       try {
@@ -800,6 +818,34 @@ function analyticsApp() {
       }
     },
 
+    get activeRotacionList() {
+      return this.categorizados[this.rotacionFiltro] || [];
+    },
+
+    get rotacionCardInfo() {
+      const config = {
+        alta: {
+          title: 'Platos Estrellas',
+          sub: 'Platos con alta demanda',
+          icon: 'trending_up',
+          color: '#22c55e',
+        },
+        media: {
+          title: 'Platos Regulares',
+          sub: 'Platos con demanda promedio',
+          icon: 'trending_flat',
+          color: '#eab308',
+        },
+        baja: {
+          title: 'Platos Rezagados',
+          sub: 'Platos con baja demanda o sin ventas',
+          icon: 'trending_down',
+          color: '#ef4444',
+        }
+      };
+      return config[this.rotacionFiltro] || config.baja;
+    },
+
     async cargarTodo() {
       await Promise.all([
         this.cargarKPIs(),
@@ -834,6 +880,7 @@ function analyticsApp() {
           this.topPlatos = data.top_platos || [];
           this.peoresPlatos = data.peores_platos || [];
           this.distribucion = data.distribucion || { alta: 0, media: 0, baja: 0 };
+          this.categorizados = data.categorizados || { alta: [], media: [], baja: [] };
           
           if (this.doughnutChartTimeout) clearTimeout(this.doughnutChartTimeout);
           this.doughnutChartTimeout = setTimeout(() => {
