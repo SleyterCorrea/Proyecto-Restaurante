@@ -621,9 +621,9 @@
                                 <div class="col">
                                     <select class="form-select form-select-sm text-xs" x-model="newInsumoId">
                                         <option value="">Agregar insumo...</option>
-                                        <template x-for="insumo in insumosDisponibles" :key="insumo.id">
+                                        <template x-for="insumo in (insumosDisponibles || []).filter(i => i && i.id)" :key="insumo.id">
                                             <option :value="insumo.id"
-                                                x-text="insumo.nombre + ' (' + (insumo.unidad_abreviatura || '') + ')'">
+                                                x-text="(insumo.nombre || 'Insumo ' + insumo.id) + ' (' + (insumo.unidad_abreviatura || '') + ')'">
                                             </option>
                                         </template>
                                     </select>

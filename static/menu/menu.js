@@ -304,7 +304,7 @@ function menuApp() {
                 id: r.id,
                 insumo_id: r.insumo_id,
                 insumo_nombre: r.insumo_nombre,
-                insumo_unidad: r.insumo_unidad,
+                insumo_unidad: r.unidad_abreviatura || r.insumo_unidad || "",
                 insumo_stock: r.insumo_stock,
                 cantidad_por_porcion: r.cantidad_por_porcion,
                 merma_porcentaje: r.merma_porcentaje,
