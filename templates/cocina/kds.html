@@ -19,6 +19,9 @@
         <span class="kds-ws-indicator kds-ws-indicator--off" id="ws-indicator" title="WebSocket desconectado">●</span>
     </div>
     <div class="kds-header__center">
+        <!-- Parte central vacía -->
+    </div>
+    <div class="kds-header__right">
         <label for="filtro-zona" class="kds-header__filter-label">Piso:</label>
         <select id="filtro-zona" class="kds-header__select">
             <option value="">Todas</option>
@@ -26,9 +29,7 @@
             <option value="{{ zona.id }}">{{ zona.nombre }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div class="kds-header__right">
-        <span class="kds-ws-indicator kds-ws-indicator--off" style="font-size:0.7rem;opacity:0.6;" id="ws-indicator-right" title="Estado WebSocket">●&nbsp;En vivo</span>
+        <span class="kds-ws-indicator kds-ws-indicator--off" style="font-size:0.7rem;opacity:0.6;margin-left:12px;" id="ws-indicator-right" title="Estado WebSocket">●&nbsp;En vivo</span>
     </div>
 </div>
 
@@ -53,6 +54,10 @@
             <div class="kds-summary__item">
                 <span class="kds-summary__label">Pedidos urgentes:</span>
                 <span class="kds-summary__value kds-summary__value--urgent" id="pedidos-urgentes">0</span>
+            </div>
+            <div class="kds-summary__item" style="margin-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
+                <span class="kds-summary__label" style="font-size: 0.8rem;">Recién llegados:</span>
+                <span class="kds-summary__value" style="font-size: 1rem; color: var(--kds-warning);" id="pedidos-recien-llegados">0</span>
             </div>
         </div>
 
