@@ -18,9 +18,6 @@
         <h1 class="kds-header__title">Panel de Comandas</h1>
         <span class="kds-ws-indicator kds-ws-indicator--off" id="ws-indicator" title="WebSocket desconectado">●</span>
     </div>
-    <div class="kds-header__center">
-        <!-- Parte central vacía -->
-    </div>
     <div class="kds-header__right">
         <label for="filtro-zona" class="kds-header__filter-label">Piso:</label>
         <select id="filtro-zona" class="kds-header__select">
@@ -29,7 +26,6 @@
             <option value="{{ zona.id }}">{{ zona.nombre }}</option>
             {% endfor %}
         </select>
-        <span class="kds-ws-indicator kds-ws-indicator--off" style="font-size:0.7rem;opacity:0.6;margin-left:12px;" id="ws-indicator-right" title="Estado WebSocket">●&nbsp;En vivo</span>
     </div>
 </div>
 

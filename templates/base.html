@@ -30,6 +30,7 @@
       --on-surface: 255 255 255;
       --on-surface-variant: 165 165 177;
       --sidebar-width: 260px;
+      --calendar-filter: invert(1);
     }
 
     html.light {
@@ -41,9 +42,12 @@
       --border: 0 0 0;
       --on-surface: 17 24 39;
       --on-surface-variant: 75 85 99;
+      --calendar-filter: none;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       font-family: 'Inter', sans-serif;
@@ -60,7 +64,7 @@
     ═══════════════════════════════════ */
     #sidebar {
       width: var(--sidebar-width);
-      min-height: 100vh;
+      height: 100vh;
       background: rgb(var(--surface));
       border-right: 1px solid rgb(var(--border) / 0.08);
       display: flex;
@@ -69,9 +73,28 @@
       top: 0;
       left: 0;
       z-index: 200;
-      transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       overflow-y: auto;
       overflow-x: hidden;
+    }
+
+    /* Clase para cuando el sidebar está colapsado (oculto en desktop) */
+    #sidebar.collapsed-desktop {
+      transform: translateX(-100%);
+    }
+
+    #main-wrapper {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #main-wrapper.expanded-desktop {
+      margin-left: 0;
     }
 
     #sidebar .sidebar-header {
@@ -88,6 +111,7 @@
       align-items: center;
       gap: 0.65rem;
       text-decoration: none;
+      flex: 1;
     }
 
     #sidebar .sidebar-logo .logo-icon {
@@ -108,12 +132,58 @@
       white-space: nowrap;
     }
 
+    .btn-toggle-sidebar-desktop {
+      background: transparent;
+      border: none;
+      color: rgb(var(--on-surface-variant));
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.4rem;
+      padding: 0.2rem;
+      transition: all 0.2s;
+    }
+
+    .btn-toggle-sidebar-desktop:hover {
+      background: rgb(var(--on-surface) / 0.08);
+      color: rgb(var(--on-surface));
+    }
+
+    /* Botón flotante para reabrir el sidebar cuando está oculto */
+    #btn-reopen-sidebar {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 150;
+      background: rgb(var(--surface));
+      border: 1px solid rgb(var(--border) / 0.08);
+      border-radius: 0.5rem;
+      padding: 0.4rem;
+      color: rgb(var(--on-surface));
+      cursor: pointer;
+      display: none;
+      /* Se maneja por JS */
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 1024px) {
+      .btn-toggle-sidebar-desktop {
+        display: none !important;
+      }
+
+      #btn-reopen-sidebar {
+        display: none !important;
+      }
+    }
+
     #sidebar .sidebar-nav {
       flex: 1;
       padding: 1rem 0.75rem;
       display: flex;
       flex-direction: column;
       gap: 0.15rem;
+      overflow-y: auto;
     }
 
     #sidebar .nav-section-label {
@@ -212,7 +282,7 @@
     }
 
     #sidebar .icon-btn.danger:hover {
-      background: rgba(239,68,68,0.1);
+      background: rgba(239, 68, 68, 0.1);
       color: #f87171;
     }
 
@@ -232,7 +302,7 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.55);
+      background: rgba(0, 0, 0, 0.55);
       backdrop-filter: blur(2px);
       z-index: 199;
       opacity: 0;
@@ -278,15 +348,7 @@
 
     /* ═══════════════════════════════════
        MAIN CONTENT
-    ═══════════════════════════════════ */
-    #main-wrapper {
-      margin-left: var(--sidebar-width);
-      flex: 1;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
+    /* Eliminado porque se movió arriba */
 
     /* ═══════════════════════════════════
        RESPONSIVE — ≤ 1024px
@@ -298,7 +360,7 @@
 
       #sidebar.open {
         transform: translateX(0);
-        box-shadow: 4px 0 30px rgba(0,0,0,0.4);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.4);
       }
 
       #sidebar-overlay {
@@ -323,19 +385,55 @@
     /* ═══════════════════════════════════
        MODO CLARO — overrides
     ═══════════════════════════════════ */
-    html.light .bg-white\/5  { background-color: rgba(0,0,0,0.04) !important; }
-    html.light .bg-white\/10 { background-color: rgba(0,0,0,0.08) !important; }
-    html.light .bg-white\/20 { background-color: rgba(0,0,0,0.12) !important; }
-    html.light .bg-black\/20 { background-color: rgba(0,0,0,0.05) !important; }
-    html.light .bg-black\/40 { background-color: rgba(0,0,0,0.06) !important; }
-    html.light .text-white   { color: rgb(var(--on-surface)) !important; }
-    html.light .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
-    html.light .border-white\/10 { border-color: rgba(0,0,0,0.1) !important; }
-    html.light .border-white\/20 { border-color: rgba(0,0,0,0.15) !important; }
-    html.light .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.06) !important; }
-    html.light .btn-close-white  { filter: invert(1); }
-    html.light .table         { color: rgb(var(--on-surface)) !important; }
-    html.light .table-dark    {
+    html.light .bg-white\/5 {
+      background-color: rgba(0, 0, 0, 0.04) !important;
+    }
+
+    html.light .bg-white\/10 {
+      background-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    html.light .bg-white\/20 {
+      background-color: rgba(0, 0, 0, 0.12) !important;
+    }
+
+    html.light .bg-black\/20 {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    html.light .bg-black\/40 {
+      background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html.light .text-white {
+      color: rgb(var(--on-surface)) !important;
+    }
+
+    html.light .border-white\/5 {
+      border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html.light .border-white\/10 {
+      border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    html.light .border-white\/20 {
+      border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    html.light .divide-white\/5>*+* {
+      border-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html.light .btn-close-white {
+      filter: invert(1);
+    }
+
+    html.light .table {
+      color: rgb(var(--on-surface)) !important;
+    }
+
+    html.light .table-dark {
       --bs-table-color: rgb(var(--on-surface));
       --bs-table-bg: transparent;
       --bs-table-border-color: rgb(var(--border) / 0.12);
@@ -348,7 +446,10 @@
       color: rgb(var(--on-surface)) !important;
       background: transparent !important;
     }
-    html.light .hover\:bg-white\/5:hover { background-color: rgba(0,0,0,0.04) !important; }
+
+    html.light .hover\:bg-white\/5:hover {
+      background-color: rgba(0, 0, 0, 0.04) !important;
+    }
 
     /* ═══════════════════════════════════
        FORMS
@@ -364,35 +465,62 @@
       border-radius: 24px;
     }
 
-    [x-cloak] { display: none !important; }
+    [x-cloak] {
+      display: none !important;
+    }
 
-    .table-dark { --bs-table-bg: transparent; color: rgb(var(--on-surface)); }
-    .table td, .table th { border-color: rgb(var(--border) / 0.1); vertical-align: middle; }
-    .text-muted { color: rgb(var(--on-surface-variant)) !important; font-weight: 500; }
+    .table-dark {
+      --bs-table-bg: transparent;
+      color: rgb(var(--on-surface));
+    }
 
-    .form-control, .form-select {
+    .table td,
+    .table th {
+      border-color: rgb(var(--border) / 0.1);
+      vertical-align: middle;
+    }
+
+    .text-muted {
+      color: rgb(var(--on-surface-variant)) !important;
+      font-weight: 500;
+    }
+
+    .form-control,
+    .form-select {
       background-color: rgb(var(--surface) / 0.5) !important;
       border: 1px solid rgb(var(--border) / 0.1) !important;
       color: rgb(var(--on-surface)) !important;
       transition: all 0.2s ease;
     }
-    .form-control:focus, .form-select:focus {
+
+    .form-control:focus,
+    .form-select:focus {
       background-color: rgb(var(--surface) / 0.8) !important;
       border-color: rgb(var(--primary)) !important;
       color: rgb(var(--on-surface)) !important;
       box-shadow: 0 0 0 4px rgb(var(--primary) / 0.15) !important;
     }
-    .form-control::placeholder { color: rgb(var(--on-surface-variant)) !important; opacity: 0.8; }
+
+    .form-control::placeholder {
+      color: rgb(var(--on-surface-variant)) !important;
+      opacity: 0.8;
+    }
+
     .input-group-text {
       background-color: rgb(var(--surface) / 0.5) !important;
       border: 1px solid rgb(var(--border) / 0.1) !important;
       color: rgb(var(--on-surface-variant)) !important;
     }
+
     input[type="date"]::-webkit-calendar-picker-indicator {
-      filter: {% if config_global.tema_oscuro %}invert(1){% else %}none{% endif %};
-      opacity: 0.7; cursor: pointer;
+      filter: var(--calendar-filter);
+      opacity: 0.7;
+      cursor: pointer;
     }
-    input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+    input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
   </style>
 
   <script id="tailwind-config">
@@ -426,15 +554,18 @@
       <span class="material-symbols-outlined" style="font-size:1.25rem">menu</span>
     </button>
     <a href="{% url 'index' %}" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
-      <div style="background:linear-gradient(135deg,rgb(var(--primary)),rgb(var(--secondary)));padding:0.35rem;border-radius:0.6rem;display:flex;">
-        <span class="material-symbols-outlined" style="font-size:1.1rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
+      <div
+        style="background:linear-gradient(135deg,rgb(var(--primary)),rgb(var(--secondary)));padding:0.35rem;border-radius:0.6rem;display:flex;">
+        <span class="material-symbols-outlined"
+          style="font-size:1.1rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
       </div>
       <span style="font-size:0.95rem;font-weight:900;color:rgb(var(--on-surface));">RestaurantOS</span>
     </a>
     {% if user.is_authenticated %}
     <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem;">
       {% if user.rol.nombre == 'ADMIN' or user.rol.nombre == 'MOZO' %}
-      <button onclick="toggleTemaGlobal()" class="hamburger" title="Cambiar tema" style="background:rgb(var(--primary)/0.12);color:rgb(var(--primary));">
+      <button onclick="toggleTemaGlobal()" class="hamburger" title="Cambiar tema"
+        style="background:rgb(var(--primary)/0.12);color:rgb(var(--primary));">
         <span class="material-symbols-outlined" style="font-size:1.1rem;">{% if config_global.tema_oscuro %}light_mode{% else %}dark_mode{% endif %}</span>
       </button>
       {% endif %}
@@ -454,10 +585,14 @@
     <div class="sidebar-header">
       <a href="{% url 'index' %}" class="sidebar-logo">
         <div class="logo-icon">
-          <span class="material-symbols-outlined" style="font-size:1.15rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
+          <span class="material-symbols-outlined"
+            style="font-size:1.15rem;color:rgb(var(--bg));font-weight:700;">restaurant</span>
         </div>
         <span class="logo-text">RestaurantOS</span>
       </a>
+      <button class="btn-toggle-sidebar-desktop" id="btn-collapse-sidebar" title="Ocultar menú">
+        <span class="material-symbols-outlined" style="font-size:1.3rem;">keyboard_double_arrow_left</span>
+      </button>
     </div>
 
     <!-- Nav Links -->
@@ -499,7 +634,8 @@
       <a href="{% url 'admin_reportes' %}" class="nav-item {% block nav_admin %}{% endblock %}">
         <span class="material-symbols-outlined">dashboard</span> Dashboard
       </a>
-      <a href="{% url 'admin_menu' %}" class="nav-item {% block nav_menu %}{% endblock %} {% block nav_menu_sidebar %}{% endblock %}">
+      <a href="{% url 'admin_menu' %}"
+        class="nav-item {% block nav_menu %}{% endblock %} {% block nav_menu_sidebar %}{% endblock %}">
         <span class="material-symbols-outlined">restaurant_menu</span> Gestión de Menú
       </a>
       <a href="/admin-panel/inventario/" class="nav-item {% block nav_inventario %}{% endblock %}">
@@ -533,8 +669,12 @@
           <span class="material-symbols-outlined" style="font-size:0.95rem;color:rgb(var(--primary));">person</span>
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:0.75rem;font-weight:800;color:rgb(var(--on-surface));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user.username }}</div>
-          <div style="font-size:0.58rem;font-weight:700;color:rgb(var(--primary));text-transform:uppercase;letter-spacing:0.1em;">{{ user.rol.nombre }}</div>
+          <div
+            style="font-size:0.75rem;font-weight:800;color:rgb(var(--on-surface));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            {{ user.username }}</div>
+          <div
+            style="font-size:0.58rem;font-weight:700;color:rgb(var(--primary));text-transform:uppercase;letter-spacing:0.1em;">
+            {{ user.rol.nombre }}</div>
         </div>
       </div>
       <div class="sidebar-actions">
@@ -569,18 +709,16 @@
   <!-- Bootstrap 5 JS (Bundle con Popper) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Contenedor de Notificaciones (Toasts) -->
-  <div x-data="notificacionesGlobal()" 
-       class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+  <div x-data="notificacionesGlobal()"
+    class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
     <template x-for="notif in toasts" :key="notif.id">
-      <div x-show="notif.show"
-           x-transition:enter="transition ease-out duration-300"
-           x-transition:enter-start="opacity-0 translate-y-4 scale-95"
-           x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-           x-transition:leave="transition ease-in duration-200"
-           x-transition:leave-start="opacity-100 translate-y-0"
-           x-transition:leave-end="opacity-0 translate-x-12"
-           class="glass-card pointer-events-auto p-4 rounded-3xl border border-primary/20 shadow-2xl flex items-center gap-4 relative overflow-hidden group">
-        
+      <div x-show="notif.show" x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+        x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+        x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 translate-x-12"
+        class="glass-card pointer-events-auto p-4 rounded-3xl border border-primary/20 shadow-2xl flex items-center gap-4 relative overflow-hidden group">
+
         <!-- Icon -->
         <div class="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary">
           <span class="material-symbols-outlined font-bold text-2xl">restaurant</span>
@@ -588,20 +726,20 @@
 
         <!-- Content -->
         <div class="flex-1">
-            <h6 class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">¡Pedido Listo!</h6>
-            <p class="text-xs text-white font-bold mb-0">
-                Mesa <span x-text="notif.mesa"></span>: 
-                <span class="text-on-surface-variant font-medium" x-text="notif.plato"></span>
-            </p>
-            <p class="text-[9px] text-on-surface-variant mt-1" x-text="'Cliente: ' + notif.cliente"></p>
+          <h6 class="text-[10px] font-black text-primary uppercase tracking-widest mb-1">¡Pedido Listo!</h6>
+          <p class="text-xs text-white font-bold mb-0">
+            Mesa <span x-text="notif.mesa"></span>:
+            <span class="text-on-surface-variant font-medium" x-text="notif.plato"></span>
+          </p>
+          <p class="text-[9px] text-on-surface-variant mt-1" x-text="'Cliente: ' + notif.cliente"></p>
         </div>
 
         <!-- Progress Bar -->
         <div class="absolute bottom-0 left-0 h-1 bg-secondary transition-all duration-[5000ms] ease-linear"
-             :style="'width: ' + (notif.show ? '0%' : '100%')"></div>
-        
+          :style="'width: ' + (notif.show ? '0%' : '100%')"></div>
+
         <button @click="notif.show = false" class="text-on-surface-variant/40 hover:text-white transition-colors">
-            <span class="material-symbols-outlined text-base">close</span>
+          <span class="material-symbols-outlined text-base">close</span>
         </button>
       </div>
     </template>
@@ -619,34 +757,34 @@
           const rolNombre = "{{ user.rol.nombre|upper }}";
           const esMozo = rolNombre === "MOZO" || rolNombre === "MESERO";
           const esAdmin = rolNombre === "ADMIN";
-          
+
           this.shouldConnect = ("{{ user.is_authenticated }}" === "True" && (esMozo || esAdmin));
-          
+
           if (this.shouldConnect) {
             // Conectar si la pestaña está visible
             if (document.visibilityState === 'visible') {
-                this.conectarWebSocket();
+              this.conectarWebSocket();
             }
 
             // Gestionar la conexión basada en si la pestaña está activa o en segundo plano
             // Esto evita agotar el límite de 6 conexiones de Chrome cuando hay múltiples pestañas abiertas
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    this.conectarWebSocket();
-                } else {
-                    this.desconectarWebSocket();
-                }
+              if (document.visibilityState === 'visible') {
+                this.conectarWebSocket();
+              } else {
+                this.desconectarWebSocket();
+              }
             });
           }
         },
         conectarWebSocket() {
           if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-              return; // Ya está conectado o conectando
+            return; // Ya está conectado o conectando
           }
 
           const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
           const socketUrl = protocol + window.location.host + '/ws/notificaciones/';
-          
+
           this.socket = new WebSocket(socketUrl);
 
           this.socket.onmessage = (e) => {
@@ -662,21 +800,21 @@
             this.socket = null;
             // Solo intentar reconectar automáticamente si la pestaña sigue visible
             if (document.visibilityState === 'visible') {
-                console.log('Reconectando en 5s...');
-                setTimeout(() => {
-                    if (document.visibilityState === 'visible') this.conectarWebSocket();
-                }, 5000);
+              console.log('Reconectando en 5s...');
+              setTimeout(() => {
+                if (document.visibilityState === 'visible') this.conectarWebSocket();
+              }, 5000);
             }
           };
         },
         desconectarWebSocket() {
-            if (this.socket) {
-                console.log('Pestaña oculta: cerrando WebSocket para liberar conexiones.');
-                // Limpiar el onclose para que no intente reconectar
-                this.socket.onclose = null; 
-                this.socket.close();
-                this.socket = null;
-            }
+          if (this.socket) {
+            console.log('Pestaña oculta: cerrando WebSocket para liberar conexiones.');
+            // Limpiar el onclose para que no intente reconectar
+            this.socket.onclose = null;
+            this.socket.close();
+            this.socket = null;
+          }
         },
         agregarToast(data) {
           const id = Date.now();
@@ -687,15 +825,15 @@
             cliente: data.cliente,
             plato: data.plato
           };
-          
+
           this.toasts.push(nuevoToast);
-          
+
           // Audio de notificación (opcional - requiere interacción previa del usuario)
           try {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
             audio.volume = 0.4;
             audio.play();
-          } catch(e) {}
+          } catch (e) { }
 
           setTimeout(() => {
             const index = this.toasts.findIndex(t => t.id === id);
@@ -712,29 +850,29 @@
     function toggleTemaGlobal() {
       // CSRF token extraído de las cookies
       const csrfToken = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
-      
+
       fetch('/api/configuracion/toggle-tema/', {
         method: 'POST',
         headers: { 'X-CSRFToken': csrfToken }
       })
-      .then(r => r.json())
-      .then(data => {
-        if(data.ok) {
-          window.location.reload(); // Recarga la página para aplicar el cambio global
-        } else {
-          alert('Error: ' + data.error);
-        }
-      })
-      .catch(e => console.error('Error cambiando tema:', e));
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            window.location.reload(); // Recarga la página para aplicar el cambio global
+          } else {
+            alert('Error: ' + data.error);
+          }
+        })
+        .catch(e => console.error('Error cambiando tema:', e));
     }
   </script>
 
   <script>
     // ── Sidebar toggle (mobile) ──────────────────────────────────
-    (function() {
-      const toggle   = document.getElementById('sidebar-toggle');
-      const sidebar  = document.getElementById('sidebar');
-      const overlay  = document.getElementById('sidebar-overlay');
+    (function () {
+      const toggle = document.getElementById('sidebar-toggle');
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
 
       function openSidebar() {
         sidebar.classList.add('open');
@@ -752,13 +890,39 @@
       if (overlay) overlay.addEventListener('click', closeSidebar);
 
       // Cerrar también si se navega a otro enlace en mobile
-      document.querySelectorAll('#sidebar .nav-item').forEach(function(link) {
-        link.addEventListener('click', function() {
+      document.querySelectorAll('#sidebar .nav-item').forEach(function (link) {
+        link.addEventListener('click', function () {
           if (window.innerWidth <= 1024) closeSidebar();
         });
       });
+
+      // ── Sidebar collapse (desktop) ───────────────────────────────
+      const btnCollapse = document.getElementById('btn-collapse-sidebar');
+      const btnReopen = document.getElementById('btn-reopen-sidebar');
+      const mainWrapper = document.getElementById('main-wrapper');
+
+      function collapseSidebar() {
+        sidebar.classList.add('collapsed-desktop');
+        mainWrapper.classList.add('expanded-desktop');
+        btnReopen.style.display = 'flex';
+      }
+
+      function expandSidebar() {
+        sidebar.classList.remove('collapsed-desktop');
+        mainWrapper.classList.remove('expanded-desktop');
+        btnReopen.style.display = 'none';
+      }
+
+      if (btnCollapse) btnCollapse.addEventListener('click', collapseSidebar);
+      if (btnReopen) btnReopen.addEventListener('click', expandSidebar);
+
     })();
   </script>
+
+  <!-- Botón para reabrir sidebar en desktop -->
+  <button id="btn-reopen-sidebar" title="Mostrar menú">
+    <span class="material-symbols-outlined" style="font-size:1.3rem;">menu</span>
+  </button>
 
   {% block extra_js %}{% endblock %}
 </body>
