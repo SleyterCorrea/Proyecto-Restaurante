@@ -362,17 +362,36 @@
           const esMozo = rolNombre === "MOZO" || rolNombre === "MESERO";
           const esAdmin = rolNombre === "ADMIN";
           
-          if ("{{ user.is_authenticated }}" === "True" && (esMozo || esAdmin)) {
-            this.conectarWebSocket();
+          this.shouldConnect = ("{{ user.is_authenticated }}" === "True" && (esMozo || esAdmin));
+          
+          if (this.shouldConnect) {
+            // Conectar si la pestaña está visible
+            if (document.visibilityState === 'visible') {
+                this.conectarWebSocket();
+            }
+
+            // Gestionar la conexión basada en si la pestaña está activa o en segundo plano
+            // Esto evita agotar el límite de 6 conexiones de Chrome cuando hay múltiples pestañas abiertas
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    this.conectarWebSocket();
+                } else {
+                    this.desconectarWebSocket();
+                }
+            });
           }
         },
         conectarWebSocket() {
+          if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+              return; // Ya está conectado o conectando
+          }
+
           const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
           const socketUrl = protocol + window.location.host + '/ws/notificaciones/';
           
-          const socket = new WebSocket(socketUrl);
+          this.socket = new WebSocket(socketUrl);
 
-          socket.onmessage = (e) => {
+          this.socket.onmessage = (e) => {
             console.log("WebSocket mensaje recibido:", e.data);
             const data = JSON.parse(e.data);
             if (data.type === 'comida_lista') {
@@ -380,10 +399,26 @@
             }
           };
 
-          socket.onclose = () => {
-            console.log('WebSocket cerrado. Reconectando en 5s...');
-            setTimeout(() => this.conectarWebSocket(), 5000);
+          this.socket.onclose = () => {
+            console.log('WebSocket cerrado.');
+            this.socket = null;
+            // Solo intentar reconectar automáticamente si la pestaña sigue visible
+            if (document.visibilityState === 'visible') {
+                console.log('Reconectando en 5s...');
+                setTimeout(() => {
+                    if (document.visibilityState === 'visible') this.conectarWebSocket();
+                }, 5000);
+            }
           };
+        },
+        desconectarWebSocket() {
+            if (this.socket) {
+                console.log('Pestaña oculta: cerrando WebSocket para liberar conexiones.');
+                // Limpiar el onclose para que no intente reconectar
+                this.socket.onclose = null; 
+                this.socket.close();
+                this.socket = null;
+            }
         },
         agregarToast(data) {
           const id = Date.now();

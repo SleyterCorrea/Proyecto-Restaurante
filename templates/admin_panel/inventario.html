@@ -115,14 +115,14 @@ html.light {
     pointer-events: none;
 }
 .inv-search-input {
-    background: var(--inv-surface-alt);
-    border: 1px solid var(--inv-border);
-    color: var(--inv-text);
+    background: var(--inv-surface-alt) !important;
+    border: 1px solid var(--inv-border) !important;
+    color: var(--inv-text) !important;
     border-radius: 0.5rem;
-    padding: 0.5rem 1rem 0.5rem 2.5rem;
+    padding: 0.5rem 1rem 0.5rem 2.5rem !important;
     width: 100%;
 }
-.inv-search-input:focus { outline: none; border-color: var(--inv-green); }
+.inv-search-input:focus { outline: none !important; border-color: var(--inv-green) !important; box-shadow: 0 0 0 1px var(--inv-green) !important; }
 
 .inv-filters { display: flex; gap: 0.5rem; background: var(--inv-surface); padding: 0.25rem; border-radius: 0.5rem; }
 
@@ -138,6 +138,45 @@ html.light {
 }
 .inv-filter-btn:hover { color: var(--inv-text); }
 .inv-filter-btn.active { background: var(--inv-green); color: #000; }
+
+.inv-modal-content {
+    background: var(--inv-surface);
+    border: 1px solid var(--inv-border);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    border-radius: 0.75rem;
+}
+.inv-modal-header {
+    border-bottom: 1px solid var(--inv-border);
+}
+.inv-modal-footer {
+    border-top: 1px solid var(--inv-border);
+}
+.inv-input-mockup {
+    background: var(--inv-bg) !important;
+    border: 1px solid var(--inv-border) !important;
+    color: var(--inv-text) !important;
+    border-radius: 0.375rem;
+    padding: 0.6rem 0.75rem;
+}
+.inv-input-mockup:focus {
+    border-color: var(--inv-green) !important;
+    box-shadow: 0 0 0 1px var(--inv-green) !important;
+}
+.inv-label-mockup {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--inv-text);
+    margin-bottom: 0.5rem;
+}
+.inv-label-asterisk {
+    color: var(--inv-green);
+}
+.inv-vista-previa-box {
+    background: var(--inv-bg);
+    border: 1px solid var(--inv-border);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+}
 
 .inv-btn-outline {
     background: transparent;
@@ -163,6 +202,14 @@ html.light {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+.inv-btn-primary:hover:not(:disabled) {
+    background: #059669;
+}
+.inv-btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    background: var(--inv-green);
 }
 
 /* Tabla */
@@ -388,10 +435,16 @@ html.light {
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'bajo' }" @click="filtroEstado='bajo'">Bajo Stock</button>
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'agotado' }" @click="filtroEstado='agotado'">Agotado</button>
             </div>
-            <button class="inv-btn-outline">
-                <span class="material-symbols-outlined" style="font-size:18px">filter_list</span>
-                Filtros
-            </button>
+            <select class="inv-search-input py-1 px-3" style="max-width: 160px; cursor: pointer; height: 36px; border-radius: 8px;" x-model="filtroCategoria">
+                <option value="todas">Todas las categorías</option>
+                <option value="PROTEINA">Proteínas</option>
+                <option value="VEGETAL">Vegetales</option>
+                <option value="BEBIDA">Bebidas</option>
+                <option value="SECO">Secos / Abarrotes</option>
+                <option value="LACTEO">Lácteos</option>
+                <option value="CONDIMENTO">Condimentos</option>
+                <option value="OTRO">Otros</option>
+            </select>
         </div>
     </div>
 
@@ -738,175 +791,128 @@ html.light {
     </div>
 </div>
 
-<!-- ── Modal Nuevo / Editar Insumo ── -->
+<!-- MODAL CREAR / EDITAR INSUMO -->
 <div class="modal fade" id="modalInsumo" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content inv-card inv-modal-insumo">
-            <!-- Header con ícono y subtítulo -->
-            <div class="modal-header border-0 pb-0">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="inv-modal-icon"
-                         :class="formInsumo.id ? 'inv-modal-icon-edit' : 'inv-modal-icon-new'">
-                        <span class="material-symbols-outlined" style="font-size:24px"
-                              x-text="formInsumo.id ? 'edit' : 'add_box'"></span>
-                    </div>
-                    <div>
-                        <h5 class="modal-title fw-bold inv-text-main mb-0"
-                            x-text="formInsumo.id ? 'Editar Insumo' : 'Nuevo Insumo'"></h5>
-                        <p class="small inv-text-muted mb-0"
-                           x-text="formInsumo.id ? 'Actualiza los datos del insumo' : 'Agrega un insumo al catálogo de inventario'"></p>
-                    </div>
+    <div class="modal-dialog modal-dialog-centered border-0">
+        <div class="modal-content inv-modal-content">
+            <div class="modal-header inv-modal-header d-flex align-items-center gap-3 py-3 px-4">
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="modal-title fw-bold inv-text-main mb-0"
+                        x-text="formInsumo.id ? 'Editar Insumo' : 'Nuevo Insumo'"></h5>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close btn-close-white ms-auto" @click="modalInsumoForm.hide()"></button>
             </div>
+            <div class="modal-body p-4">
 
-            <div class="modal-body pt-3">
-                <!-- Nombre -->
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold inv-text-muted">
-                        Nombre del insumo <span class="text-danger">*</span>
-                    </label>
-                    <input type="text"
-                           class="form-control inv-input"
-                           :class="{'is-invalid': formInsumoErrors.nombre, 'is-warning': !formInsumoErrors.nombre && formInsumoWarnings.nombre}"
+                <!-- Error general del servidor (permisos, validación global, etc.) -->
+                <div x-show="formInsumoErrorGeneral"
+                     class="alert d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+                     style="background:rgba(248,113,113,0.12); border:1px solid #F87171; color:#F87171; font-size:0.875rem;">
+                    <span class="material-symbols-outlined" style="font-size:18px; flex-shrink:0; margin-top:1px">error</span>
+                    <span x-text="formInsumoErrorGeneral"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label class="inv-label-mockup">Nombre del insumo <span class="inv-label-asterisk">*</span></label>
+                    <input type="text" class="form-control inv-input-mockup"
+                           id="insumo_nombre_input"
                            x-model="formInsumo.nombre"
                            @input="validarFormInsumo()"
-                           placeholder="Ej: Lomo Fino"
-                           maxlength="120">
-                    <div class="invalid-feedback" x-show="formInsumoErrors.nombre" x-text="formInsumoErrors.nombre"></div>
+                           placeholder="Ej: Lomo Fino" autocomplete="off">
+                    <div class="invalid-feedback d-block" x-show="formInsumoErrors.nombre" x-text="formInsumoErrors.nombre"></div>
                     <div class="inv-warning-feedback" x-show="!formInsumoErrors.nombre && formInsumoWarnings.nombre" x-text="formInsumoWarnings.nombre"></div>
-                    <div class="form-text inv-text-muted d-flex justify-content-between">
-                        <span>Nombre único, máx 120 caracteres</span>
-                        <span x-text="(formInsumo.nombre || '').length + ' / 120'"></span>
-                    </div>
+                    <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Nombre único, máx 120 caracteres</div>
                 </div>
 
-                <!-- Unidad -->
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold inv-text-muted">
-                        Unidad de Medida <span class="text-danger">*</span>
-                    </label>
-                    <select class="form-select inv-input"
-                            :class="{'is-invalid': formInsumoErrors.unidad_medida}"
-                            x-model="formInsumo.unidad_medida"
-                            @change="validarFormInsumo()">
-                        <option value="">Seleccione una unidad…</option>
+                <div class="mb-4">
+                    <label class="inv-label-mockup">Unidad de Medida <span class="inv-label-asterisk">*</span></label>
+                    <select class="form-select inv-input-mockup" x-model="formInsumo.unidad_medida" @change="validarFormInsumo()">
+                        <option value="" disabled selected hidden>Seleccione una unidad...</option>
                         {% for u in unidades %}
                         <option value="{{ u.id }}">{{ u.nombre }} ({{ u.abreviatura }})</option>
                         {% endfor %}
                     </select>
-                    <div class="invalid-feedback" x-show="formInsumoErrors.unidad_medida" x-text="formInsumoErrors.unidad_medida"></div>
+                    <div class="invalid-feedback d-block" x-show="formInsumoErrors.unidad_medida" x-text="formInsumoErrors.unidad_medida"></div>
                 </div>
 
-                <!-- Categoría -->
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold inv-text-muted">
-                        Categoría <span class="text-danger">*</span>
-                    </label>
-                    <select class="form-select inv-input"
-                            :class="{'is-invalid': formInsumoErrors.categoria}"
-                            x-model="formInsumo.categoria"
-                            @change="validarFormInsumo()">
+                <div class="mb-4">
+                    <label class="inv-label-mockup">Categoría <span class="inv-label-asterisk">*</span></label>
+                    <select class="form-select inv-input-mockup" x-model="formInsumo.categoria" @change="validarFormInsumo()">
+                        <option value="" disabled selected hidden>Seleccione una categoría...</option>
                         <option value="PROTEINA">🥩 Proteínas</option>
                         <option value="VEGETAL">🥦 Vegetales</option>
                         <option value="BEBIDA">🥤 Bebidas</option>
                         <option value="SECO">🌾 Secos / Abarrotes</option>
-                        <option value="LACTEO">🥛 Lácteos</option>
+                        <option value="LACTEO">🧀 Lácteos</option>
                         <option value="CONDIMENTO">🧂 Condimentos</option>
                         <option value="OTRO">📦 Otros</option>
                     </select>
-                    <div class="invalid-feedback" x-show="formInsumoErrors.categoria" x-text="formInsumoErrors.categoria"></div>
+                    <div class="invalid-feedback d-block" x-show="formInsumoErrors.categoria" x-text="formInsumoErrors.categoria"></div>
                 </div>
 
-                <!-- Stock mínimo + Costo unitario -->
-                <div class="row g-3">
-                    <div class="col-12 col-md-6">
-                        <label class="form-label small fw-semibold inv-text-muted">
-                            Stock Mínimo <span class="text-danger">*</span>
-                        </label>
-                        <div class="input-group">
-                            <input type="number" step="0.001" min="0"
-                                   class="form-control inv-input"
-                                   :class="{'is-invalid': formInsumoErrors.stock_minimo}"
-                                   x-model.number="formInsumo.stock_minimo"
-                                   @input="validarFormInsumo()"
-                                   placeholder="0">
-                            <span class="input-group-text inv-input-addon" x-text="unidadAbrev || '—'"></span>
-                        </div>
-                        <div class="form-text inv-text-muted">Umbral para alertar reposición.</div>
+                <div class="row gx-3 mb-4">
+                    <div class="col-sm-6 mb-3 mb-sm-0">
+                        <label class="inv-label-mockup">Stock Mínimo <span class="inv-label-asterisk">*</span></label>
+                        <input type="number" step="0.001" min="0" class="form-control inv-input-mockup"
+                               x-model.number="formInsumo.stock_minimo"
+                               @input="validarFormInsumo()"
+                               placeholder="0">
+                        <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Umbral para alertar reposición.</div>
+                        <div class="invalid-feedback d-block" x-show="formInsumoErrors.stock_minimo" x-text="formInsumoErrors.stock_minimo"></div>
                     </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label small fw-semibold inv-text-muted">
-                            Costo Unitario <span class="text-danger">*</span>
-                        </label>
+                    <div class="col-sm-6">
+                        <label class="inv-label-mockup">Costo Unitario <span class="inv-label-asterisk">*</span></label>
                         <div class="input-group">
-                            <span class="input-group-text inv-input-addon">S/.</span>
-                            <input type="number" step="0.01" min="0"
-                                   class="form-control inv-input"
-                                   :class="{'is-invalid': formInsumoErrors.costo_unitario}"
+                            <span class="input-group-text inv-input-addon inv-input-mockup border-end-0" style="background:var(--inv-bg)">S/.</span>
+                            <input type="number" step="0.01" min="0" class="form-control inv-input-mockup border-start-0"
                                    x-model.number="formInsumo.costo_unitario"
                                    @input="validarFormInsumo()"
                                    placeholder="0.00">
                         </div>
-                        <div class="form-text inv-text-muted">Costo de adquisición por unidad.</div>
-                    </div>
-
-                    <!-- Stock inicial — solo al crear -->
-                    <div class="col-12" x-show="!formInsumo.id">
-                        <label class="form-label small fw-semibold inv-text-muted">
-                            Stock Inicial
-                        </label>
-                        <div class="input-group">
-                            <input type="number" step="0.001" min="0"
-                                   class="form-control inv-input"
-                                   x-model.number="formInsumo.stock_inicial"
-                                   placeholder="0">
-                            <span class="input-group-text inv-input-addon" x-text="unidadAbrev || '—'"></span>
-                        </div>
-                        <div class="form-text inv-text-muted">Cantidad disponible al momento de crearlo (opcional).</div>
+                        <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Costo de adquisición por unidad.</div>
+                        <div class="invalid-feedback d-block" x-show="formInsumoErrors.costo_unitario" x-text="formInsumoErrors.costo_unitario"></div>
                     </div>
                 </div>
 
-                <!-- Preview: estado estimado + valor en stock -->
-                <div class="inv-form-preview mt-4 p-3" x-show="formInsumo.nombre && formInsumo.unidad_medida">
-                    <div class="small fw-semibold inv-text-muted mb-2">Vista previa</div>
-                    <div class="row g-3 align-items-center">
-                        <div class="col-6">
-                            <div class="small inv-text-muted">Valor inicial en stock</div>
-                            <div class="fw-bold inv-text-main"
-                                 x-text="'S/. ' + (((formInsumo.stock_inicial || 0) * (formInsumo.costo_unitario || 0))).toFixed(2)"></div>
-                        </div>
-                        <div class="col-6 text-end">
-                            <div class="small inv-text-muted">Estado al crear</div>
-                            <span class="badge rounded-pill px-3"
-                                  :class="(formInsumo.stock_inicial || 0) <= 0 ? 'bg-danger' :
-                                          ((formInsumo.stock_inicial || 0) <= (formInsumo.stock_minimo || 0) ? 'bg-warning text-dark' : 'bg-success')"
-                                  x-text="(formInsumo.stock_inicial || 0) <= 0 ? 'Agotado' :
-                                          ((formInsumo.stock_inicial || 0) <= (formInsumo.stock_minimo || 0) ? 'Bajo' : 'OK')"></span>
-                        </div>
+                <div class="mb-4" x-show="!formInsumo.id">
+                    <label class="inv-label-mockup">Stock Inicial</label>
+                    <input type="number" step="0.001" min="0" class="form-control inv-input-mockup"
+                           x-model.number="formInsumo.stock_inicial"
+                           @input="validarFormInsumo()"
+                           placeholder="0">
+                    <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Cantidad disponible al momento de crearlo (opcional).</div>
+                    <div class="invalid-feedback d-block" x-show="formInsumoErrors.stock_inicial" x-text="formInsumoErrors.stock_inicial"></div>
+                    <div class="inv-warning-feedback d-block" x-show="!formInsumoErrors.stock_inicial && formInsumoWarnings.stock_inicial" x-text="formInsumoWarnings.stock_inicial"></div>
+                </div>
+
+                <!-- Resumen VISTA PREVIA al crear -->
+                <div class="inv-vista-previa-box" x-show="!formInsumo.id">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="inv-text-muted fw-medium">Vista previa</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="inv-text-main" style="font-size:0.9rem;">Valor inicial en stock</span>
+                        <span class="inv-text-main fw-bold" style="color:var(--inv-green);" x-text="previewValor"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="inv-text-main" style="font-size:0.9rem;">Estado al crear</span>
+                        <span class="badge" :class="previewBadgeClass" x-text="previewEstado"></span>
                     </div>
                 </div>
             </div>
 
-            <div class="modal-footer border-0 pt-2 d-flex justify-content-between">
-                <button class="btn inv-btn-edit" data-bs-dismiss="modal">
-                    <span class="material-symbols-outlined align-middle" style="font-size:16px">close</span>
+            <div class="modal-footer inv-modal-footer pt-3 pb-3 px-4 d-flex justify-content-between">
+                <button type="button" class="btn text-white px-0 text-decoration-none" style="opacity: 0.7;" @click="modalInsumoForm.hide()" :disabled="guardando">
                     Cancelar
                 </button>
                 <button type="button"
-                        class="btn btn-accent d-flex align-items-center gap-2 px-4"
+                        class="btn inv-btn-primary d-flex align-items-center gap-2 px-4"
                         @click="guardarInsumo()"
                         :disabled="guardando || !formInsumoValido">
-                    <span class="spinner-border spinner-border-sm" role="status" x-show="guardando" x-cloak></span>
-                    <span class="material-symbols-outlined" style="font-size:18px" x-show="!guardando" x-cloak>
-                        <span x-show="formInsumo.id">save</span>
-                        <span x-show="!formInsumo.id">add</span>
+                    <span class="spinner-border spinner-border-sm" role="status" x-show="guardando"></span>
+                    <span class="fw-semibold" x-show="!guardando" x-text="formInsumo.id ? 'Guardar cambios' : 'Guardar'">
                     </span>
-                    <span class="fw-semibold" x-show="!guardando" x-cloak>
-                        <span x-show="formInsumo.id">Guardar cambios</span>
-                        <span x-show="!formInsumo.id">Crear insumo</span>
-                    </span>
-                    <span class="fw-semibold" x-show="guardando" x-cloak>Guardando…</span>
+                    <span class="fw-semibold" x-show="guardando">Guardando…</span>
                 </button>
             </div>
         </div>
@@ -939,14 +945,16 @@ function inventarioApp() {
         selectedInsumo: null,
         busqueda: '',
         filtroEstado: 'todos',
+        filtroCategoria: 'todas',
         sortCol: 'nombre',
         sortDir: 'asc',
         guardando: false,
         toasts: [],
         ajuste: { tipo: 'AJUSTE_POSITIVO', cantidad: 0, motivo: '' },
-        formInsumo: { id: null, nombre: '', unidad_medida: '', categoria: 'OTRO', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 },
+        formInsumo: { id: null, nombre: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 },
         formInsumoErrors: {},
         formInsumoWarnings: {},
+        formInsumoErrorGeneral: '',
         modalAjuste: null,
         modalInsumoForm: null,
         modalHistorial: null,
@@ -954,9 +962,21 @@ function inventarioApp() {
         modalAtajos: null,
         movimientosGlobales: [],
         seleccionados: [],
+        paginaActual: 1,
+        totalItems: 0,
+        totalPaginas: 1,
+        itemsPorPagina: 20,
+
+        // Vista previa: valores reactivos actualizados explícitamente en validarFormInsumo()
+        previewValor: 'S/. 0.00',
+        previewEstado: 'Agotado',
+        previewBadgeClass: 'bg-danger',
 
         // helper: parsea cualquier valor numérico de forma segura
         pf: v => parseFloat(v) || 0,
+        
+        // helper: elimina tildes y acentos para búsquedas
+        removeAccents: str => str.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
 
         nivelStock(insumo) {
             const real = parseFloat(insumo.stock_real) || 0;
@@ -1216,18 +1236,26 @@ function inventarioApp() {
         },
 
         get insumosFiltrados() {
+            const b = this.removeAccents((this.busqueda || '').toLowerCase());
             let lista = this.insumos.filter(i => {
                 const r = parseFloat(i.stock_real)   || 0;
                 const m = parseFloat(i.stock_minimo) || 0;
                 const ok     = r > m;
                 const bajo   = r <= m && r > 0;
                 const agot   = r <= 0;
-                const matchN = i.nombre.toLowerCase().includes(this.busqueda.toLowerCase());
+                
+                const n = this.removeAccents((i.nombre || '').toLowerCase());
+                const c = this.removeAccents((i.categoria || '').toLowerCase());
+                const u = this.removeAccents((i.unidad_abreviatura || '').toLowerCase());
+                
+                const matchN = n.includes(b) || c.includes(b) || u.includes(b);
+                const matchC = this.filtroCategoria === 'todas' || i.categoria === this.filtroCategoria;
+                
                 const matchE = this.filtroEstado === 'todos'
                     || (this.filtroEstado === 'ok'      && ok)
                     || (this.filtroEstado === 'bajo'    && bajo)
                     || (this.filtroEstado === 'agotado' && agot);
-                return matchN && matchE;
+                return matchN && matchE && matchC;
             });
             // ordenar
             lista.sort((a, b) => {
@@ -1275,28 +1303,49 @@ function inventarioApp() {
             if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
         },
 
+        async fetchInsumos() {
+            try {
+                const url = new URL('/api/inventario/insumos/', window.location.origin);
+                // Solo agregar page si es un número válido >= 1
+                if (this.paginaActual && Number.isInteger(this.paginaActual) && this.paginaActual >= 1) {
+                    url.searchParams.append('page', this.paginaActual);
+                }
+                // Traer todos los insumos activos (sin filtros de server, el filtrado es client-side)
+                url.searchParams.append('page_size', 200);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                const resp = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!resp.ok) {
+                    console.error('[INV] fetchInsumos error HTTP:', resp.status);
+                    return;  // No corromper this.insumos si el servidor falla
+                }
+
+                const data = await resp.json();
+                const lista = data.results ?? data;
+                if (Array.isArray(lista)) {
+                    this.insumos = lista;
+                    this.totalItems = data.count ?? lista.length;
+                    this.totalPaginas = Math.ceil(this.totalItems / this.itemsPorPagina) || 1;
+                } else {
+                    console.error('[INV] fetchInsumos: respuesta inesperada del servidor', data);
+                }
+            } catch (e) {
+                if (e.name !== 'AbortError') console.error('[INV] Error fetching insumos:', e);
+            }
+        },
+
         toast(mensaje, tipo = 'ok') {
             const id = Date.now();
             this.toasts.push({ id, mensaje, tipo });
             setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4000);
-        },
-
-        async fetchInsumos() {
-            try {
-                // La API devuelve paginación: {count, next, previous, results:[...]}
-                // Cargamos todas las páginas para mostrar el inventario completo
-                let url = '/api/inventario/insumos/?page_size=100';
-                let todos = [];
-                while (url) {
-                    const resp = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-                    if (!resp.ok) { this.toast(`Error al cargar insumos (HTTP ${resp.status})`, 'error'); return; }
-                    const data = await resp.json();
-                    const pagina = Array.isArray(data) ? data : (data.results || []);
-                    todos = todos.concat(pagina);
-                    url = Array.isArray(data) ? null : (data.next || null);
-                }
-                this.insumos = todos;
-            } catch { this.toast('Respuesta inesperada del servidor', 'error'); }
         },
 
         async fetchUnidades() {
@@ -1353,17 +1402,27 @@ function inventarioApp() {
         },
 
         nuevoInsumo() {
-            this.formInsumo = { id: null, nombre: '', unidad_medida: '', categoria: 'OTRO', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 };
+            this.formInsumo = { id: null, nombre: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0 };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
+            this.formInsumoErrorGeneral = '';
             this.guardando = false;
+            this.previewValor = 'S/. 0.00';
+            this.previewEstado = 'Agotado';
+            this.previewBadgeClass = 'bg-danger';
             this.modalInsumoForm.show();
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    document.getElementById('insumo_nombre_input')?.focus();
+                }, 150);
+            });
         },
 
         editarInsumo(i) {
             this.formInsumo = { id: i.id, nombre: i.nombre, unidad_medida: i.unidad_medida, categoria: i.categoria || 'OTRO', stock_minimo: i.stock_minimo, costo_unitario: i.costo_unitario, stock_inicial: 0 };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
+            this.formInsumoErrorGeneral = '';
             this.guardando = false;
             this.modalInsumoForm.show();
         },
@@ -1374,15 +1433,28 @@ function inventarioApp() {
             const f = this.formInsumo;
             const nombre = (f.nombre || '').trim();
             // Errores DURO (bloquean guardar)
-            if (!nombre) errors.nombre = 'El nombre es obligatorio.';
-            else if (nombre.length > 120) errors.nombre = 'Máximo 120 caracteres.';
+            if (!f.nombre) errors.nombre = 'El nombre es obligatorio.';
+            else if (f.nombre.length > 120) errors.nombre = 'Máximo 120 caracteres.';
             if (!f.unidad_medida) errors.unidad_medida = 'Selecciona una unidad de medida.';
+            if (!f.categoria) errors.categoria = 'Selecciona una categoría.';
+            
             const sm = parseFloat(f.stock_minimo);
             if (f.stock_minimo === '' || f.stock_minimo === null || isNaN(sm) || sm < 0)
                 errors.stock_minimo = 'Debe ser un número ≥ 0.';
             const cu = parseFloat(f.costo_unitario);
             if (f.costo_unitario === '' || f.costo_unitario === null || isNaN(cu) || cu < 0)
                 errors.costo_unitario = 'Debe ser un número ≥ 0.';
+            
+            const si = parseFloat(f.stock_inicial);
+            if (!f.id) {
+                if (!isNaN(si) && si < 0) {
+                    errors.stock_inicial = 'El stock inicial no puede ser negativo.';
+                }
+                if (!isNaN(si) && si > 0 && si <= sm) {
+                    warnings.stock_inicial = 'El stock inicial está por debajo o igual al mínimo. El insumo quedará en estado BAJO.';
+                }
+            }
+
             // Advertencia: nombre potencialmente duplicado (NO bloquea — el backend tiene la verdad)
             if (nombre && nombre.length <= 120) {
                 const dup = this.insumos.find(i =>
@@ -1393,59 +1465,155 @@ function inventarioApp() {
             }
             this.formInsumoErrors = errors;
             this.formInsumoWarnings = warnings;
+
+            // Actualizar vista previa (solo aplica al crear, no editar)
+            if (!f.id) {
+                const siP = parseFloat(f.stock_inicial) || 0;
+                const cuP = parseFloat(f.costo_unitario) || 0;
+                const smP = parseFloat(f.stock_minimo) || 0;
+                this.previewValor = 'S/. ' + (siP * cuP).toFixed(2);
+                if (siP <= 0)       { this.previewEstado = 'Agotado'; this.previewBadgeClass = 'bg-danger'; }
+                else if (siP <= smP){ this.previewEstado = 'Bajo';    this.previewBadgeClass = 'bg-warning text-dark'; }
+                else                { this.previewEstado = 'OK';      this.previewBadgeClass = 'bg-success'; }
+            }
+
             return Object.keys(errors).length === 0;
         },
 
         get formInsumoValido() {
-            // Solo errores duros bloquean; campos mínimos presentes
-            return Object.keys(this.formInsumoErrors).length === 0
-                && (this.formInsumo.nombre || '').trim() !== ''
-                && !!this.formInsumo.unidad_medida;
+            try {
+                // Solo los campos del formulario bloquean el botón (no errores generales del servidor)
+                const camposFormulario = ['nombre','unidad_medida','categoria','stock_minimo','costo_unitario','stock_actual','stock_real','stock_inicial'];
+                const tieneErroresCampo = camposFormulario.some(c => !!(this.formInsumoErrors || {})[c]);
+                return !tieneErroresCampo
+                    && (this.formInsumo.nombre || '').trim() !== ''
+                    && !!this.formInsumo.unidad_medida
+                    && !!this.formInsumo.categoria;
+            } catch(e) { return false; }
         },
 
         get unidadAbrev() {
-            const id = parseInt(this.formInsumo.unidad_medida);
-            if (!id) return '';
-            const u = this.unidades.find(x => x.id === id);
-            return u ? u.abreviatura : '';
+            try {
+                const id = parseInt(this.formInsumo.unidad_medida);
+                if (!id || isNaN(id)) return '—';
+                const u = (this.unidades || []).find(x => x.id === id);
+                return u ? u.abreviatura : '—';
+            } catch(e) { return '—'; }
         },
 
         async guardarInsumo() {
-            if (!this.validarFormInsumo()) {
-                this.toast('Revisa los campos marcados', 'error');
-                return;
-            }
-            this.guardando = true;
-            const isEdit = !!this.formInsumo.id;
-            const body = { nombre: this.formInsumo.nombre, unidad_medida: this.formInsumo.unidad_medida, categoria: this.formInsumo.categoria, stock_minimo: this.formInsumo.stock_minimo, costo_unitario: this.formInsumo.costo_unitario };
-            if (!isEdit) { body.stock_actual = this.formInsumo.stock_inicial || 0; body.stock_real = this.formInsumo.stock_inicial || 0; }
+            // Todo dentro de try-catch-finally para garantizar que guardando vuelva a false
             try {
-                const resp = await fetch(isEdit ? `/api/inventario/insumos/${this.formInsumo.id}/` : '/api/inventario/insumos/', {
-                    method: isEdit ? 'PUT' : 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
-                    body: JSON.stringify(body)
+                this.formInsumoErrorGeneral = '';
+                if (!this.validarFormInsumo()) {
+                    this.toast('Revisa los campos marcados', 'error');
+                    return;
+                }
+                this.guardando = true;
+
+                const isEdit = !!this.formInsumo.id;
+                const url = isEdit ? `/api/inventario/insumos/${this.formInsumo.id}/` : '/api/inventario/insumos/';
+                const body = {
+                    nombre: (this.formInsumo.nombre || '').trim(),
+                    unidad_medida: parseInt(this.formInsumo.unidad_medida) || null,
+                    categoria: this.formInsumo.categoria || 'OTRO',
+                    stock_minimo: parseFloat(this.formInsumo.stock_minimo) || 0,
+                    costo_unitario: parseFloat(this.formInsumo.costo_unitario) || 0
+                };
+                if (!isEdit) {
+                    const inicial = parseFloat(this.formInsumo.stock_inicial) || 0;
+                    body.stock_actual = inicial;
+                    body.stock_real = inicial;
+                }
+
+                const csrfToken = this._csrf();
+                console.log('[INV] Guardando →', url, body, 'csrf:', csrfToken ? 'OK' : 'VACIO');
+
+                // Timeout de 10 segundos para evitar que el botón se quede pegado si el servidor o la red fallan
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                const resp = await fetch(url, {
+                    method: isEdit ? 'PUT' : 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(body),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
+                console.log('[INV] Respuesta HTTP:', resp.status);
+
                 if (resp.ok) {
-                    this.modalInsumoForm.hide();
-                    await this.fetchInsumos();
-                    this.toast(isEdit ? `"${this.formInsumo.nombre}" actualizado` : `"${this.formInsumo.nombre}" creado`);
-                } else {
-                    // Mapear errores del backend al objeto formInsumoErrors
-                    const err = await resp.json().catch(() => ({}));
-                    const nuevosErrores = {};
-                    for (const campo of Object.keys(err)) {
-                        const msgs = Array.isArray(err[campo]) ? err[campo] : [err[campo]];
-                        nuevosErrores[campo] = msgs.join(' ');
-                    }
-                    if (Object.keys(nuevosErrores).length > 0) {
-                        this.formInsumoErrors = { ...this.formInsumoErrors, ...nuevosErrores };
-                        this.toast(Object.values(nuevosErrores).join(' '), 'error');
+                    // Actualizar el array local directamente desde la respuesta (evita refetch con paginación)
+                    const insumoGuardado = await resp.json().catch(() => null);
+                    if (insumoGuardado && insumoGuardado.id) {
+                        if (isEdit) {
+                            const idx = this.insumos.findIndex(i => i.id === insumoGuardado.id);
+                            if (idx >= 0) this.insumos.splice(idx, 1, insumoGuardado);
+                            else this.insumos.push(insumoGuardado);
+                        } else {
+                            this.insumos.push(insumoGuardado);
+                        }
                     } else {
-                        this.toast('Error al guardar', 'error');
+                        // Fallback: refrescar lista si la respuesta no tiene datos
+                        await this.fetchInsumos();
+                    }
+                    if (this.modalInsumoForm) this.modalInsumoForm.hide();
+                    this.toast(isEdit ? `"${body.nombre}" actualizado ✓` : `"${body.nombre}" creado ✓`);
+                } else {
+                    let err = {};
+                    try { err = await resp.json(); } catch(e) {}
+                    console.error('[INV] Error al guardar, HTTP', resp.status, err);
+
+                    // Campos del formulario que tienen un <div> de error visible
+                    const camposFormulario = new Set(['nombre','unidad_medida','categoria','stock_minimo','costo_unitario','stock_actual','stock_real','stock_inicial']);
+
+                    const erroresCampo = {};
+                    const erroresGenerales = [];
+
+                    for (const [campo, val] of Object.entries(err)) {
+                        const msgs = Array.isArray(val) ? val : [String(val)];
+                        const texto = msgs.join(' ');
+                        if (camposFormulario.has(campo)) {
+                            erroresCampo[campo] = texto;
+                        } else {
+                            // detail, non_field_errors, permission errors, etc.
+                            erroresGenerales.push(texto);
+                        }
+                    }
+
+                    if (Object.keys(erroresCampo).length > 0) {
+                        this.formInsumoErrors = { ...this.formInsumoErrors, ...erroresCampo };
+                    }
+
+                    if (erroresGenerales.length > 0) {
+                        // Mostrar en el banner rojo del modal (visible y persistente)
+                        this.formInsumoErrorGeneral = erroresGenerales.join(' | ');
+                        this.toast(erroresGenerales[0], 'error');
+                    } else if (Object.keys(erroresCampo).length > 0) {
+                        this.toast('Corrige los campos marcados en rojo', 'error');
+                    } else {
+                        // Respuesta vacía o formato inesperado
+                        this.formInsumoErrorGeneral = `Error del servidor (HTTP ${resp.status}). Verifica los logs.`;
+                        this.toast(`Error HTTP ${resp.status} al guardar`, 'error');
                     }
                 }
-            } catch { this.toast('Error de conexión', 'error'); }
-            finally { this.guardando = false; }
+            } catch (e) {
+                console.error('[INV] Error en guardarInsumo:', e.name, e.message, e);
+                const msg = e.name === 'AbortError'
+                    ? 'Timeout: el servidor tardó demasiado. Intenta de nuevo.'
+                    : `Error: ${e.message || 'Error de conexión'}`;
+                this.formInsumoErrorGeneral = msg;
+                this.toast(msg, 'error');
+            } finally {
+                this.guardando = false;
+                console.log('[INV] guardando = false (finally)');
+            }
         },
 
         async desactivarInsumo(insumo) {
