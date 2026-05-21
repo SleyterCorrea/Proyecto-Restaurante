@@ -201,12 +201,6 @@
         Métricas en tiempo real &bull; Turno: <span class="fw-bold" style="color:rgb(var(--primary));" x-text="turnoCodigo"></span>
       </p>
     </div>
-    <a href="{% url 'api_exportar_csv' %}"
-       class="d-flex align-items-center gap-2 px-3 py-2"
-       style="background:rgb(var(--surface));border:1px solid rgb(var(--border)/0.1);border-radius:10px;color:rgb(var(--on-surface));text-decoration:none;font-size:12px;font-weight:700;letter-spacing:0.05em;">
-      <span class="material-symbols-outlined" style="font-size:17px;">download</span>
-      Exportar CSV
-    </a>
   </div>
 
   <!-- ─── Global Filter Bar ─── -->
@@ -517,7 +511,7 @@
             <th>TURNO</th>
             <th>DETALLE</th>
             <th>PRECIO INICIAL</th>
-            <th>IGV (10%)</th>
+            <th>IGV (18%)</th>
             <th>GANANCIA FINAL</th>
             <th>METODO</th>
             <th>ESTADO</th>
@@ -571,14 +565,33 @@
       </table>
     </div>
 
-    <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2"
+    <div class="mt-4 d-flex justify-content-between align-items-center flex-wrap gap-3"
          x-show="!loadingHistorial && historial.length > 0">
-      <span style="font-size:12px;color:#64748b;">
+      <span style="font-size:12px;color:rgb(var(--on-surface-variant));">
         <span x-text="historial.length"></span> ventas registradas
       </span>
-      <span style="font-size:12px;color:#64748b;">
-        Total neto: <strong style="color:#22c55e;" x-text="'S/. ' + historial.reduce((a,v)=>a+(v.estado === 'PERDIDA' ? 0 : v.neto),0).toFixed(2)"></strong>
-      </span>
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#22c55e;letter-spacing:0.06em;">Total cobrado</div>
+          <div style="font-size:15px;font-weight:800;color:#22c55e;" 
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.bruto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;letter-spacing:0.06em;">IGV 18%</div>
+          <div style="font-size:15px;font-weight:800;color:#3b82f6;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.impuesto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(139,124,248,0.08);border:1px solid rgba(139,124,248,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#8b7cf8;letter-spacing:0.06em;">Neto sin IGV</div>
+          <div style="font-size:15px;font-weight:800;color:#8b7cf8;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PAGADO').reduce((a,v) => a + v.neto, 0).toFixed(2)"></div>
+        </div>
+        <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:8px 14px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#ef4444;letter-spacing:0.06em;">Pérdidas</div>
+          <div style="font-size:15px;font-weight:800;color:#ef4444;"
+               x-text="'S/. ' + historial.filter(v => v.estado === 'PERDIDA').reduce((a,v) => a + v.bruto, 0).toFixed(2)"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -913,6 +926,42 @@ function analyticsApp() {
           this.gaugeChartTimeout = setTimeout(() => {
             this.renderGaugeChart();
           }, 100);
+          // Export CSV function
+          this.exportCSV = function() {
+            // Build CSV header
+            const headers = ['Fecha','Mesa','Mozo','Turno','Detalle','Neto','Impuesto','Bruto','Estado','Método'];
+            const rows = this.historial.map(v => [
+              v.fecha,
+              v.mesa,
+              v.mozo,
+              v.turno,
+              v.detalle,
+              v.neto,
+              v.impuesto,
+              v.bruto,
+              v.estado,
+              v.metodo
+            ].map(item => {
+              // Escape commas and quotes
+              const str = String(item ?? '');
+              if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+              }
+              return str;
+            }));
+            const csvContent = [headers, ...rows].map(e => e.join(',')).join('\r\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const now = new Date();
+            const fname = `reporte_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.csv`;
+            link.setAttribute('href', url);
+            link.setAttribute('download', fname);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          };
         }
       } catch(e) {
         console.error('Historial error', e);

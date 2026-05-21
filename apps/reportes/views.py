@@ -435,22 +435,53 @@ def api_ventas_historial(request):
 @permission_classes([EsCajeroOAdmin])
 def api_exportar_csv(request):
     """
-    Genera y descarga un archivo CSV con el detalle de todas las comandas cobradas en el turno.
+    Genera y descarga un archivo CSV profesional con BOM UTF-8
+    para que Excel lo abra correctamente con tildes y caracteres especiales.
     """
     turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
     if not turno:
         return Response({'error': 'No hay turno activo'}, status=400)
 
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="reporte_ventas_{turno.codigo_turno}.csv"'
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = f'attachment; filename="Reporte_Ventas_{turno.codigo_turno}.csv"'
 
-    writer = csv.writer(response)
-    writer.writerow(['Codigo', 'Mesa', 'Mozo', 'Apertura', 'Cierre', 'Total Bruto', 'Impuesto (10%)', 'Neto', 'Metodo Pago'])
+    # utf-8-sig agrega el BOM automáticamente — Excel lo detecta y muestra tildes correctamente
+    writer = csv.writer(response, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
 
-    TAX_RATE = 0.10
+    # ── Encabezado del reporte ──
+    writer.writerow(['REPORTE DE VENTAS', '', '', '', '', '', '', '', ''])
+    writer.writerow(['Turno:', turno.codigo_turno, '', 'Cajero:', turno.cajero.username, '', 'Fecha apertura:', turno.fecha_apertura.strftime('%d/%m/%Y %H:%M'), ''])
+    writer.writerow(['Estado:', turno.get_estado_display(), '', 'Punto de caja:', turno.get_punto_caja_display(), '', '', '', ''])
+    writer.writerow(['', '', '', '', '', '', '', '', ''])  # fila vacía
+
+    # ── Cabecera de columnas ──
+    writer.writerow([
+        'N°',
+        'Código Comanda',
+        'Mesa',
+        'Mozo',
+        'Apertura',
+        'Cierre',
+        'Detalle',
+        'Método de Pago',
+        'Estado',
+        'Precio Neto (sin IGV)',
+        'IGV (18%)',
+        'Total Bruto',
+    ])
+
+    TAX_RATE = 0.18
     comandas = Comanda.objects.filter(
         pagos__caja_turno=turno
-    ).distinct().select_related('mesa', 'mozo')
+    ).distinct().select_related('mesa', 'mozo').prefetch_related(
+        'lineas__plato', 'pagos__metodo_pago'
+    ).order_by('fecha_apertura')
+
+    total_bruto = 0
+    total_igv = 0
+    total_neto = 0
+    total_perdidas = 0
+    contador = 1
 
     for c in comandas:
         pago = c.pagos.filter(caja_turno=turno).first()
