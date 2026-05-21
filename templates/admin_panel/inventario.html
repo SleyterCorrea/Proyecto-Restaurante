@@ -415,7 +415,7 @@ html.light {
                     <span>VALOR STOCK</span>
                     <span class="material-symbols-outlined" style="font-size:20px; color:var(--inv-pink)">payments</span>
                 </div>
-                <div class="inv-metric-number inv-num" x-text="'$' + insumosFiltrados.reduce((s,i)=>s+pf(i.stock_real)*pf(i.costo_unitario),0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})">—</div>
+                <div class="inv-metric-number inv-num" x-text="'S/. ' + insumosFiltrados.reduce((s,i)=>s+pf(i.stock_real)*pf(i.costo_unitario),0).toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2})">—</div>
                 <div class="inv-metric-sub">COSTO ACUMULADO</div>
             </div>
         </div>
@@ -446,6 +446,27 @@ html.light {
                 <option value="OTRO">Otros</option>
             </select>
         </div>
+    </div>
+
+    <!-- Barra selección múltiple -->
+    <div x-show="seleccionados.length > 0"
+         class="d-flex align-items-center gap-3 px-4 py-2 mb-2 rounded-3"
+         style="background:rgba(198,191,255,0.08); border:1px solid rgba(198,191,255,0.2);">
+        <span class="small fw-semibold" style="color:var(--inv-text);">
+            <span x-text="seleccionados.length"></span> seleccionado<span x-show="seleccionados.length > 1">s</span>
+        </span>
+        <button class="inv-btn-outline d-flex align-items-center gap-1"
+                style="font-size:0.8rem; padding:0.3rem 0.8rem; color:var(--inv-red); border-color:var(--inv-red);"
+                @click="desactivarSeleccionados()">
+            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+            Desactivar seleccionados
+        </button>
+        <button class="inv-btn-outline d-flex align-items-center gap-1"
+                style="font-size:0.8rem; padding:0.3rem 0.8rem;"
+                @click="seleccionados = []">
+            <span class="material-symbols-outlined" style="font-size:16px">close</span>
+            Deseleccionar
+        </button>
     </div>
 
     <!-- Tabla -->
@@ -511,7 +532,7 @@ html.light {
                                 <span class="inv-num inv-text-main" x-text="pf(insumo.stock_minimo).toFixed(2)"></span>
                             </td>
                             <td>
-                                <span class="inv-num inv-text-main" x-text="'$' + pf(insumo.costo_unitario).toFixed(2)"></span>
+                                <span class="inv-num inv-text-main" x-text="'S/. ' + pf(insumo.costo_unitario).toFixed(2)"></span>
                             </td>
                             <td>
                                 <span class="inv-status-badge"
@@ -520,9 +541,22 @@ html.light {
                                 </span>
                             </td>
                             <td class="text-end">
-                                <button class="inv-action-btn" title="Editar insumo" @click="editarInsumo(insumo)">
-                                    <span class="material-symbols-outlined" style="font-size:18px">edit</span>
-                                </button>
+                                <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <button class="inv-action-btn" title="Ajustar stock" @click="ajustarStock(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">swap_vert</span>
+                                    </button>
+                                    <button class="inv-action-btn" title="Ver historial" @click="verHistorial(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">history</span>
+                                    </button>
+                                    <button class="inv-action-btn" title="Editar insumo" @click="editarInsumo(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+                                    </button>
+                                    <button class="inv-action-btn" title="Desactivar insumo"
+                                            style="color:var(--inv-red)!important; opacity:0.75;"
+                                            @click="desactivarInsumo(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     </template>
@@ -537,7 +571,7 @@ html.light {
             </span>
         </div>
     </div>
-</div>
+    <!-- /inv-table-card — x-data="inventarioApp" sigue abierto, cubre todos los modales -->
 
 <!-- ── Modal Atajos de teclado ── -->
 <div class="modal fade" id="modalAtajos" tabindex="-1">
@@ -644,6 +678,7 @@ html.light {
         </div>
     </div>
 </div>
+<!-- /modalMovimientosGlobales -->
 
 <!-- ── Modal Historial ── -->
 <div class="modal fade" id="modalHistorial" tabindex="-1">
@@ -818,6 +853,7 @@ html.light {
                            id="insumo_nombre_input"
                            x-model="formInsumo.nombre"
                            @input="validarFormInsumo()"
+                           :style="formInsumoErrors.nombre ? 'border-color:#F87171!important;' : ''"
                            placeholder="Ej: Lomo Fino" autocomplete="off">
                     <div class="invalid-feedback d-block" x-show="formInsumoErrors.nombre" x-text="formInsumoErrors.nombre"></div>
                     <div class="inv-warning-feedback" x-show="!formInsumoErrors.nombre && formInsumoWarnings.nombre" x-text="formInsumoWarnings.nombre"></div>
@@ -826,7 +862,8 @@ html.light {
 
                 <div class="mb-4">
                     <label class="inv-label-mockup">Unidad de Medida <span class="inv-label-asterisk">*</span></label>
-                    <select class="form-select inv-input-mockup" x-model="formInsumo.unidad_medida" @change="validarFormInsumo()">
+                    <select class="form-select inv-input-mockup" x-model="formInsumo.unidad_medida" @change="validarFormInsumo()"
+                            :style="formInsumoErrors.unidad_medida ? 'border-color:#F87171!important;' : ''">
                         <option value="" disabled selected hidden>Seleccione una unidad...</option>
                         {% for u in unidades %}
                         <option value="{{ u.id }}">{{ u.nombre }} ({{ u.abreviatura }})</option>
@@ -837,7 +874,8 @@ html.light {
 
                 <div class="mb-4">
                     <label class="inv-label-mockup">Categoría <span class="inv-label-asterisk">*</span></label>
-                    <select class="form-select inv-input-mockup" x-model="formInsumo.categoria" @change="validarFormInsumo()">
+                    <select class="form-select inv-input-mockup" x-model="formInsumo.categoria" @change="validarFormInsumo()"
+                            :style="formInsumoErrors.categoria ? 'border-color:#F87171!important;' : ''">
                         <option value="" disabled selected hidden>Seleccione una categoría...</option>
                         <option value="PROTEINA">🥩 Proteínas</option>
                         <option value="VEGETAL">🥦 Vegetales</option>
@@ -902,13 +940,14 @@ html.light {
             </div>
 
             <div class="modal-footer inv-modal-footer pt-3 pb-3 px-4 d-flex justify-content-between">
-                <button type="button" class="btn text-white px-0 text-decoration-none" style="opacity: 0.7;" @click="modalInsumoForm.hide()" :disabled="guardando">
+                <button type="button" class="btn text-white px-0 text-decoration-none" style="opacity: 0.7;"
+                        @click="guardando = false; formInsumoErrorGeneral = ''; modalInsumoForm.hide()">
                     Cancelar
                 </button>
                 <button type="button"
                         class="btn inv-btn-primary d-flex align-items-center gap-2 px-4"
                         @click="guardarInsumo()"
-                        :disabled="guardando || !formInsumoValido">
+                        :disabled="guardando">
                     <span class="spinner-border spinner-border-sm" role="status" x-show="guardando"></span>
                     <span class="fw-semibold" x-show="!guardando" x-text="formInsumo.id ? 'Guardar cambios' : 'Guardar'">
                     </span>
@@ -934,6 +973,9 @@ html.light {
         </div>
     </template>
 </div>
+<!-- /Toasts -->
+</div>
+<!-- /x-data="inventarioApp" — todos los modales y toasts ya están dentro del scope Alpine -->
 
 <script>
 function inventarioApp() {
@@ -1280,6 +1322,8 @@ function inventarioApp() {
         },
 
         async init() {
+            console.log('[INV] v2026-05-21d — Inventario App iniciando (botones acción + selección múltiple)');
+
             // Cargar datos SSR desde los elementos <script type="application/json">
             try {
                 const elI = document.getElementById('inv-insumos-ssr');
@@ -1294,6 +1338,44 @@ function inventarioApp() {
             try { this.modalHistorial  = new bootstrap.Modal(document.getElementById('modalHistorial')); } catch(e) {}
             this._keyHandler = (e) => this._onKeyDown(e);
             window.addEventListener('keydown', this._keyHandler);
+
+            // Watchdog de seguridad: si guardando queda pegado > 20s, lo resetea automáticamente
+            this._watchdog = setInterval(() => {
+                if (this.guardando) {
+                    console.warn('[INV] Watchdog: guardando lleva >20s pegado — reseteando');
+                    this.guardando = false;
+                    this.formInsumoErrorGeneral = 'La operación tardó demasiado. Intenta de nuevo.';
+                }
+            }, 20000);
+
+            // Funciones de diagnóstico y rescate desde la consola del navegador
+            window._invTest = () => {
+                const csrf = this._csrf();
+                const um = (this.unidades[0] || {}).id || 1;
+                console.log('[INV] Test directo a la API...');
+                fetch('/api/inventario/insumos/', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type':'application/json','X-CSRFToken': csrf,'Accept':'application/json'},
+                    body: JSON.stringify({nombre:'_test_'+Date.now(),unidad_medida:um,categoria:'OTRO',stock_minimo:0,costo_unitario:0,stock_actual:0,stock_real:0})
+                }).then(r => r.json().then(d => console.log('[INV] Test HTTP '+r.status+':', d))).catch(e => console.error('[INV] Test ERROR:', e));
+            };
+            // Resetea el estado si el botón queda pegado
+            window._invReset = () => {
+                this.guardando = false;
+                this.formInsumoErrorGeneral = '';
+                console.log('[INV] Estado reseteado: guardando=false');
+            };
+            // Muestra el estado actual del formulario
+            window._invState = () => {
+                console.log('[INV] guardando:', this.guardando);
+                console.log('[INV] formInsumoValido:', this.formInsumoValido);
+                console.log('[INV] formInsumo:', JSON.stringify(this.formInsumo));
+                console.log('[INV] errors:', JSON.stringify(this.formInsumoErrors));
+            };
+            // Fuerza el guardado desde la consola (útil para diagnóstico)
+            window._invGuardar = () => this.guardarInsumo();
+            console.log('[INV] Consola: _invReset() | _invState() | _invGuardar() | _invTest()');
+
             // Fallback API si SSR no entregó datos
             if (this.insumos.length === 0)  await this.fetchInsumos();
             if (this.unidades.length === 0) await this.fetchUnidades();
@@ -1301,6 +1383,7 @@ function inventarioApp() {
 
         destroy() {
             if (this._keyHandler) window.removeEventListener('keydown', this._keyHandler);
+            if (this._watchdog) clearInterval(this._watchdog);
         },
 
         async fetchInsumos() {
@@ -1502,13 +1585,26 @@ function inventarioApp() {
         },
 
         async guardarInsumo() {
+            console.log('[INV] guardarInsumo() llamado — guardando actual:', this.guardando, '| valido:', this.formInsumoValido);
             // Todo dentro de try-catch-finally para garantizar que guardando vuelva a false
             try {
                 this.formInsumoErrorGeneral = '';
                 if (!this.validarFormInsumo()) {
-                    this.toast('Revisa los campos marcados', 'error');
+                    // Construir mensaje con los campos faltantes
+                    const faltantes = [];
+                    if (this.formInsumoErrors.nombre) faltantes.push('Nombre');
+                    if (this.formInsumoErrors.unidad_medida) faltantes.push('Unidad de medida');
+                    if (this.formInsumoErrors.categoria) faltantes.push('Categoría');
+                    if (this.formInsumoErrors.stock_minimo) faltantes.push('Stock mínimo');
+                    if (this.formInsumoErrors.costo_unitario) faltantes.push('Costo unitario');
+                    const msg = faltantes.length
+                        ? `Completa los campos requeridos: ${faltantes.join(', ')}`
+                        : 'Revisa los campos marcados en rojo';
+                    this.formInsumoErrorGeneral = msg;
+                    this.toast(msg, 'error');
                     return;
                 }
+                this.formInsumoErrorGeneral = '';
                 this.guardando = true;
 
                 const isEdit = !!this.formInsumo.id;
@@ -1527,11 +1623,14 @@ function inventarioApp() {
                 }
 
                 const csrfToken = this._csrf();
-                console.log('[INV] Guardando →', url, body, 'csrf:', csrfToken ? 'OK' : 'VACIO');
+                if (!csrfToken) {
+                    throw new Error('No se pudo obtener el token CSRF. Recarga la página (Ctrl+Shift+R).');
+                }
+                console.log('[INV] Guardando →', url, JSON.stringify(body), 'csrf:', csrfToken.substring(0, 8) + '...');
 
-                // Timeout de 10 segundos para evitar que el botón se quede pegado si el servidor o la red fallan
+                // Timeout de 12 segundos para evitar que el botón se quede pegado
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
 
                 const resp = await fetch(url, {
                     method: isEdit ? 'PUT' : 'POST',
