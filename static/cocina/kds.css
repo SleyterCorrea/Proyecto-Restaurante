@@ -6,9 +6,9 @@
 /* ========= VARIABLES ========= */
 :root {
     /* Colores primarios */
-    --kds-primary: #c6bfff;
-    --kds-primary-dark: #1a1d27;
-    --kds-primary-light: #4edea3;
+    --kds-primary: #C0392B;
+    --kds-primary-dark: #A93226;
+    --kds-primary-light: #E74C3C;
 
     /* Estados */
     --color-pendiente: #95A5A6;
