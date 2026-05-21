@@ -596,6 +596,8 @@ def api_cocina_activas(request):
                 'tiempo_transcurrido_min': int(diff_mins),
                 'tiempo_estimado': tiempo_estimado,
                 'fecha_inicio_prep_iso': l.fecha_inicio_prep.isoformat() if l.fecha_inicio_prep else None,
+                'fecha_envio_cocina_iso': l.fecha_envio_cocina.isoformat() if l.fecha_envio_cocina else None,
+                'tiempo_real_preparacion_seg': l.tiempo_real_preparacion_seg,
                 'orden_entrega': orden,
                 'observacion': l.observacion or '',
             })
@@ -623,15 +625,17 @@ def api_cocina_activas(request):
 def api_cocina_cambiar_estado(request, pk):
     """
     PATCH /api/cocina/lineas/<id>/cambiar-estado/
-    Body: { "nuevo_estado": "EN_PREP"|"LISTO"|"ANULADO", "motivo": "..." }
+    Body: { "nuevo_estado": "EN_PREP"|"LISTO"|"ANULADO", "motivo": "...", "cantidad_parcial": 0 }
     Compatible con kds.js — usa 'nuevo_estado' en lugar de 'estado'.
+    cantidad_parcial: si > 0, indica cuántas unidades el cocinero SÍ puede preparar.
     """
     nuevo_estado = request.data.get('nuevo_estado')
     motivo = request.data.get('motivo', '')
+    cantidad_parcial = int(request.data.get('cantidad_parcial', 0))
 
     with transaction.atomic():
         try:
-            linea = LineaComanda.objects.select_for_update().select_related('plato', 'comanda').get(pk=pk)
+            linea = LineaComanda.objects.select_for_update().select_related('plato', 'comanda', 'comanda__mesa').get(pk=pk)
         except LineaComanda.DoesNotExist:
             return Response({'error': 'Línea no encontrada'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -667,18 +671,53 @@ def api_cocina_cambiar_estado(request, pk):
             linea.fecha_inicio_prep = ahora
         elif nuevo_estado == LineaComanda.Estado.LISTO:
             linea.fecha_listo = ahora
+            # Auditoría: calcular tiempo real de preparación en segundos
+            if linea.fecha_inicio_prep:
+                linea.tiempo_real_preparacion_seg = int((ahora - linea.fecha_inicio_prep).total_seconds())
+
+        # ── Cancelación parcial ──────────────────────────────────────────
+        nueva_linea_parcial = None
+        if nuevo_estado == LineaComanda.Estado.ANULADO:
+            linea.motivo_anulacion = motivo
+            # Validar cantidad_parcial
+            if cantidad_parcial > 0:
+                if cantidad_parcial >= linea.cantidad:
+                    return Response(
+                        {'error': f'La cantidad parcial ({cantidad_parcial}) debe ser menor a la cantidad original ({linea.cantidad}).'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                linea.cantidad_parcial_cocina = cantidad_parcial
+                # Crear nueva línea con la cantidad que SÍ se puede cocinar
+                nueva_linea_parcial = LineaComanda.objects.create(
+                    comanda=linea.comanda,
+                    plato=linea.plato,
+                    cantidad=cantidad_parcial,
+                    precio_unitario=linea.precio_unitario,
+                    subtotal=linea.precio_unitario * cantidad_parcial,
+                    observacion=linea.observacion,
+                    estado=LineaComanda.Estado.EN_PREP,
+                    fecha_envio_cocina=linea.fecha_envio_cocina,
+                    fecha_inicio_prep=ahora,
+                    tiempo_estimado_min=linea.tiempo_estimado_min,
+                )
 
         linea.estado = nuevo_estado
         linea.save()
 
+        # Recalcular totales de la comanda
+        linea.comanda.calcular_totales()
+
         # Auditoría
         from apps.comandas.models import ComandaHistorialEstado
+        motivo_historial = motivo or 'Cambio de estado vía KDS'
+        if cantidad_parcial > 0 and nuevo_estado == LineaComanda.Estado.ANULADO:
+            motivo_historial = f'{motivo} [Parcial: cocinero puede preparar {cantidad_parcial} de {linea.cantidad}]'
         ComandaHistorialEstado.objects.create(
             comanda=linea.comanda,
             estado_anterior=estado_actual,
             estado_nuevo=nuevo_estado,
             usuario=request.user,
-            motivo=motivo or f'Cambio de estado vía KDS',
+            motivo=motivo_historial,
             origen=ComandaHistorialEstado.Origen.KDS,
         )
 
@@ -710,18 +749,44 @@ def api_cocina_cambiar_estado(request, pk):
         except Exception:
             pass  # El WS es opcional; el polling es el fallback
 
+        # ── Notificar cancelación parcial a meseros ──────────────────────
+        if nuevo_estado == LineaComanda.Estado.ANULADO and cantidad_parcial > 0:
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    'notificaciones_mozos',
+                    {
+                        'type': 'cancelacion_parcial',
+                        'mesa': linea.comanda.mesa.numero,
+                        'plato': linea.plato.nombre,
+                        'cantidad_original': linea.cantidad,
+                        'cantidad_preparable': cantidad_parcial,
+                        'motivo': motivo,
+                    }
+                )
+            except Exception:
+                pass
+
     mensaje_map = {
         LineaComanda.Estado.EN_PREP: f'Plato "{linea.plato.nombre}" marcado En Preparación',
         LineaComanda.Estado.LISTO:   f'Plato "{linea.plato.nombre}" marcado Listo',
         LineaComanda.Estado.ANULADO: f'Plato "{linea.plato.nombre}" anulado',
     }
 
-    return Response({
+    resp_data = {
         'ok': True,
         'id': linea.id,
         'estado': linea.estado,
         'mensaje': mensaje_map.get(nuevo_estado, 'Estado actualizado'),
-    })
+    }
+    if nueva_linea_parcial:
+        resp_data['linea_parcial_id'] = nueva_linea_parcial.id
+        resp_data['cantidad_parcial'] = cantidad_parcial
+        resp_data['mensaje'] = f'Plato "{linea.plato.nombre}" anulado parcialmente. Se prepararán {cantidad_parcial} de {linea.cantidad}.'
+
+    return Response(resp_data)
 
 
 @api_view(['GET'])

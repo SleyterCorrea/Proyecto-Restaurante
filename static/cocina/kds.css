@@ -1,4 +1,4 @@
-/* ========================================================
+ï»¿/* ========================================================
    KDS â€” Kitchen Display System
    Estilos del panel de cocina
    ======================================================== */
@@ -281,6 +281,15 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+}
+
+
+/* Card header right group (timer + date) */
+.kds-card__header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .kds-card__pedido {
@@ -889,6 +898,121 @@
 .kds-modal__btn--confirm { background: var(--color-anulado); color: #fff; }
 .kds-modal__btn--confirm:hover { filter: brightness(1.1); transform: translateY(-1px); }
 
+/* ========= COMANDA-LEVEL TIMER (card header) ========= */
+.kds-card__timer {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    background: #F5F5F5;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+.kds-card__timer-icon {
+    font-size: 14px;
+}
+.kds-card__timer--alerta {
+    color: #E65100;
+    background: #FFF3E0;
+}
+.kds-card__timer--urgente {
+    color: #C62828;
+    background: #FFEBEE;
+    animation: timerPulse 1.5s ease-in-out infinite;
+}
+@keyframes timerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ========= INDIVIDUAL DISH TIMER vs ESTIMATED ========= */
+.kds-linea__timer-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.kds-linea__estimado {
+    font-size: 11px;
+    color: #999;
+    font-weight: 500;
+}
+.kds-linea__estimado::before {
+    content: '/ ';
+}
+.kds-linea__tiempo--excedido {
+    color: #E65100 !important;
+    font-weight: 700 !important;
+}
+.kds-linea__tiempo--critico {
+    color: var(--color-anulado) !important;
+    font-weight: 700 !important;
+    animation: timerPulse 1s ease-in-out infinite;
+}
+.kds-linea__timer-bar {
+    width: 60px;
+    height: 3px;
+    background: #E0E0E0;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-left: 4px;
+}
+.kds-linea__timer-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s linear, background-color 0.3s ease;
+    background: var(--color-listo);
+}
+.kds-linea__timer-fill--warning {
+    background: var(--color-en-prep);
+}
+.kds-linea__timer-fill--danger {
+    background: var(--color-anulado);
+}
+
+/* ========= MODAL PARTIAL CANCELLATION ========= */
+.kds-modal__parcial {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: #FFF8E1;
+    border-left: 3px solid var(--color-en-prep);
+    border-radius: 0 8px 8px 0;
+}
+.kds-modal__hint {
+    font-size: 11px;
+    color: #999;
+    font-weight: 400;
+    font-style: italic;
+}
+.kds-modal__select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #E0E0E0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition-fast);
+    background: #fff;
+    cursor: pointer;
+    margin-top: 6px;
+}
+.kds-modal__select:focus {
+    border-color: var(--kds-primary);
+}
+.kds-modal__parcial-info {
+    font-size: 11px;
+    color: #888;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+
 /* ========= RESPONSIVE ========= */
 @media (max-width: 1200px) {
     .kds-sidebar {
@@ -937,7 +1061,7 @@
 
 
 /* ========================================================
-   MESERO INTEGRATION — Adapts KDS to work inside MESERO's navbar
+   MESERO INTEGRATION ï¿½ Adapts KDS to work inside MESERO's navbar
    ======================================================== */
 
 /* El .kds-layout reemplaza el container-fluid del base.html */
@@ -947,7 +1071,7 @@
     max-width: 100% !important;
 }
 
-/* El kds-main NO necesita margin-top porque el navbar de MESERO ya está */
+/* El kds-main NO necesita margin-top porque el navbar de MESERO ya estï¿½ */
 .kds-main {
     margin-top: 0 !important;
     min-height: calc(100vh - 60px) !important;
