@@ -245,13 +245,12 @@
           <div class="kpi-icon" style="background:rgba(139,124,248,0.12);">
             <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:20px;">payments</span>
           </div>
-          <span class="trend-badge"
-            :class="kpis.tendencia_ventas === null ? 'trend-flat' : kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_ventas !== undefined">
-            <span x-text="kpis.tendencia_ventas !== null
-              ? (kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'
-              : '—'"></span>
-          </span>
+              <span class="trend-badge"
+      :class="kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
+      x-show="kpis.tendencia_ventas !== null && kpis.tendencia_ventas !== undefined">
+      
+      <span x-text="(kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'"></span>
+    </span>
         </div>
         <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
           <span>Ventas totales</span>
@@ -272,12 +271,11 @@
             <span class="material-symbols-outlined" style="color:#22c55e;font-size:20px;">receipt_long</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_comandas === null ? 'trend-flat' : kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_comandas !== undefined">
-            <span x-text="kpis.tendencia_comandas !== null
-              ? (kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
+  x-show="kpis.tendencia_comandas !== null && kpis.tendencia_comandas !== undefined">
+
+  <span x-text="(kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'"></span>
+</span>
         </div>
         <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
           <span>Comandas cobradas</span>
@@ -298,12 +296,11 @@
             <span class="material-symbols-outlined" style="color:var(--r-cyan);font-size:20px;">timer</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_tiempo === null || kpis.tendencia_tiempo === undefined ? 'trend-flat' : kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
-            x-show="kpis.tendencia_tiempo !== undefined">
-            <span x-text="kpis.tendencia_tiempo !== null && kpis.tendencia_tiempo !== undefined
-              ? (kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%')
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
+  x-show="kpis.tendencia_tiempo !== null && kpis.tendencia_tiempo !== undefined">
+
+  <span x-text="kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%'"></span>
+</span>
         </div>
         <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
           <span>Tiempo pico prep.</span>
@@ -324,12 +321,11 @@
             <span class="material-symbols-outlined" style="color:var(--r-orange);font-size:20px;">warning</span>
           </div>
           <span class="trend-badge"
-            :class="kpis.tendencia_perdidas === null || kpis.tendencia_perdidas === undefined ? 'trend-flat' : kpis.tendencia_perdidas >= 0 ? 'trend-down' : 'trend-up'"
-            x-show="kpis.tendencia_perdidas !== undefined">
-            <span x-text="kpis.tendencia_perdidas !== null && kpis.tendencia_perdidas !== undefined
-              ? (kpis.tendencia_perdidas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_perdidas) + '%'
-              : '—'"></span>
-          </span>
+  :class="kpis.tendencia_perdidas >= 0 ? 'trend-down' : 'trend-up'"
+  x-show="kpis.tendencia_perdidas !== null && kpis.tendencia_perdidas !== undefined">
+
+  <span x-text="(kpis.tendencia_perdidas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_perdidas) + '%'"></span>
+</span>
         </div>
         <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
           <span>Total Pérdidas</span>

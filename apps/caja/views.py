@@ -111,6 +111,7 @@ def cobrar_view(request):
                 lineas_ya_pagadas_ids.add(l.id)
 
         lineas_activas = [l for l in c.lineas.all() if l.estado != LineaComanda.Estado.ANULADO]
+
         lineas_por_pagar = [l for l in lineas_activas if l.id not in lineas_ya_pagadas_ids]
         
         c.total_pendiente = sum(l.subtotal for l in lineas_por_pagar)
@@ -127,6 +128,7 @@ def cobrar_view(request):
 
         c.total_pendiente = sum(l.subtotal for l in lineas_activas)
         # lineas_json ya es @property del modelo Comanda — no necesita reasignarse
+
 
     metodos_pago = MetodoPago.objects.filter(activo=True)
 
