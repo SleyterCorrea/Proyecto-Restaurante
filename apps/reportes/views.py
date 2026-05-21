@@ -44,7 +44,22 @@ def admin_reportes(request):
 @login_required
 @rol_requerido('ADMIN')
 def admin_inventario(request):
-    return render(request, 'admin_panel/inventario.html')
+    import json
+    from apps.inventario.models import Insumo, UnidadMedida
+    from apps.inventario.serializers import InsumoSerializer, UnidadMedidaSerializer
+
+    insumos = Insumo.objects.filter(activo=True).select_related('unidad_medida').order_by('nombre')
+    unidades = UnidadMedida.objects.filter(activo=True).order_by('nombre')
+
+    insumos_data = InsumoSerializer(insumos, many=True).data
+    unidades_data = UnidadMedidaSerializer(unidades, many=True).data
+
+    return render(request, 'admin_panel/inventario.html', {
+        'insumos_json': json.dumps(list(insumos_data)),
+        'unidades_json': json.dumps(list(unidades_data)),
+        # Necesario para el {% for u in unidades %} del <select> en el modal Django server-side
+        'unidades': unidades,
+    })
 
 @login_required
 @rol_requerido('ADMIN')
