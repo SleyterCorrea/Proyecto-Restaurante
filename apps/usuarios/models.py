@@ -53,6 +53,13 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     ]
     tipo_trabajo = models.CharField(max_length=20, choices=TIPO_TRABAJO_CHOICES, default='FULL_TIME')
     
+    TURNO_CHOICES = [
+        ('MANANA', 'Turno Mañana'),
+        ('TARDE', 'Turno Tarde'),
+        ('NOCHE', 'Turno Noche'),
+    ]
+    turno = models.CharField(max_length=20, choices=TURNO_CHOICES, default='MANANA')
+    
     fecha_ingreso = models.DateField(null=True, blank=True)
     fecha_termino = models.DateField(null=True, blank=True)
     

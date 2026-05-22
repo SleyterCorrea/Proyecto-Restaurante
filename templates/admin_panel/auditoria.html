@@ -178,7 +178,7 @@ function auditApp() {
                     entidad: this.filtroEntidad,
                     accion: this.filtroAccion
                 });
-                const res = await fetch(`/api/auditoria-logs/?${params.toString()}`);
+                const res = await fetch(`/admin-panel/api/auditoria-logs/?${params.toString()}`);
                 if(res.ok) {
                     this.logs = await res.json();
                 }

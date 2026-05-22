@@ -142,3 +142,4 @@ Proyecto-Restaurante/
 ## Equipo
 
 Proyecto desarrollado como trabajo grupal — cada integrante tiene su rama con su parte del sistema.
+ 

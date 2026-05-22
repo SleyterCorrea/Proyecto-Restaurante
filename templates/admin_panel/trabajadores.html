@@ -37,6 +37,7 @@
                         <th>DNI</th>
                         <th>Rol</th>
                         <th>Tipo Contrato</th>
+                        <th>Turno</th>
                         <th>Fecha Ingreso</th>
                         <th>Estado</th>
                         <th class="text-end pe-4">Acciones</th>
@@ -62,6 +63,9 @@
                             </td>
                             <td>
                                 <span class="text-xs font-bold" x-text="t.tipo_trabajo === 'FULL_TIME' ? 'FULL TIME' : 'PART TIME'"></span>
+                            </td>
+                            <td>
+                                <span class="text-xs font-bold uppercase" :class="t.turno === 'MANANA' ? 'text-primary' : (t.turno === 'TARDE' ? 'text-warning' : 'text-info')" x-text="t.turno === 'MANANA' ? 'MAÑANA' : (t.turno === 'TARDE' ? 'TARDE' : 'NOCHE')"></span>
                             </td>
                             <td class="small text-on-surface-variant font-medium" x-text="formatDate(t.fecha_ingreso)"></td>
                             <td>
@@ -146,22 +150,30 @@
                             </div>
                             <p class="text-[9px] text-primary mt-1 font-bold" x-show="form.id">* Dejar en blanco para no cambiar</p>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Rol del Sistema</label>
-                            <select class="form-select rounded-xl py-2.5" x-model="form.rol">
-                                <option value="">Seleccione un rol...</option>
-                                <template x-for="r in roles" :key="r.id">
-                                    <option :value="r.id" x-text="r.nombre" :selected="r.id == form.rol"></option>
-                                </template>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Tipo de Contrato</label>
-                            <select class="form-select rounded-xl py-2.5" x-model="form.tipo_trabajo">
-                                <option value="FULL_TIME">Full Time</option>
-                                <option value="PART_TIME">Part Time</option>
-                            </select>
-                        </div>
+                        <div class="col-md-4">
+                                <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Rol del Sistema</label>
+                                <select class="form-select rounded-xl py-2.5" x-model="form.rol">
+                                    <option value="">Seleccione un rol...</option>
+                                    <template x-for="r in roles" :key="r.id">
+                                        <option :value="r.id" x-text="r.nombre" :selected="r.id == form.rol"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Tipo de Contrato</label>
+                                <select class="form-select rounded-xl py-2.5" x-model="form.tipo_trabajo">
+                                    <option value="FULL_TIME">Full Time</option>
+                                    <option value="PART_TIME">Part Time</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Turno de Trabajo</label>
+                                <select class="form-select rounded-xl py-2.5" x-model="form.turno">
+                                    <option value="MANANA">Turno Mañana</option>
+                                    <option value="TARDE">Turno Tarde</option>
+                                    <option value="NOCHE">Turno Noche</option>
+                                </select>
+                            </div>
 
                         <hr class="border-white/5 my-2">
 
@@ -214,6 +226,7 @@ function trabajadoresApp() {
             rol: '',
             dni: '',
             tipo_trabajo: 'FULL_TIME',
+            turno: 'MANANA',
             fecha_ingreso: '',
             fecha_termino: '',
             password: '',
@@ -265,6 +278,7 @@ function trabajadoresApp() {
                 rol: '',
                 dni: '',
                 tipo_trabajo: 'FULL_TIME',
+                turno: 'MANANA',
                 fecha_ingreso: new Date().toISOString().split('T')[0],
                 fecha_termino: '',
                 password: '',
