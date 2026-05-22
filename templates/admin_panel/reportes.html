@@ -7,7 +7,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 
 <style>
-  /* ── Tokens locales heredados de las variables globales del tema ── */
   :root {
     --r-primary: rgb(var(--primary));
     --r-primary-glow: rgb(var(--primary) / 0.15);
@@ -24,10 +23,8 @@
     --r-radius-lg: 24px;
   }
 
-  /* Usamos las variables globales del sistema de tema */
   body { background: rgb(var(--bg)) !important; font-family: 'Inter', sans-serif !important; color: rgb(var(--on-surface)) !important; }
 
-  /* ── Glass Card ── */
   .r-card {
     background: rgb(var(--surface));
     border: 1px solid rgb(var(--border) / 0.1);
@@ -37,12 +34,42 @@
   }
   .r-card:hover { border-color: rgb(var(--border) / 0.2); }
 
-  /* ── KPI ── */
   .kpi-icon {
     width: 44px; height: 44px;
     border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
   }
+
+  /* ── Floating Info Button ── */
+  .btn-info-floating {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(var(--surface));
+    border: 1px solid rgb(var(--border) / 0.12);
+    color: rgb(var(--on-surface-variant) / 0.75);
+    cursor: pointer;
+    transition: all .2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+  }
+  .btn-info-floating:hover {
+    transform: translateY(-2px) scale(1.05);
+    color: rgb(var(--primary));
+    border-color: rgb(var(--primary) / 0.25);
+    box-shadow: 0 8px 18px rgba(0,0,0,.14);
+  }
+  .btn-info-floating .material-symbols-outlined {
+    font-size: 16px;
+    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  }
+
   .trend-badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 11px; font-weight: 700;
@@ -52,7 +79,6 @@
   .trend-down { color: var(--r-red);   background: var(--r-red-dim); }
   .trend-flat { color: rgb(var(--on-surface-variant)); background: rgb(var(--border) / 0.05); }
 
-  /* ── Top Selling Progress Bar ── */
   .top-bar-track {
     height: 6px; border-radius: 999px;
     background: rgb(var(--border) / 0.1);
@@ -64,7 +90,6 @@
     transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
   }
 
-  /* ── History Table ── */
   .r-table { width: 100%; border-collapse: separate; border-spacing: 0; }
   .r-table thead th {
     font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
@@ -85,7 +110,6 @@
     vertical-align: middle;
   }
 
-  /* ── Search & Inputs ── */
   .r-search {
     background: rgb(var(--surface)) !important; 
     border: 1px solid rgb(var(--border) / 0.1);
@@ -95,38 +119,29 @@
     font-size: 13px; 
     outline: none;
     transition: border-color 0.2s;
-    color-scheme: dark; /* Forzar widgets nativos oscuros */
+    color-scheme: dark;
   }
-
-  /* Específico para el input de fecha */
   input[type="date"].r-search {
     position: relative;
-    background-image: none; /* Quitar posibles iconos de background de Tailwind forms */
+    background-image: none;
   }
-
-  /* Asegurar que el icono del calendario sea blanco en modo oscuro */
   input[type="date"].r-search::-webkit-calendar-picker-indicator {
     filter: invert(1);
     opacity: 0.6;
     cursor: pointer;
   }
-
-  html.light .r-search {
-    color-scheme: light;
-  }
+  html.light .r-search { color-scheme: light; }
   html.light input[type="date"].r-search::-webkit-calendar-picker-indicator {
     filter: none;
     opacity: 0.5;
   }
 
-  /* ── Status Badge ── */
   .badge-pagado  { color: var(--r-green); background: var(--r-green-dim); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
   .badge-anulado { color: var(--r-red);   background: var(--r-red-dim);   border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
   .badge-perdida { color: var(--r-red);   background: var(--r-red-dim);   border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
   .badge-multi   { color: #3b82f6; background: rgba(59,130,246,0.12); border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 700; margin-left: 6px; }
   .badge-otro    { color: rgb(var(--on-surface-variant)); background: rgb(var(--border) / 0.05); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
 
-  /* ── Filter Bar ── */
   .filter-bar {
     display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
     background: rgb(var(--surface)); border: 1px solid rgb(var(--border) / 0.1);
@@ -143,16 +158,11 @@
     text-transform: uppercase; color: rgb(var(--on-surface-variant)); margin-bottom: 2px;
   }
 
-  /* ── Doughnut wrapper ── */
   .doughnut-wrap { position: relative; height: 200px; width: 200px; margin: 0 auto; }
 
-  /* ── Section Title ── */
   .r-section-title { font-size: 15px; font-weight: 700; color: rgb(var(--on-surface)); }
   .r-section-sub   { font-size: 12px; color: rgb(var(--on-surface-variant)); margin-top: 2px; }
 
-  /* ── Chart container ──
-     Chart.js + maintainAspectRatio:false necesita altura real en el canvas;
-     reglas globales (p. ej. height:auto en responsive) pueden dejar el canvas en 0px. */
   .chart-wrap {
     position: relative;
     height: 220px;
@@ -166,23 +176,14 @@
     max-height: none !important;
   }
 
-  /* ── Empty State ── */
   .empty-state { text-align: center; padding: 48px 0; color: rgb(var(--on-surface-variant)); }
   .empty-state .material-symbols-outlined { font-size: 40px; opacity: 0.3; display: block; margin-bottom: 12px; }
 
-  /* ── Loading Skeleton ── */
   @keyframes skeleton-pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
   .skeleton { background: rgb(var(--border) / 0.15); border-radius: 8px; animation: skeleton-pulse 1.6s ease-in-out infinite; }
 
-  /* ── Clickable Rotation Columns ── */
-  .rotacion-col {
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .rotacion-col:hover {
-    opacity: 0.9;
-    background: rgb(var(--border) / 0.05);
-    border-radius: 12px;
-  }
+  .rotacion-col { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+  .rotacion-col:hover { opacity: 0.9; background: rgb(var(--border) / 0.05); border-radius: 12px; }
 
   [x-cloak] { display: none !important; }
 </style>
@@ -241,23 +242,22 @@
     <!-- Ventas totales -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="position-relative mb-3">
+          <button type="button"
+                  @click="abrirInfoModal('Ventas totales')"
+                  class="btn-info-floating">
+            <span class="material-symbols-outlined">info</span>
+          </button>
           <div class="kpi-icon" style="background:rgba(139,124,248,0.12);">
             <span class="material-symbols-outlined" style="color:#8b7cf8;font-size:20px;">payments</span>
           </div>
-              <span class="trend-badge"
-      :class="kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
-      x-show="kpis.tendencia_ventas !== null && kpis.tendencia_ventas !== undefined">
-      
-      <span x-text="(kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'"></span>
-    </span>
         </div>
-        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
-          <span>Ventas totales</span>
-          <button type="button" @click="abrirInfoModal('Ventas totales')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
-            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
-          </button>
-        </div>
+        <span class="trend-badge"
+          :class="kpis.tendencia_ventas >= 0 ? 'trend-up' : 'trend-down'"
+          x-show="kpis.tendencia_ventas !== null && kpis.tendencia_ventas !== undefined">
+          <span x-text="(kpis.tendencia_ventas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_ventas) + '%'"></span>
+        </span>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;margin-top:8px;">Ventas totales</div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_ventas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
@@ -266,48 +266,46 @@
     <!-- Cantidad de comandas -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="position-relative mb-3">
+          <button type="button"
+                  @click="abrirInfoModal('Comandas cobradas')"
+                  class="btn-info-floating">
+            <span class="material-symbols-outlined">info</span>
+          </button>
           <div class="kpi-icon" style="background:rgba(34,197,94,0.12);">
             <span class="material-symbols-outlined" style="color:#22c55e;font-size:20px;">receipt_long</span>
           </div>
-          <span class="trend-badge"
-  :class="kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
-  x-show="kpis.tendencia_comandas !== null && kpis.tendencia_comandas !== undefined">
-
-  <span x-text="(kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'"></span>
-</span>
         </div>
-        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
-          <span>Comandas cobradas</span>
-          <button type="button" @click="abrirInfoModal('Comandas cobradas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
-            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
-          </button>
-        </div>
+        <span class="trend-badge"
+          :class="kpis.tendencia_comandas >= 0 ? 'trend-up' : 'trend-down'"
+          x-show="kpis.tendencia_comandas !== null && kpis.tendencia_comandas !== undefined">
+          <span x-text="(kpis.tendencia_comandas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_comandas) + '%'"></span>
+        </span>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;margin-top:8px;">Comandas cobradas</div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.cant_comandas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">vs turno anterior</div>
       </div>
     </div>
 
-    <!-- Tiempo máximo cocina (TIEMPO PICO PREP) -->
+    <!-- Tiempo máximo cocina -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="position-relative mb-3">
+          <button type="button"
+                  @click="abrirInfoModal('Tiempo pico prep.')"
+                  class="btn-info-floating">
+            <span class="material-symbols-outlined">info</span>
+          </button>
           <div class="kpi-icon" style="background:var(--r-cyan-dim);">
             <span class="material-symbols-outlined" style="color:var(--r-cyan);font-size:20px;">timer</span>
           </div>
-          <span class="trend-badge"
-  :class="kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
-  x-show="kpis.tendencia_tiempo !== null && kpis.tendencia_tiempo !== undefined">
-
-  <span x-text="kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%'"></span>
-</span>
         </div>
-        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
-          <span>Tiempo pico prep.</span>
-          <button type="button" @click="abrirInfoModal('Tiempo pico prep.')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
-            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
-          </button>
-        </div>
+        <span class="trend-badge"
+          :class="kpis.tendencia_tiempo <= 0 ? 'trend-up' : 'trend-down'"
+          x-show="kpis.tendencia_tiempo !== null && kpis.tendencia_tiempo !== undefined">
+          <span x-text="kpis.tendencia_tiempo <= 0 ? '▲ Mejor' : '▼ ' + Math.abs(kpis.tendencia_tiempo) + '%'"></span>
+        </span>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;margin-top:8px;">Tiempo pico prep.</div>
         <div style="font-size:26px;font-weight:800;color:rgb(var(--on-surface));font-family:'Plus Jakarta Sans',sans-serif;" x-text="kpis.tiempo_maximo_prep ? kpis.tiempo_maximo_prep + ' min' : '0 min'"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">plato que más tardó</div>
       </div>
@@ -316,23 +314,22 @@
     <!-- Total Pérdidas -->
     <div class="col-6 col-lg-3">
       <div class="r-card p-4 h-100">
-        <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="position-relative mb-3">
+          <button type="button"
+                  @click="abrirInfoModal('Total Pérdidas')"
+                  class="btn-info-floating">
+            <span class="material-symbols-outlined">info</span>
+          </button>
           <div class="kpi-icon" style="background:var(--r-orange-dim);">
             <span class="material-symbols-outlined" style="color:var(--r-orange);font-size:20px;">warning</span>
           </div>
-          <span class="trend-badge"
-  :class="kpis.tendencia_perdidas >= 0 ? 'trend-down' : 'trend-up'"
-  x-show="kpis.tendencia_perdidas !== null && kpis.tendencia_perdidas !== undefined">
-
-  <span x-text="(kpis.tendencia_perdidas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_perdidas) + '%'"></span>
-</span>
         </div>
-        <div class="d-flex align-items-center gap-1" style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;">
-          <span>Total Pérdidas</span>
-          <button type="button" @click="abrirInfoModal('Total Pérdidas')" class="btn-info-kpi" style="background:transparent;border:none;padding:0;display:inline-flex;align-items:center;justify-content:center;color:rgb(var(--on-surface-variant)/0.6);cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='rgb(var(--primary))'" onmouseout="this.style.color='rgb(var(--on-surface-variant)/0.6)'">
-            <span class="material-symbols-outlined" style="font-size:14px;">info</span>
-          </button>
-        </div>
+        <span class="trend-badge"
+          :class="kpis.tendencia_perdidas >= 0 ? 'trend-down' : 'trend-up'"
+          x-show="kpis.tendencia_perdidas !== null && kpis.tendencia_perdidas !== undefined">
+          <span x-text="(kpis.tendencia_perdidas >= 0 ? '▲' : '▼') + ' ' + Math.abs(kpis.tendencia_perdidas) + '%'"></span>
+        </span>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgb(var(--on-surface-variant));margin-bottom:4px;margin-top:8px;">Total Pérdidas</div>
         <div style="font-size:26px;font-weight:800;color:var(--r-orange);font-family:'Plus Jakarta Sans',sans-serif;" x-text="'S/. ' + kpis.total_perdidas"></div>
         <div style="font-size:11px;color:rgb(var(--on-surface-variant));margin-top:4px;">cuentas no cobradas</div>
       </div>
@@ -470,7 +467,6 @@
         <div class="r-section-sub">Historial detallado de ventas y pérdidas</div>
       </div>
       <div class="ms-auto d-flex align-items-center flex-wrap gap-3">
-        <!-- Toggle de Estado -->
         <div class="btn-group" role="group" style="background: rgb(var(--bg)); border: 1px solid rgb(var(--border) / 0.15); border-radius: 8px; padding: 2px; display: inline-flex;">
           <button type="button" class="btn btn-sm" 
                   :style="filterEstadoHistorial === 'TODOS' ? 'background: rgb(var(--border) / 0.15); color: rgb(var(--on-surface)); border-radius: 6px;' : 'background: transparent; color: rgb(var(--on-surface-variant)); border: none;'"
@@ -596,22 +592,19 @@
     <div class="r-section-title mb-4 text-center">Proporción de Estado de Transacciones</div>
     <div class="row align-items-center">
       <div class="col-md-6 position-relative d-flex justify-content-center">
-        <!-- Contenedor del Gauge -->
         <div style="position: relative; height: 180px; width: 260px;">
-  <canvas id="chartGauge"></canvas>
-  <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
-    <div class="d-flex gap-4 justify-content-center">
-      <div class="badge-pagado" x-show="filterEstadoHistorial !== 'PERDIDAS'" x-text="historial.filter(v => v.estado === 'PAGADO').length"></div>
-      <div class="badge-perdida" x-show="filterEstadoHistorial !== 'COBRADOS'" x-text="historial.filter(v => v.estado === 'PERDIDA').length"></div>
-    </div>
-    <div style="font-size: 10px; color: rgb(var(--on-surface-variant)); font-weight: 600; text-transform: uppercase;">Total Transacciones</div>
-  </div>
-</div>
+          <canvas id="chartGauge"></canvas>
+          <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center;">
+            <div class="d-flex gap-4 justify-content-center">
+              <div class="badge-pagado" x-show="filterEstadoHistorial !== 'PERDIDAS'" x-text="historial.filter(v => v.estado === 'PAGADO').length"></div>
+              <div class="badge-perdida" x-show="filterEstadoHistorial !== 'COBRADOS'" x-text="historial.filter(v => v.estado === 'PERDIDA').length"></div>
+            </div>
+            <div style="font-size: 10px; color: rgb(var(--on-surface-variant)); font-weight: 600; text-transform: uppercase;">Total Transacciones</div>
+          </div>
+        </div>
       </div>
       <div class="col-md-6">
-        <div class="d-flex justify-content-around">
-
-        </div>
+        <div class="d-flex justify-content-around"></div>
       </div>
     </div>
   </div>
@@ -621,19 +614,15 @@
        class="position-fixed top-0 start-0 w-100 h-100"
        style="z-index: 1050; display: none;"
        x-transition.opacity>
-    <!-- Fondo de desenfoque oscuro -->
     <div class="position-absolute w-100 h-100" 
          @click="infoModal.show = false"
          style="background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px);"></div>
     
-    <!-- Contenedor Flex intermedio para centrado perfecto -->
     <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative" style="pointer-events: none;">
-      <!-- Contenido del modal con Glassmorphism -->
       <div class="position-relative p-4 r-card" 
            style="pointer-events: auto; max-width: 500px; width: 90%; background: rgb(var(--surface) / 0.85); backdrop-filter: blur(20px); border: 1px solid rgb(var(--border) / 0.25); box-shadow: 0 20px 40px rgba(0,0,0,0.55);"
            x-transition.scale.95>
         
-        <!-- Encabezado del modal -->
         <div class="d-flex align-items-center gap-3 mb-4">
           <div class="kpi-icon" :style="`background: ${infoModal.iconBg}; width: 48px; height: 48px; border-radius:12px; display:flex; align-items:center; justify-content:center;`">
             <span class="material-symbols-outlined" :style="`color: ${infoModal.iconColor}; font-size: 24px;`" x-text="infoModal.icon"></span>
@@ -651,7 +640,6 @@
           </button>
         </div>
         
-        <!-- Cuerpo del modal -->
         <div class="d-flex flex-column gap-3 mb-4 text-start">
           <div>
             <h4 style="font-size:11px; font-weight:700; color:rgb(var(--primary)); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">¿Qué significa?</h4>
@@ -664,7 +652,6 @@
           </div>
         </div>
         
-        <!-- Pie del modal -->
         <div class="d-flex justify-content-end">
           <button type="button" @click="infoModal.show = false" 
                   class="px-4 py-2"
@@ -680,7 +667,7 @@
 
 </div>
 
-<!-- Chart.js (UMD explícito; el entry "module" no expone Chart en window) -->
+<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 
 <script>
@@ -703,7 +690,6 @@ function analyticsApp() {
     mesas: [],
     historial: [],
     
-    // Filtros
     filterFechaGlobal: '',
     filterTurno: '',
     filterCajero: '',
@@ -711,7 +697,6 @@ function analyticsApp() {
     filterSearch: '',
     filterEstadoHistorial: 'TODOS',
     
-    // Modal interactivo de información de KPIs
     infoModal: {
       show: false,
       title: '',
@@ -741,7 +726,6 @@ function analyticsApp() {
         } else {
           this.turnoCodigo = 'Sin turno activo';
         }
-        // Wait for Alpine to remove x-cloak (display:none) before loading charts
         await this.$nextTick();
         await this.cargarTodo();
       } catch (e) {
@@ -922,23 +906,12 @@ function analyticsApp() {
           this.gaugeChartTimeout = setTimeout(() => {
             this.renderGaugeChart();
           }, 100);
-          // Export CSV function
           this.exportCSV = function() {
-            // Build CSV header
             const headers = ['Fecha','Mesa','Mozo','Turno','Detalle','Neto','Impuesto','Bruto','Estado','Método'];
             const rows = this.historial.map(v => [
-              v.fecha,
-              v.mesa,
-              v.mozo,
-              v.turno,
-              v.detalle,
-              v.neto,
-              v.impuesto,
-              v.bruto,
-              v.estado,
-              v.metodo
+              v.fecha, v.mesa, v.mozo, v.turno, v.detalle,
+              v.neto, v.impuesto, v.bruto, v.estado, v.metodo
             ].map(item => {
-              // Escape commas and quotes
               const str = String(item ?? '');
               if (str.includes(',') || str.includes('"') || str.includes('\n')) {
                 return '"' + str.replace(/"/g, '""') + '"';
@@ -976,24 +949,13 @@ function analyticsApp() {
     },
 
     renderBarChart(data) {
-      if (typeof Chart === 'undefined') {
-        console.error('Chart.js no está cargado');
-        return;
-      }
-
+      if (typeof Chart === 'undefined') { console.error('Chart.js no está cargado'); return; }
       const canvas = document.getElementById('chartVentasHora');
       if (!canvas) return;
-
       const existingChart = Chart.getChart(canvas);
-      if (existingChart) {
-        existingChart.destroy();
-      }
-
+      if (existingChart) existingChart.destroy();
       const ctx = canvas.getContext('2d');
-      if (!ctx || typeof ctx.save !== 'function') {
-        console.error('Canvas 2D context no disponible');
-        return;
-      }
+      if (!ctx || typeof ctx.save !== 'function') { console.error('Canvas 2D context no disponible'); return; }
 
       const colorPrimary = this._rgbCsv(this._cssVar('--primary', '139 124 248'));
       const colorOnSurface = this._rgbCsv(this._cssVar('--on-surface', '241 245 249'));
@@ -1002,10 +964,7 @@ function analyticsApp() {
 
       const labels = (data || []).map(i => i.plato__nombre || '—');
       const values = (data || []).map(i => Number(i.cantidad || 0));
-
-      if (!labels.length) {
-        return;
-      }
+      if (!labels.length) return;
 
       const gradient = ctx.createLinearGradient(0, 0, 0, 200);
       gradient.addColorStop(0, `rgba(${colorPrimary}, 0.85)`);
@@ -1021,12 +980,7 @@ function analyticsApp() {
             backgroundColor: gradient,
             borderColor: `rgba(${colorPrimary}, 1)`,
             borderWidth: 1.5,
-            borderRadius: {
-              topLeft: 8,
-              topRight: 8,
-              bottomLeft: 0,
-              bottomRight: 0
-            },
+            borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 },
             borderSkipped: 'bottom',
             maxBarThickness: 28,
           }]
@@ -1059,11 +1013,7 @@ function analyticsApp() {
             y: {
               beginAtZero: true,
               grid: { color: `rgba(${colorBorder}, 0.05)`, drawBorder: false },
-              ticks: {
-                color: `rgb(${colorOnVariant})`,
-                font: { size: 10 },
-                callback: v => v
-              }
+              ticks: { color: `rgb(${colorOnVariant})`, font: { size: 10 }, callback: v => v }
             },
             x: {
               grid: { display: false, drawBorder: false },
@@ -1076,20 +1026,12 @@ function analyticsApp() {
 
     renderDoughnutChart(distribucion) {
       if (typeof Chart === 'undefined') return;
-
       const canvas = document.getElementById('chartDoughnut');
       if (!canvas) return;
-
       const existingChart = Chart.getChart(canvas);
-      if (existingChart) {
-        existingChart.destroy();
-      }
-
+      if (existingChart) existingChart.destroy();
       const ctx = canvas.getContext('2d');
-      if (!ctx || typeof ctx.save !== 'function') {
-        console.error('Canvas 2D context no disponible');
-        return;
-      }
+      if (!ctx || typeof ctx.save !== 'function') { console.error('Canvas 2D context no disponible'); return; }
 
       this.doughnutChart = new Chart(canvas, {
         type: 'doughnut',
@@ -1107,11 +1049,7 @@ function analyticsApp() {
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: c => ` ${c.label}: ${c.raw} platos`
-              }
-            }
+            tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw} platos` } }
           },
           cutout: '72%'
         }
@@ -1120,24 +1058,15 @@ function analyticsApp() {
 
     renderGaugeChart() {
       if (typeof Chart === 'undefined') return;
-
       const canvas = document.getElementById('chartGauge');
       if (!canvas) return;
-
       const existingChart = Chart.getChart(canvas);
-      if (existingChart) {
-        existingChart.destroy();
-      }
-
+      if (existingChart) existingChart.destroy();
       const ctx = canvas.getContext('2d');
-      if (!ctx || typeof ctx.save !== 'function') {
-        console.error('Canvas 2D context no disponible');
-        return;
-      }
+      if (!ctx || typeof ctx.save !== 'function') { console.error('Canvas 2D context no disponible'); return; }
 
       const cobradas = this.historial.filter(v => v.estado === 'PAGADO').length;
       const perdidas = this.historial.filter(v => v.estado === 'PERDIDA').length;
-      const total = cobradas + perdidas;
 
       this.gaugeChart = new Chart(canvas, {
         type: 'doughnut',
@@ -1156,11 +1085,7 @@ function analyticsApp() {
           rotation: -90,
           plugins: {
             legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: c => ` ${c.label}: ${c.raw} transacciones`
-              }
-            }
+            tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw} transacciones` } }
           },
           cutout: '75%'
         }
