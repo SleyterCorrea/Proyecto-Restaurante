@@ -409,51 +409,45 @@ def api_historial_pagos(request):
             hoy = timezone.localtime(timezone.now()).date()
             pagos = pagos.filter(fecha_pago__date=hoy)
 
-    # Agrupar por transaccion_id (multi-pago) o por pago individual
+    # Agrupar por comanda (todas las transacciones/boletas de una misma orden)
     data = []
     grupos = {}
     pagos_list = list(pagos)
 
     for p in pagos_list:
-        key = p.transaccion_id or str(p.id)
+        key = f"comanda_{p.comanda_id}"
         if key not in grupos:
             grupos[key] = []
         grupos[key].append(p)
 
-    for key, group_pagos in grupos.items():
+    for idx, (key, group_pagos) in enumerate(grupos.items(), start=1):
         primer_pago = group_pagos[0]
         es_multi = len(group_pagos) > 1
         monto_total = sum(p.monto for p in group_pagos)
 
-        # Desglose de líneas (del primer pago, típicamente tienen las mismas)
-        lineas_ids = set()
-        for p in group_pagos:
-            for l in p.lineas_pagadas.all():
-                lineas_ids.add(l.id)
-
         desglose_pagos = [
             {
+                'pago_id': p.id,
                 'metodo': p.metodo_pago.nombre,
                 'monto': float(p.monto),
                 'referencia': p.referencia or '',
                 'estado': p.estado,
+                'boleta_url': f'/caja/boleta/{p.id}/',
             }
             for p in group_pagos
         ]
 
         data.append({
-            'pago_id': primer_pago.id,
-            'transaccion_id': key,
+            'orden': idx,
+            'comanda_id': primer_pago.comanda_id,
             'fecha_pago': timezone.localtime(primer_pago.fecha_pago).strftime('%d/%m/%Y %H:%M'),
             'cliente': primer_pago.comanda.nombre_cliente or 'Público en General',
             'mesa': f"Mesa {primer_pago.comanda.mesa.numero} ({primer_pago.comanda.mesa.zona.nombre if primer_pago.comanda.mesa.zona else ''})",
             'comanda_codigo': primer_pago.comanda.codigo_comanda,
             'monto_total': float(monto_total),
-            'vuelto': float(primer_pago.vuelto),
-            'metodo_display': 'MULTI' if es_multi else primer_pago.metodo_pago.nombre,
+            'cantidad_pagos': len(group_pagos),
             'es_multi': es_multi,
             'estado': primer_pago.estado,
-            'boleta_url': f'/caja/boleta/{primer_pago.id}/',
             'desglose_pagos': desglose_pagos,
         })
 
