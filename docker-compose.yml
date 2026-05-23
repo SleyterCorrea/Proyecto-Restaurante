@@ -58,6 +58,8 @@ services:
       - DEBUG=True
       - SECRET_KEY=restaurant-os-super-secret-key-2026-production
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,*
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       db:
         condition: service_healthy
