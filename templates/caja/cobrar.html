@@ -159,7 +159,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead class="sticky top-0 bg-surface-container z-10 border-b border-white/10">
                             <tr>
-                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Venta</th>
+                                <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">ID</th>
                                 <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Fecha/Hora</th>
                                 <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Cliente</th>
                                 <th class="py-3 px-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Ubicación</th>
@@ -169,24 +169,6 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="pago in historial" :key="pago.pago_id">
-                                <tr class="border-b border-white/5 transition-colors"
-                                    :class="pago.estado === 'PERDIDA' ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'hover:bg-white/5'">
-                                    <td class="py-3 px-4 text-sm font-medium" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-white'">Venta #<span x-text="pago.comanda_codigo"></span></td>
-                                    <td class="py-3 px-4 text-sm" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-on-surface-variant'" x-text="pago.fecha_pago"></td>
-                                    <td class="py-3 px-4 text-sm font-bold" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-primary'" x-text="pago.cliente"></td>
-                                    <td class="py-3 px-4 text-sm" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-on-surface'" x-text="pago.mesa"></td>
-                                    <td class="py-3 px-4 text-sm">
-                                        <span :class="pago.estado === 'PERDIDA' ? 'bg-red-500/15 border-red-500/30 text-red-400' : (pago.es_multi ? 'bg-secondary/20 border-secondary/30 text-secondary' : 'bg-surface/50 border-white/10 text-on-surface')" class="border px-2 py-1 rounded text-xs font-bold" x-text="pago.estado === 'PERDIDA' ? 'SIN PAGAR (PÉRDIDA)' : pago.metodo_display"></span>
-                                    </td>
-                                    <td class="py-3 px-4 text-sm font-black text-right" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-secondary'" x-text="'S/. ' + pago.monto_total.toFixed(2)"></td>
-                                    <td class="py-3 px-4 text-center">
-                                        <a :href="pago.boleta_url" target="_blank" class="w-8 h-8 mx-auto bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors" title="Descargar Boleta">
-                                            <span class="material-symbols-outlined text-sm">download</span>
-                                        </a>
-                                    </td>
-                                </tr>
-                            </template>
                             <tr x-show="historial.length === 0 && !loadingHistorial">
                                 <td colspan="7" class="text-center py-10 text-on-surface-variant">No se encontraron pagos en este rango de fechas.</td>
                             </tr>
@@ -197,6 +179,52 @@
                                 </td>
                             </tr>
                         </tbody>
+                        
+                        <template x-for="pago in historial" :key="pago.comanda_id">
+                            <tbody>
+                                <tr class="border-b border-white/5 transition-colors"
+                                    :class="pago.estado === 'PERDIDA' ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'hover:bg-white/5'">
+                                    <td class="py-3 px-4 text-sm font-medium" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-white'"><span x-text="'Orden #' + pago.orden"></span></td>
+                                    <td class="py-3 px-4 text-sm" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-on-surface-variant'" x-text="pago.fecha_pago"></td>
+                                    <td class="py-3 px-4 text-sm font-bold" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-primary'" x-text="pago.cliente"></td>
+                                    <td class="py-3 px-4 text-sm" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-on-surface'" x-text="pago.mesa"></td>
+                                    <td class="py-3 px-4 text-sm">
+                                        <span x-show="!pago.es_multi" :class="pago.estado === 'PERDIDA' ? 'bg-red-500/15 border-red-500/30 text-red-400' : 'bg-surface/50 border-white/10 text-on-surface'" class="border px-2 py-1 rounded text-xs font-bold" x-text="pago.estado === 'PERDIDA' ? 'SIN PAGAR (PÉRDIDA)' : pago.desglose_pagos[0].metodo"></span>
+                                        <span x-show="pago.es_multi" class="bg-secondary/20 border-secondary/30 text-secondary border px-2 py-1 rounded text-xs font-bold" x-text="pago.cantidad_pagos + ' pagos'"></span>
+                                    </td>
+                                    <td class="py-3 px-4 text-sm font-black text-right" :class="pago.estado === 'PERDIDA' ? 'text-red-400' : 'text-secondary'" x-text="'S/. ' + pago.monto_total.toFixed(2)"></td>
+                                    <td class="py-3 px-4 text-center">
+                                        <button @click="pago.expanded = !pago.expanded"
+                                                class="w-8 h-8 mx-auto bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors"
+                                                :title="pago.expanded ? 'Cerrar' : 'Desglosar'">
+                                            <span x-show="!pago.expanded" class="material-symbols-outlined text-sm">add</span>
+                                            <span x-show="pago.expanded" class="material-symbols-outlined text-sm">remove</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr x-show="pago.expanded" x-cloak>
+                                    <td colspan="7" class="p-0 border-b border-white/5">
+                                        <div class="bg-black/10 px-8 py-3 space-y-2">
+                                            <template x-for="item in pago.desglose_pagos" :key="item.pago_id">
+                                                <div class="flex items-center justify-between py-2 border-b border-white/5 last:border-b-0">
+                                                    <div class="flex items-center gap-3">
+                                                        <span class="material-symbols-outlined text-sm text-primary">receipt</span>
+                                                        <span class="text-sm text-on-surface font-medium" x-text="item.metodo"></span>
+                                                        <span class="text-xs text-on-surface-variant" x-show="item.referencia" x-text="'Ref: ' + item.referencia"></span>
+                                                    </div>
+                                                    <div class="flex items-center gap-3">
+                                                        <span class="text-sm font-bold text-white" x-text="'S/. ' + item.monto.toFixed(2)"></span>
+                                                        <a :href="item.boleta_url" target="_blank" class="w-7 h-7 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg flex items-center justify-center transition-colors" title="Descargar Boleta">
+                                                            <span class="material-symbols-outlined text-sm">download</span>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </template>
                     </table>
                 </div>
             </div>
@@ -549,7 +577,7 @@ function cobrarApp() {
                 const res = await fetch(`/caja/api/historial/?${params.toString()}`);
                 const data = await res.json();
                 if (data.ok) {
-                    this.historial = data.pagos;
+                    this.historial = data.pagos.map(p => ({ ...p, expanded: false }));
                 }
             } catch (e) {
                 console.error("Error al cargar historial:", e);
