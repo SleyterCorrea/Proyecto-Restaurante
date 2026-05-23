@@ -386,11 +386,36 @@ def api_ventas_historial(request):
     
     search = request.GET.get('search', '').strip()
     if search:
-        # Búsqueda flexible: número de mesa (parcial) o código de comanda
-        base_pagos = base_pagos.filter(
-            Q(comanda__mesa__numero__icontains=search) |
-            Q(comanda__codigo_comanda__icontains=search)
-        )
+        import re
+        # Búsqueda flexible e inteligente
+        # 1. Detectar si busca una mesa con prefijo (ej: "mesa 1", "Mesa 3", "m 2")
+        match = re.search(r'(?:mesa|m)\s*(\d+)', search, re.IGNORECASE)
+        
+        # 2. Verificar si la búsqueda es puramente numérica
+        is_numeric = search.isdigit()
+        
+        query = Q()
+        if match:
+            # Búsqueda exacta de mesa si especifica "mesa X"
+            numero_mesa = int(match.group(1))
+            query |= Q(comanda__mesa__numero=numero_mesa)
+        elif is_numeric:
+            # Si escribe solo un número (ej. "1"):
+            # - Si tiene menos de 3 dígitos (ej. "1", "10"), buscamos por mesa exacta.
+            # - Si tiene 3 o más dígitos (ej. "101"), puede ser un código de comanda o mesa grande.
+            numero_mesa = int(search)
+            query |= Q(comanda__mesa__numero=numero_mesa)
+            if len(search) >= 3:
+                query |= Q(comanda__codigo_comanda__icontains=search)
+        else:
+            # Búsqueda general de texto en otros campos
+            query |= Q(comanda__codigo_comanda__icontains=search)
+            query |= Q(comanda__mozo__username__icontains=search)
+            query |= Q(comanda__mozo__nombres__icontains=search)
+            query |= Q(comanda__mozo__apellidos__icontains=search)
+            query |= Q(comanda__nombre_cliente__icontains=search)
+            
+        base_pagos = base_pagos.filter(query)
 
     comandas_ids = base_pagos.values_list('comanda_id', flat=True).distinct()
     
