@@ -23,12 +23,17 @@ def notificar_plato_listo(sender, instance, created, **kwargs):
         cliente = instance.comanda.nombre_cliente or "Cliente"
         plato_nombre = instance.plato.nombre
         
-        async_to_sync(channel_layer.group_send)(
-            "notificaciones_mozos",
-            {
-                "type": "notify_ready",
-                "mesa": mesa_numero,
-                "cliente": cliente,
-                "plato": plato_nombre,
-            }
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                "notificaciones_mozos",
+                {
+                    "type": "notify_ready",
+                    "mesa": mesa_numero,
+                    "cliente": cliente,
+                    "plato": plato_nombre,
+                }
+            )
+        except Exception as e:
+            # Tolerancia a fallos: Evitar que fallas del WebSocket (e.g., caídas de Redis)
+            # rompan la transacción principal en la base de datos de Django.
+            print(f"Error al enviar notificación WebSocket (notificar_plato_listo): {e}", flush=True)

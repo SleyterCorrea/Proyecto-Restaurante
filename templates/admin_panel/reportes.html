@@ -110,16 +110,67 @@
     vertical-align: middle;
   }
 
+  /* ── Search Box Premium ── */
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 11px;
+    font-size: 17px;
+    color: rgb(var(--on-surface-variant) / 0.5);
+    pointer-events: none;
+    transition: color 0.2s;
+    z-index: 1;
+  }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgb(var(--border) / 0.15);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgb(var(--on-surface-variant));
+    transition: all 0.15s;
+    padding: 0;
+  }
+  .search-clear:hover {
+    background: rgb(var(--border) / 0.3);
+    color: rgb(var(--on-surface));
+  }
+  .search-clear .material-symbols-outlined { font-size: 13px; }
+
   .r-search {
-    background: rgb(var(--surface)) !important; 
-    border: 1px solid rgb(var(--border) / 0.1);
-    border-radius: 10px; 
-    padding: 8px 12px 8px 36px;
-    color: rgb(var(--on-surface)) !important; 
-    font-size: 13px; 
+    background: rgb(var(--surface)) !important;
+    border: 1px solid rgb(var(--border) / 0.12);
+    border-radius: 12px;
+    padding: 9px 32px 9px 36px;
+    color: rgb(var(--on-surface)) !important;
+    font-size: 13px;
+    font-weight: 500;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     color-scheme: dark;
+    width: 210px;
+  }
+  .r-search::placeholder {
+    color: rgb(var(--on-surface-variant) / 0.45);
+    font-weight: 400;
+  }
+  .r-search:focus {
+    border-color: rgb(var(--primary) / 0.45);
+    box-shadow: 0 0 0 3px rgb(var(--primary) / 0.08);
+    background: rgb(var(--surface)) !important;
+  }
+  .search-wrap:focus-within .search-icon {
+    color: rgb(var(--primary) / 0.7);
   }
   input[type="date"].r-search {
     position: relative;
@@ -482,13 +533,20 @@
                   style="font-size: 11px; font-weight: 600; padding: 4px 12px; transition: all 0.2s;">Pérdidas</button>
         </div>
         
-        <div class="position-relative">
-          <span class="material-symbols-outlined position-absolute"
-                style="left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:#64748b;pointer-events:none;">search</span>
+        <div class="search-wrap">
+          <span class="material-symbols-outlined search-icon">search</span>
           <input type="text" class="r-search" x-model="filterSearch"
-                 @input.debounce.400ms="cargarHistorial()"
-                 placeholder="Buscar por mesa..."
-                 style="width:180px;">
+                 @input.debounce.350ms="cargarHistorial()"
+                 placeholder="Buscar por mesa…"
+                 autocomplete="off"
+                 spellcheck="false">
+          <button type="button" class="search-clear"
+                  x-show="filterSearch.length > 0"
+                  x-transition.opacity
+                  @click="filterSearch = ''; cargarHistorial()"
+                  title="Limpiar búsqueda">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
       </div>
     </div>

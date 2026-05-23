@@ -79,12 +79,14 @@ TEMPLATES = [
 WSGI_APPLICATION = 'restaurant.wsgi.application'
 ASGI_APPLICATION = 'restaurant.asgi.application'
 
-# ─── Configuración de Channels (Redis para Producción/Docker) ───────────────
+# ─── Configuración de Channels (Redis) ────────────────────────────────────────
+# En Docker, REDIS_HOST=redis (nombre del contenedor).
+# En local, agregar REDIS_HOST=127.0.0.1 al .env
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('redis', 6379)],
+            "hosts": [(env('REDIS_HOST', default='redis'), int(env('REDIS_PORT', default='6379')))],
         },
     },
 }

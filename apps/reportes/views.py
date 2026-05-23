@@ -388,16 +388,11 @@ def api_ventas_historial(request):
     
     search = request.GET.get('search', '').strip()
     if search:
-        if search.isdigit():
-            base_pagos = base_pagos.filter(
-                Q(comanda__mesa__numero=int(search)) |
-                Q(comanda__codigo_comanda__endswith=search)
-            )
-        else:
-            base_pagos = base_pagos.filter(
-                Q(comanda__codigo_comanda__icontains=search) | 
-                Q(comanda__mesa__numero__icontains=search)
-            )
+        # Búsqueda flexible: número de mesa (parcial) o código de comanda
+        base_pagos = base_pagos.filter(
+            Q(comanda__mesa__numero__icontains=search) |
+            Q(comanda__codigo_comanda__icontains=search)
+        )
 
     comandas_ids = base_pagos.values_list('comanda_id', flat=True).distinct()
     
