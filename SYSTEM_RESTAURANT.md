@@ -92,10 +92,11 @@ El sistema opera mediante una combinación de vistas HTML clásicas y endpoints 
 * **`POST /api/comandas/crear/`**: Crea una orden de forma atómica. Soporta **unión de múltiples mesas** (`mesa_ids: [1, 2, 3]`), verifica stock de insumos por receta y bloquea las mesas a `OCUPADA`.
 * **`POST /api/comandas/<id>/platos/`**: Añade nuevos platos a una comanda existente (incluso si los anteriores ya están en preparación).
 * **`GET /api/cocina/pendientes/`**: Lista filtrada para el KDS de la cocina (solo ítems `PENDIENTE` y `EN_PREP`).
+* **`POST /api/lineas/<id>/enviar-cocina/`**: Inicia explícitamente la preparación de una línea y actualiza la comanda a `EN_PREPARACION`.
 * **`PATCH /api/lineas/<id>/estado/`**: Avanza el flujo de preparación (`PENDIENTE` -> `EN_PREP` -> `LISTO`). Dispara automáticamente una **notificación vía WebSocket** al mozo.
 * **`WS /ws/notificaciones/`**: Canal bidireccional para alertas en tiempo real (Notificaciones de platos listos).
 * **`POST /api/comandas/mesa/<id>/liberar/`**: Cierra la comanda en el sistema de mesas y la manda a caja. Cambia el estado de la mesa a `POR_PAGAR` (celeste).
-* **`POST /api/caja/comanda/<id>/pagar/`**: Procesa el pago, genera la boleta PDF y libera definitivamente la mesa (`LIBRE`).
+* **`POST /caja/api/comandas/<id>/pagar/`**: Procesa el pago y descuenta los insumos atómicamente, genera la boleta PDF y envía la mesa a `LIMPIEZA`.
 * **`GET /api/caja/historial/`**: Consulta histórica de pagos filtrados por fechas. Restringido al día actual para CAJEROS.
 * **`GET/POST/PATCH /api/trabajadores/`**: CRUD completo de personal (Solo Admin). Permite gestionar altas, bajas, roles y contraseñas.
 * **`GET/POST/PUT/DELETE /api/menu/platos/`**: Gestión administrativa de platos incluyendo carga de imágenes (`multipart/form-data`).
@@ -124,19 +125,22 @@ El sistema opera mediante una combinación de vistas HTML clásicas y endpoints 
 - **UX de Pedidos**: Validación de límite de mesas (3) integrada en el modal con auto-ocultado tras 10 segundos.
 - **Documentación por Rol**: Acceso directo a manuales de uso personalizados según el rol del usuario logueado.
 - **Módulo de Gestión de Menú**: CRUD dinámico de categorías y platos con carga de imágenes y previsualización en tiempo real.
+- **Service Layer**: `ComandaService`, `CocinaService`, `CajaService`, `InventarioService`, `MesaService` y `MenuService` concentran las reglas de negocio y transacciones.
+- **Excepciones de Dominio**: Jerarquía común para stock, caja, estados, permisos y recursos no encontrados, traducida a respuestas HTTP por las vistas.
+- **Inventario Atómico**: El stock se valida al pedir y se descuenta una sola vez dentro de la transacción de cobro, con movimientos trazables por línea.
 - **Sistema de Auditoría**: Trazabilidad completa de acciones críticas, cambios en el menú, gestión de usuarios e inicios de sesión.
 - **UX Optimizada**: Hovers dinámicos y botones con código de colores (Azul Primario para acciones principales) para máxima claridad en modo claro/oscuro.
 
 🟡 **A Medio Hacer / Pendiente (WIP)**
 - **Reportes/Dashboard Administrativo**: Finalizar la carga de gráficos de métricas (ingresos, platos más vendidos) en tiempo real.
-- **Descuento de Inventario Automático**: Conectar totalmente el trigger que reste insumos al confirmar una línea como `LISTO`.
+- **ModeloBase y Soft Delete Global**: Unificar campos de auditoría y managers activos en todas las entidades mediante migraciones controladas.
 
 ---
 
 ## 7. Guía de Estilo y Convenciones
 
-1. **Arquitectura "Fat Models, Thin Views"**: 
-   La lógica de negocio reside predominantemente en los modelos (Ej. `comanda.calcular_totales()`, `comanda.marcar_como_lista()`) para mantener los controladores limpios y testeables.
+1. **Arquitectura Service Layer**:
+   Las vistas reciben la solicitud, llaman al servicio del módulo y traducen excepciones a HTTP. Los modelos conservan únicamente comportamiento propio de la entidad, como cálculo de totales y transiciones locales.
 2. **Atomicidad**: 
    Toda creación o modificación que involucre más de un registro (Ej. Crear Comanda + Líneas + Cambiar estado de Mesa) se envuelve estrictamente en `transaction.atomic()`.
 3. **Idiomas y Nomenclatura**:

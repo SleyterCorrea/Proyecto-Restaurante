@@ -7,14 +7,8 @@ API Endpoints:
   POST  /api/mesas/<id>/liberar/       → Cierra comanda y libera la mesa
 """
 from __future__ import annotations
-import json
-import logging
 from django.http import JsonResponse
-
-logger = logging.getLogger(__name__)
-from django.views.decorators.http import require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -25,40 +19,12 @@ from apps.usuarios.decorators import rol_requerido
 from apps.usuarios.permissions import EsMozoOAdmin, EsCocineroOAdmin, EsAdmin
 
 from .models import Comanda, LineaComanda
-from apps.mesas.models import Mesa
-from apps.menu.models import Plato
-from apps.inventario.models import RecetaInsumo
-
-def verificar_stock_plato(plato, cantidad_pedida):
-    """
-    Verifica si hay stock suficiente de todos los insumos de un plato.
-    Retorna (True, None) o (False, error_data).
-    """
-    recetas = RecetaInsumo.objects.filter(plato=plato, activo=True).select_related('insumo')
-    for receta in recetas:
-        stock_requerido = receta.cantidad_por_porcion * cantidad_pedida
-        if receta.insumo.stock_real < stock_requerido:
-            return False, {
-                "error": "Stock insuficiente",
-                "insumo": receta.insumo.nombre,
-                "stock_disponible": float(receta.insumo.stock_real),
-                "stock_requerido": float(stock_requerido)
-            }
-    return True, None
+from apps.core.exceptions import AppError
+from .services import ComandaService, CocinaService
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _parse_json_body(request) -> tuple[dict | list, None] | tuple[None, JsonResponse]:
-    """Parsea el body JSON de la request. Devuelve (data, None) o (None, error_response)."""
-    try:
-        data = json.loads(request.body)
-        return data, None
-    except (json.JSONDecodeError, ValueError):
-        return None, JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
-
+def _error_response(exc):
+    return Response(exc.as_dict(), status=exc.status_code)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /api/comandas/crear/
@@ -84,116 +50,10 @@ def api_crear_comanda(request):
     Respuesta exitosa:
     { "ok": true, "comanda_id": 42, "redirect": "/mesero/mesas/" }
     """
-    data = request.data
-
-    # ── Validaciones básicas ──────────────────────────────────────────────────
-    mesa_ids = data.get('mesa_ids', [])
-    # Compatibilidad con legacy (solo un mesa_id)
-    if not mesa_ids and data.get('mesa_id'):
-        mesa_ids = [data.get('mesa_id')]
-    
-    items = data.get('items', [])
-
-    if not mesa_ids:
-        return JsonResponse({'ok': False, 'error': 'Falta el campo mesa_ids'}, status=400)
-    if len(mesa_ids) > 3:
-        return JsonResponse({'ok': False, 'error': 'Máximo 3 mesas permitidas'}, status=400)
-    if not items:
-        return JsonResponse({'ok': False, 'error': 'El pedido no tiene ítems'}, status=400)
-
-    # ── Obtener las mesas y verificar que estén libres ────────────────────────────
-    mesas = Mesa.objects.filter(pk__in=mesa_ids)
-    if mesas.count() != len(mesa_ids):
-        return JsonResponse({'ok': False, 'error': 'Una o más mesas no encontradas'}, status=404)
-
-    for m in mesas:
-        if m.estado != Mesa.Estado.LIBRE:
-            return JsonResponse(
-                {'ok': False, 'error': f'La mesa {m.numero} no está libre (estado: {m.get_estado_display()})'},
-                status=409
-            )
-
-    # ── Bloque atómico: todo o nada ───────────────────────────────────────────
     try:
-        with transaction.atomic():
-            # 1. Crear la Comanda (usamos la primera mesa como principal)
-            mesa_principal = mesas[0]
-            mesas_adicionales = mesas[1:]
-
-            import datetime
-            now = datetime.datetime.now()
-            count = Comanda.objects.filter(fecha_apertura__date=now.date()).count() + 1
-            codigo = f"COM-{now.strftime('%Y%m%d')}-{count:03d}"
-
-            comanda = Comanda.objects.create(
-                codigo_comanda = codigo,
-                mesa   = mesa_principal,
-                mozo   = request.user if request.user.is_authenticated else None,
-                nombre_cliente = data.get('nombre_cliente', ''),
-                estado = Comanda.Estado.ABIERTA,
-                observacion_general = data.get('notas', ''),
-            )
-            
-            if mesas_adicionales:
-                comanda.mesas_adicionales.set(mesas_adicionales)
-
-            # 2. Crear las LineaComanda
-            ahora_linea = timezone.now()
-            for item in items:
-                plato_id = item.get('plato_id')
-                cantidad = int(item.get('cantidad', 1))
-
-                if not plato_id or cantidad < 1:
-                    raise ValueError(f'Ítem inválido: {item}')
-                
-                plato = Plato.objects.get(pk=plato_id)
-                
-                # --- VERIFICACIÓN DE STOCK ---
-                apto, error_data = verificar_stock_plato(plato, cantidad)
-                if not apto:
-                    return JsonResponse(error_data, status=400)
-
-                LineaComanda.objects.create(
-                    comanda         = comanda,
-                    plato           = plato,
-                    cantidad        = cantidad,
-                    precio_unitario = plato.precio_actual,
-                    subtotal        = plato.precio_actual * cantidad,
-                    observacion     = item.get('notas', ''),
-                    fecha_envio_cocina = ahora_linea,
-                    tiempo_estimado_min = plato.tiempo_preparacion_min or 0,
-                )
-
-            # 3. Marcar TODAS las mesas como OCUPADA
-            for m in mesas:
-                m.estado = Mesa.Estado.OCUPADA
-                m.save(update_fields=['estado'])
-
-            # 4. Calcular totales
-            comanda.calcular_totales()
-
-    except Plato.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'Un plato indicado no existe'}, status=404)
-    except ValueError as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': f'Error interno: {str(e)}'}, status=500)
-
-    # 5. Notificar al KDS vía WebSocket para actualización inmediata
-    try:
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            'kds_updates',
-            {
-                'type': 'kds_update',
-                'action': 'nueva_comanda',
-                'detail': {'comanda_id': comanda.id, 'mesa': mesa_principal.numero},
-            }
-        )
-    except Exception:
-        pass  # El WS es opcional, el polling es el fallback
+        comanda = ComandaService.abrir(request.data, request.user)
+    except AppError as exc:
+        return _error_response(exc)
 
     return JsonResponse({
         'ok': True, 
@@ -214,61 +74,19 @@ def api_linea_detail(request, pk):
     REGLA DE NEGOCIO: Solo se permite si el estado es 'PENDIENTE'.
     """
     try:
-        linea = LineaComanda.objects.select_related('comanda').get(pk=pk)
-    except LineaComanda.DoesNotExist:
-        return Response({'error': 'Línea no encontrada'}, status=status.HTTP_404_NOT_FOUND)
-
-    # 1. Verificar REGLA DE NEGOCIO
-    if linea.estado != LineaComanda.Estado.PENDIENTE:
-        return Response({
-            'error': f'No se puede modificar: El plato ya está en estado {linea.get_estado_display().upper()}.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if request.method == 'DELETE':
-        with transaction.atomic():
-            comanda = linea.comanda
-            linea.delete()
-            comanda.calcular_totales()
-            
-            # Si la comanda se quedó sin líneas, anularla automáticamente y liberar mesas
-            if comanda.lineas.count() == 0:
-                comanda.estado = Comanda.Estado.ANULADA
-                comanda.save(update_fields=['estado'])
-                for m in comanda.todas_las_mesas:
-                    m.estado = Mesa.Estado.LIBRE
-                    m.save(update_fields=['estado'])
-                    
-        return Response({'ok': True, 'message': 'Plato eliminado del pedido.'})
-
-    if request.method == 'PATCH':
-        data = request.data
-        with transaction.atomic():
-            if 'plato_id' in data:
-                try:
-                    nuevo_plato = Plato.objects.get(pk=data['plato_id'])
-                    linea.plato = nuevo_plato
-                    linea.precio_unitario = nuevo_plato.precio_actual
-                except Plato.DoesNotExist:
-                    return Response({'error': 'El plato seleccionado no existe'}, status=status.HTTP_404_NOT_FOUND)
-            
-            if 'cantidad' in data:
-                linea.cantidad = max(1, int(data['cantidad']))
-            
-            if 'notas' in data:
-                linea.observacion = data['notas']
-            
-            # Recalcular siempre por si cambió el plato o la cantidad
-            linea.subtotal = linea.precio_unitario * linea.cantidad
-            linea.save()
-            linea.comanda.calcular_totales()
-
-        return Response({
-            'ok': True,
-            'linea_id': linea.pk,
-            'plato_nombre': linea.plato.nombre,
-            'cantidad': linea.cantidad,
-            'subtotal': str(linea.subtotal)
-        })
+        if request.method == 'DELETE':
+            ComandaService.eliminar_linea(pk)
+            return Response({'ok': True, 'message': 'Plato eliminado del pedido.'})
+        linea = ComandaService.editar_linea(pk, request.data)
+    except AppError as exc:
+        return _error_response(exc)
+    return Response({
+        'ok': True,
+        'linea_id': linea.pk,
+        'plato_nombre': linea.plato.nombre,
+        'cantidad': linea.cantidad,
+        'subtotal': str(linea.subtotal),
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -276,47 +94,18 @@ def api_linea_detail(request, pk):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @csrf_exempt
-@require_POST
+@api_view(['POST'])
+@permission_classes([EsMozoOAdmin])
 def api_liberar_mesa(request, mesa_id):
     """
     Cierra la comanda activa de la mesa y la pone en estado LIBRE.
     Típicamente se llama al presionar "Liberar Mesa / Cobrar".
     """
     try:
-        mesa = Mesa.objects.get(pk=mesa_id)
-    except Mesa.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'Mesa no encontrada'}, status=404)
-
-    with transaction.atomic():
-        # Marcar la comanda como LISTA para que aparezca en Caja
-        comanda = (
-            mesa.comandas
-            .filter(estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.LISTA])
-            .order_by('-fecha_apertura')
-            .first()
-        )
-        if comanda:
-            if comanda.estado == Comanda.Estado.ABIERTA:
-                comanda.estado = Comanda.Estado.LISTA
-                comanda.save(update_fields=['estado'])
-                
-                # Cambiar todas las mesas vinculadas (uniones) a estado POR_PAGAR
-                for m in comanda.todas_las_mesas:
-                    m.estado = Mesa.Estado.POR_PAGAR
-                    m.save(update_fields=['estado'])
-                
-                return JsonResponse({'ok': True, 'message': 'Comanda enviada a caja. Mesa en espera de pago.'})
-            
-            # Si ya estaba LISTA, devolvemos éxito igual para evitar el error 400 en el frontend
-            # Aseguramos que las mesas estén en POR_PAGAR por si acaso
-            for m in comanda.todas_las_mesas:
-                if m.estado != Mesa.Estado.POR_PAGAR:
-                    m.estado = Mesa.Estado.POR_PAGAR
-                    m.save(update_fields=['estado'])
-            
-            return JsonResponse({'ok': True, 'message': 'La comanda ya está en caja.'})
-        
-        return JsonResponse({'ok': False, 'error': 'No hay comanda activa en esta mesa.'}, status=400)
+        ComandaService.enviar_a_caja(mesa_id)
+    except AppError as exc:
+        return _error_response(exc)
+    return Response({'ok': True, 'message': 'Comanda enviada a caja. Mesa en espera de pago.'})
 
 
 @csrf_exempt
@@ -328,26 +117,9 @@ def api_marcar_pedido_entregado(request, pk):
     Este paso lo ejecuta el mozo al entregar físicamente el pedido al cliente.
     """
     try:
-        comanda = Comanda.objects.get(pk=pk)
-    except Comanda.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'Comanda no encontrada'}, status=404)
-
-    with transaction.atomic():
-        lineas_listas = comanda.lineas.filter(estado=LineaComanda.Estado.LISTO)
-        cantidad = lineas_listas.count()
-        if cantidad == 0:
-            return JsonResponse(
-                {'ok': False, 'error': 'No hay platos listos pendientes de entrega.'},
-                status=400
-            )
-
-        ahora = timezone.now()
-        lineas_listas.update(
-            estado=LineaComanda.Estado.ENTREGADO,
-            fecha_entregado=ahora,
-        )
-
-        comanda.marcar_como_lista()
+        cantidad = ComandaService.marcar_entregado(pk)
+    except AppError as exc:
+        return _error_response(exc)
 
     return JsonResponse({
         'ok': True,
@@ -367,50 +139,10 @@ def api_agregar_plato_comanda(request, pk):
     """
     Agrega un plato a una comanda existente.
     """
-    data = request.data
-
     try:
-        comanda = Comanda.objects.get(pk=pk)
-    except Comanda.DoesNotExist:
-        return JsonResponse({'error': 'Comanda no encontrada'}, status=404)
-
-    plato_id = data.get('plato_id')
-    cantidad = int(data.get('cantidad', 1))
-
-    try:
-        plato = Plato.objects.get(pk=plato_id)
-    except Plato.DoesNotExist:
-        return JsonResponse({'error': 'Plato no encontrado'}, status=404)
-
-    apto, error_data = verificar_stock_plato(plato, cantidad)
-    if not apto:
-        return JsonResponse(error_data, status=400)
-
-    linea = LineaComanda.objects.create(
-        comanda=comanda,
-        plato=plato,
-        cantidad=cantidad,
-        precio_unitario=plato.precio_actual,
-        subtotal=plato.precio_actual * cantidad,
-        observacion=data.get('notas', ''),
-        fecha_envio_cocina=timezone.now(),
-        tiempo_estimado_min=plato.tiempo_preparacion_min or 0,
-    )
-
-    # Calcular totales
-    comanda.calcular_totales()
-
-    # Notificar al KDS
-    try:
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            'kds_updates',
-            {'type': 'kds_update', 'action': 'nueva_linea', 'detail': {'comanda_id': comanda.id}}
-        )
-    except Exception:
-        pass
+        linea = ComandaService.agregar_plato(pk, request.data)
+    except AppError as exc:
+        return _error_response(exc)
 
     return JsonResponse({'ok': True, 'linea_id': linea.id})
 
@@ -482,43 +214,25 @@ def api_linea_estado(request, pk):
     - Cualquiera: PENDIENTE -> EN_PREP
     - Solo COCINERO: EN_PREP -> LISTO
     """
-    nuevo_estado = request.data.get('estado')
+    try:
+        linea, _ = CocinaService.cambiar_estado(
+            pk, request.data.get('estado'), request.user
+        )
+    except AppError as exc:
+        return _error_response(exc)
+    return Response({'ok': True, 'id': linea.id, 'estado': linea.estado})
 
-    with transaction.atomic():
-        try:
-            linea = LineaComanda.objects.select_for_update().select_related('plato', 'comanda').get(pk=pk)
-        except LineaComanda.DoesNotExist:
-            return Response({'error': 'Línea no encontrada'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Validar transiciones y permisos
-        if linea.estado == LineaComanda.Estado.PENDIENTE and nuevo_estado == LineaComanda.Estado.EN_PREP:
-            if hasattr(linea, 'fecha_inicio_prep'):
-                linea.fecha_inicio_prep = timezone.now()
-
-        elif linea.estado == LineaComanda.Estado.EN_PREP and nuevo_estado == LineaComanda.Estado.LISTO:
-            if request.user.rol.nombre not in ['COCINERO', 'ADMIN']:
-                return Response({'error': 'Solo cocina puede marcar platos como listos'}, status=status.HTTP_403_FORBIDDEN)
-            apto, error_data = verificar_stock_plato(linea.plato, linea.cantidad)
-            if not apto:
-                return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
-            if hasattr(linea, 'fecha_listo'):
-                linea.fecha_listo = timezone.now()
-        else:
-            return Response({'error': 'Transición no permitida'}, status=status.HTTP_400_BAD_REQUEST)
-
-        linea.estado = nuevo_estado
-        linea.save()
-
-        if nuevo_estado == LineaComanda.Estado.LISTO:
-            try:
-                from apps.inventario.services import descontar_inventario_al_marcar_listo
-                descontar_inventario_al_marcar_listo(linea, request.user)
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            except Exception:
-                logger.exception('Error al descontar inventario para línea %s', pk)
-            linea.comanda.marcar_como_lista()
-
+@api_view(['POST'])
+@permission_classes([EsCocineroOAdmin])
+def api_enviar_linea_cocina(request, pk):
+    """Explicit endpoint required by the KDS contract: PENDIENTE -> EN_PREP."""
+    try:
+        linea, _ = CocinaService.cambiar_estado(
+            pk, LineaComanda.Estado.EN_PREP, request.user
+        )
+    except AppError as exc:
+        return _error_response(exc)
     return Response({'ok': True, 'id': linea.id, 'estado': linea.estado})
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -637,144 +351,15 @@ def api_cocina_cambiar_estado(request, pk):
     """
     nuevo_estado = request.data.get('nuevo_estado')
     motivo = request.data.get('motivo', '')
-    cantidad_parcial = int(request.data.get('cantidad_parcial', 0))
-
-    with transaction.atomic():
-        try:
-            linea = LineaComanda.objects.select_for_update().select_related('plato', 'comanda', 'comanda__mesa').get(pk=pk)
-        except LineaComanda.DoesNotExist:
-            return Response({'error': 'Línea no encontrada'}, status=status.HTTP_404_NOT_FOUND)
-
-        estado_actual = linea.estado
-
-        # Validar transiciones permitidas
-        transiciones_ok = {
-            LineaComanda.Estado.PENDIENTE: [LineaComanda.Estado.EN_PREP, LineaComanda.Estado.ANULADO],
-            LineaComanda.Estado.EN_PREP:   [LineaComanda.Estado.LISTO, LineaComanda.Estado.ANULADO],
-            LineaComanda.Estado.LISTO:     [LineaComanda.Estado.ANULADO],
-        }
-
-        permitidos = transiciones_ok.get(estado_actual, [])
-        if nuevo_estado not in permitidos:
-            return Response({
-                'error': f'Transición no permitida: {estado_actual} → {nuevo_estado}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validaciones especiales
-        if nuevo_estado == LineaComanda.Estado.ANULADO and not motivo:
-            return Response({'error': 'Se requiere un motivo para anular.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if nuevo_estado == LineaComanda.Estado.LISTO:
-            if request.user.rol.nombre not in ['COCINERO', 'ADMIN']:
-                return Response({'error': 'Solo cocina puede marcar platos como listos'}, status=status.HTTP_403_FORBIDDEN)
-            apto, error_data = verificar_stock_plato(linea.plato, linea.cantidad)
-            if not apto:
-                return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
-
-        # Actualizar timestamps
-        ahora = timezone.now()
-        if nuevo_estado == LineaComanda.Estado.EN_PREP:
-            linea.fecha_inicio_prep = ahora
-        elif nuevo_estado == LineaComanda.Estado.LISTO:
-            linea.fecha_listo = ahora
-            # Auditoría: calcular tiempo real de preparación en segundos
-            if linea.fecha_inicio_prep:
-                linea.tiempo_real_preparacion_seg = int((ahora - linea.fecha_inicio_prep).total_seconds())
-
-        # ── Cancelación parcial ──────────────────────────────────────────
-        nueva_linea_parcial = None
-        if nuevo_estado == LineaComanda.Estado.ANULADO:
-            linea.motivo_anulacion = motivo
-            # Validar cantidad_parcial
-            if cantidad_parcial > 0:
-                if cantidad_parcial >= linea.cantidad:
-                    return Response(
-                        {'error': f'La cantidad parcial ({cantidad_parcial}) debe ser menor a la cantidad original ({linea.cantidad}).'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                linea.cantidad_parcial_cocina = cantidad_parcial
-                # Crear nueva línea con la cantidad que SÍ se puede cocinar
-                nueva_linea_parcial = LineaComanda.objects.create(
-                    comanda=linea.comanda,
-                    plato=linea.plato,
-                    cantidad=cantidad_parcial,
-                    precio_unitario=linea.precio_unitario,
-                    subtotal=linea.precio_unitario * cantidad_parcial,
-                    observacion=linea.observacion,
-                    estado=LineaComanda.Estado.EN_PREP,
-                    fecha_envio_cocina=linea.fecha_envio_cocina,
-                    fecha_inicio_prep=ahora,
-                    tiempo_estimado_min=linea.tiempo_estimado_min,
-                )
-
-        linea.estado = nuevo_estado
-        linea.save()
-
-        # Recalcular totales de la comanda
-        linea.comanda.calcular_totales()
-
-        # Auditoría
-        from apps.comandas.models import ComandaHistorialEstado
-        motivo_historial = motivo or 'Cambio de estado vía KDS'
-        if cantidad_parcial > 0 and nuevo_estado == LineaComanda.Estado.ANULADO:
-            motivo_historial = f'{motivo} [Parcial: cocinero puede preparar {cantidad_parcial} de {linea.cantidad}]'
-        ComandaHistorialEstado.objects.create(
-            comanda=linea.comanda,
-            estado_anterior=estado_actual,
-            estado_nuevo=nuevo_estado,
-            usuario=request.user,
-            motivo=motivo_historial,
-            origen=ComandaHistorialEstado.Origen.KDS,
+    try:
+        cantidad_parcial = int(request.data.get('cantidad_parcial', 0))
+        linea, nueva_linea_parcial = CocinaService.cambiar_estado(
+            pk, nuevo_estado, request.user, motivo, cantidad_parcial
         )
-
-        # Descontar inventario al marcar LISTO
-        if nuevo_estado == LineaComanda.Estado.LISTO:
-            from apps.inventario.services import descontar_inventario_al_marcar_listo
-            try:
-                descontar_inventario_al_marcar_listo(linea, request.user)
-            except ValueError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            except Exception:
-                logger.exception('Error al descontar inventario para línea %s (KDS)', pk)
-
-        # Verificar si la comanda completa está lista
-        linea.comanda.marcar_como_lista()
-
-        # Notificar vía WebSocket al grupo kds_updates
-        try:
-            from channels.layers import get_channel_layer
-            from asgiref.sync import async_to_sync
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                'kds_updates',
-                {
-                    'type': 'kds_update',
-                    'action': 'estado_cambiado',
-                    'detail': {'linea_id': pk, 'nuevo_estado': nuevo_estado},
-                }
-            )
-        except Exception:
-            pass  # El WS es opcional; el polling es el fallback
-
-        # ── Notificar cancelación parcial a meseros ──────────────────────
-        if nuevo_estado == LineaComanda.Estado.ANULADO and cantidad_parcial > 0:
-            try:
-                from channels.layers import get_channel_layer
-                from asgiref.sync import async_to_sync
-                channel_layer = get_channel_layer()
-                async_to_sync(channel_layer.group_send)(
-                    'notificaciones_mozos',
-                    {
-                        'type': 'cancelacion_parcial',
-                        'mesa': linea.comanda.mesa.numero,
-                        'plato': linea.plato.nombre,
-                        'cantidad_original': linea.cantidad,
-                        'cantidad_preparable': cantidad_parcial,
-                        'motivo': motivo,
-                    }
-                )
-            except Exception:
-                pass
+    except (TypeError, ValueError):
+        return Response({'error': 'Cantidad parcial invalida.'}, status=400)
+    except AppError as exc:
+        return _error_response(exc)
 
     mensaje_map = {
         LineaComanda.Estado.EN_PREP: f'Plato "{linea.plato.nombre}" marcado En Preparación',

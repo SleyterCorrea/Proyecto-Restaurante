@@ -17,16 +17,14 @@ API:
 """
 import json
 import datetime
-from decimal import Decimal
 from itertools import groupby
 
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, FileResponse
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db import transaction, models
+from django.db import models
 from django.contrib import messages
-from django.core.exceptions import ValidationError
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -37,7 +35,8 @@ from apps.usuarios.permissions import EsCajeroOAdmin, EsMozoOAdmin
 from apps.comandas.models import Comanda, LineaComanda
 from .models import CajaTurno, MetodoPago, Pago
 from apps.mesas.models import UnionMesas, Mesa
-from .services import procesar_cobro, registrar_perdida
+from .services import CajaService
+from apps.core.exceptions import AppError
 from .utils import generar_pdf_boleta
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +100,6 @@ def cobrar_view(request):
 
     _anotar_union_labels(comandas_listas)
 
-    import json
     # Calcular total_pendiente para cada comanda (excluye líneas anuladas y ya pagadas)
     for c in comandas_listas:
         # Determinar qué líneas ya fueron pagadas en cobros previos usando prefetch cache
@@ -220,28 +218,10 @@ def descargar_boleta_view(request, pago_id):
 @permission_classes([EsCajeroOAdmin])
 def api_abrir_turno(request):
     """Abre un nuevo turno de caja con saldo inicial y punto de caja."""
-    saldo_inicial = request.data.get('saldo_inicial', 0)
-    punto_caja = request.data.get('punto_caja', 'PLANTA_BAJA')
-
-    existente = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-    if existente:
-        return Response({
-            'error': f'Ya hay un turno abierto por {existente.cajero.username} desde las {existente.fecha_apertura.strftime("%H:%M")}'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    # Generar código único con contador diario
-    hoy = timezone.now()
-    count = CajaTurno.objects.filter(fecha_apertura__date=hoy.date()).count() + 1
-    codigo = f"TUR-{hoy.strftime('%Y%m%d')}-{count:03d}"
-
-    turno = CajaTurno.objects.create(
-        codigo_turno=codigo,
-        cajero=request.user,
-        saldo_inicial=saldo_inicial,
-        punto_caja=punto_caja,
-        estado=CajaTurno.Estado.ABIERTA,
-    )
-
+    try:
+        turno = CajaService.abrir_turno(request.data, request.user)
+    except AppError as exc:
+        return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True, 'codigo': turno.codigo_turno})
 
 
@@ -249,53 +229,10 @@ def api_abrir_turno(request):
 @permission_classes([EsCajeroOAdmin])
 def api_cerrar_turno(request):
     """Cierra el turno activo con arqueo físico opcional."""
-    saldo_final = request.data.get('saldo_final', 0)
-    observacion = request.data.get('observacion', '')
-    arqueo_fisico = request.data.get('arqueo_fisico', None)
-
-    turno = CajaTurno.objects.filter(estado=CajaTurno.Estado.ABIERTA).first()
-    if not turno:
-        return Response({'error': 'No hay un turno abierto para cerrar.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Validar si existen pedidos o platos pendientes
-    pendientes_cocina = LineaComanda.objects.filter(
-        estado__in=[LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP],
-        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
-    ).count()
-
-    pendientes_servicio = LineaComanda.objects.filter(
-        estado=LineaComanda.Estado.LISTO,
-        comanda__estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
-    ).count()
-
-    comandas_no_cobradas = Comanda.objects.filter(
-        estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
-    ).count()
-
-    if pendientes_cocina > 0 or pendientes_servicio > 0 or comandas_no_cobradas > 0:
-        razones = []
-        if pendientes_cocina > 0:
-            razones.append(f"{pendientes_cocina} platos pendientes o cocinándose en cocina")
-        if pendientes_servicio > 0:
-            razones.append(f"{pendientes_servicio} platos por servir en salón")
-        if comandas_no_cobradas > 0:
-            razones.append(f"{comandas_no_cobradas} comandas activas sin cobrar")
-        
-        error_msg = f"No se puede cerrar la caja. Aún existen actividades pendientes en el restaurante: {', '.join(razones)}. Por favor, culmínelas antes de proceder."
-        return Response({'error': error_msg}, status=status.HTTP_400_BAD_REQUEST)
-
-    turno.saldo_final = saldo_final
-    turno.observacion = observacion
-    turno.estado = CajaTurno.Estado.CERRADA
-    turno.fecha_cierre = timezone.now()
-
-    if arqueo_fisico is not None:
-        turno.arqueo_fisico = Decimal(str(arqueo_fisico))
-        efectivo_sistema = turno.saldo_inicial + turno.total_efectivo
-        turno.diferencia = turno.arqueo_fisico - efectivo_sistema
-
-    turno.save()
-
+    try:
+        CajaService.cerrar_turno(request.data)
+    except AppError as exc:
+        return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True})
 
 
@@ -349,7 +286,7 @@ def api_pagar_comanda(request, pk):
         return Response({'error': 'Se requiere al menos un método de pago.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        pagos = procesar_cobro(
+        pagos = CajaService.cobrar(
             comanda_id=pk,
             pagos_data=pagos_data,
             usuario=request.user,
@@ -361,7 +298,9 @@ def api_pagar_comanda(request, pk):
             'pago_ids': [p.id for p in pagos],
             'boleta_url': f'/caja/boleta/{pagos[0].id}/',
         })
-    except (ValidationError, Exception) as e:
+    except AppError as e:
+        return Response(e.as_dict(), status=e.status_code)
+    except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -375,9 +314,11 @@ def api_registrar_perdida(request, pk):
     """
     observacion = request.data.get('observacion', 'Cliente no pagó')
     try:
-        pago = registrar_perdida(comanda_id=pk, usuario=request.user, observacion=observacion)
+        pago = CajaService.registrar_perdida(comanda_id=pk, usuario=request.user, observacion=observacion)
         return Response({'ok': True, 'pago_id': pago.id})
-    except (ValidationError, Exception) as e:
+    except AppError as e:
+        return Response(e.as_dict(), status=e.status_code)
+    except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -423,7 +364,7 @@ def api_historial_pagos(request):
     for idx, (key, group_pagos) in enumerate(grupos.items(), start=1):
         primer_pago = group_pagos[0]
         es_multi = len(group_pagos) > 1
-        monto_total = sum(p.monto for p in group_pagos)
+        monto_total = sum(p.monto - p.vuelto for p in group_pagos)
 
         desglose_pagos = [
             {

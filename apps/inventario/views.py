@@ -3,20 +3,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from django.db import transaction
-from django.db import models
 from decimal import Decimal
 from django.utils import timezone
-from datetime import timedelta
-from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, OrdenCompra, OrdenCompraItem
+from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, OrdenCompra
 from .serializers import (
     UnidadMedidaSerializer, InsumoSerializer, RecetaInsumoSerializer,
     MovimientoInventarioSerializer, AjusteStockSerializer, RecetaPorPlatoSerializer,
-    MermaSerializer, ReponerSerializer, OrdenCompraSerializer, OrdenCompraItemSerializer,
+    MermaSerializer, ReponerSerializer, OrdenCompraSerializer,
 )
 from apps.usuarios.permissions import EsAdmin
 from apps.menu.models import Plato
-from .services import obtener_insumos_criticos, obtener_stock_bajo
+from .services import InventarioService, obtener_insumos_criticos, obtener_stock_bajo
+from apps.core.exceptions import AppError
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -99,30 +97,10 @@ class InsumoViewSet(viewsets.ModelViewSet):
         cantidad = serializer.validated_data['cantidad']
         observacion = serializer.validated_data.get('observacion', '') or 'Reposición de inventario'
 
-        with transaction.atomic():
-            try:
-                insumo = Insumo.objects.select_for_update().get(pk=pk)
-            except Insumo.DoesNotExist:
-                return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-            if not insumo.activo:
-                return Response({'error': 'No se puede reponer un insumo inactivo.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            stock_anterior = insumo.stock_real
-            insumo.stock_real += cantidad
-            insumo.stock_actual += cantidad
-            insumo.save(update_fields=['stock_real', 'stock_actual'])
-
-            MovimientoInventario.objects.create(
-                insumo=insumo,
-                tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
-                cantidad=cantidad,
-                stock_anterior=stock_anterior,
-                stock_nuevo=insumo.stock_real,
-                usuario=request.user,
-                observacion=observacion,
-            )
-
+        try:
+            insumo = InventarioService.reponer(pk, cantidad, request.user, observacion)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(insumo).data)
 
     @action(detail=True, methods=['get'], url_path='historial')
@@ -155,37 +133,10 @@ class InsumoViewSet(viewsets.ModelViewSet):
         motivo = serializer.validated_data['motivo']
         tipo = serializer.validated_data['tipo']
 
-        with transaction.atomic():
-            try:
-                insumo = Insumo.objects.select_for_update().get(pk=pk)
-            except Insumo.DoesNotExist:
-                return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-            stock_anterior = insumo.stock_real
-            if tipo == 'AJUSTE_POSITIVO':
-                insumo.stock_actual += cantidad
-                insumo.stock_real += cantidad
-            else:
-                if insumo.stock_real < cantidad:
-                    return Response(
-                        {'error': f'Stock insuficiente: hay {insumo.stock_real}, se intenta restar {cantidad}'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                insumo.stock_actual -= cantidad
-                insumo.stock_real -= cantidad
-
-            insumo.save(update_fields=['stock_actual', 'stock_real'])
-
-            MovimientoInventario.objects.create(
-                insumo=insumo,
-                tipo_movimiento=tipo,
-                cantidad=cantidad,
-                stock_anterior=stock_anterior,
-                stock_nuevo=insumo.stock_real,
-                usuario=request.user,
-                observacion=motivo,
-            )
-
+        try:
+            insumo = InventarioService.ajustar(pk, cantidad, tipo, motivo, request.user)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(insumo).data)
 
     def destroy(self, request, *args, **kwargs):
@@ -193,42 +144,19 @@ class InsumoViewSet(viewsets.ModelViewSet):
         Soft-delete: marca el insumo como inactivo en vez de borrarlo,
         para preservar el historial de movimientos (FK PROTECT).
         """
-        with transaction.atomic():
-            try:
-                insumo = Insumo.objects.select_for_update().get(pk=kwargs.get('pk'))
-            except Insumo.DoesNotExist:
-                return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-            if not insumo.activo:
-                return Response({'error': 'Este insumo ya está desactivado.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            insumo.activo = False
-            insumo.save(update_fields=['activo'])
-
-            # Desactivar también sus recetas para que no aparezca en platos activos
-            RecetaInsumo.objects.filter(insumo=insumo, activo=True).update(activo=False)
-
-            # Re-evaluar disponibilidad de platos afectados
-            from apps.inventario.services import actualizar_disponibilidad_platos
-            actualizar_disponibilidad_platos(insumo)
-
+        try:
+            insumo = InventarioService.cambiar_activo(kwargs.get('pk'), False)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response({'ok': True, 'message': f'Insumo "{insumo.nombre}" desactivado.'})
 
     @action(detail=True, methods=['post'], url_path='reactivar')
     def reactivar(self, request, pk=None):
         """Reactiva un insumo previamente desactivado."""
-        with transaction.atomic():
-            try:
-                insumo = Insumo.objects.select_for_update().get(pk=pk)
-            except Insumo.DoesNotExist:
-                return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-            if insumo.activo:
-                return Response({'error': 'Este insumo ya está activo.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            insumo.activo = True
-            insumo.save(update_fields=['activo'])
-
+        try:
+            insumo = InventarioService.cambiar_activo(pk, True)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response({'ok': True, 'message': f'Insumo "{insumo.nombre}" reactivado.'})
 
     @action(detail=True, methods=['post'], url_path='merma')
@@ -242,34 +170,12 @@ class InsumoViewSet(viewsets.ModelViewSet):
         causa = serializer.validated_data['causa']
         observacion = serializer.validated_data.get('observacion', '')
 
-        with transaction.atomic():
-            try:
-                insumo = Insumo.objects.select_for_update().get(pk=pk)
-            except Insumo.DoesNotExist:
-                return Response({'error': 'Insumo no encontrado'}, status=status.HTTP_404_NOT_FOUND)
-
-            if insumo.stock_real < cantidad:
-                return Response(
-                    {'error': f'Stock insuficiente: hay {insumo.stock_real}, merma {cantidad}'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            stock_anterior = insumo.stock_real
-            insumo.stock_real -= cantidad
-            insumo.stock_actual -= cantidad
-            insumo.save(update_fields=['stock_real', 'stock_actual'])
-
-            MovimientoInventario.objects.create(
-                insumo=insumo,
-                tipo_movimiento=MovimientoInventario.TipoMovimiento.MERMA,
-                cantidad=cantidad,
-                stock_anterior=stock_anterior,
-                stock_nuevo=insumo.stock_real,
-                causa_merma=causa,
-                usuario=request.user,
-                observacion=f"Merma ({causa}). {observacion}".strip(),
+        try:
+            insumo = InventarioService.registrar_merma(
+                pk, cantidad, causa, request.user, observacion
             )
-
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(insumo).data)
 
     @action(detail=False, methods=['get'], url_path='reporte-pdf')
@@ -349,99 +255,30 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
         Crea una orden de compra desde una lista de items:
         body: { proveedor, notas, items: [{ insumo, cantidad_solicitada, costo_unitario }] }
         """
-        data = request.data
-        items_data = data.get('items', [])
-        if not items_data:
-            return Response({'error': 'La orden debe tener al menos un ítem'}, status=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            orden = OrdenCompra.objects.create(
-                codigo='TEMP',
-                proveedor=data.get('proveedor', ''),
-                notas=data.get('notas', ''),
-                creado_por=request.user,
-                estado=OrdenCompra.Estado.BORRADOR,
-            )
-            ts = timezone.localtime(timezone.now())
-            orden.codigo = f'OC-{ts.strftime("%Y%m%d")}-{orden.pk:04d}'
-
-            total = Decimal('0')
-            for item in items_data:
-                try:
-                    insumo = Insumo.objects.get(pk=item['insumo'])
-                except (Insumo.DoesNotExist, KeyError):
-                    return Response({'error': f'Insumo inválido en ítem: {item}'}, status=status.HTTP_400_BAD_REQUEST)
-                cantidad = Decimal(str(item.get('cantidad_solicitada', 0)))
-                if cantidad <= 0:
-                    return Response({'error': f'La cantidad solicitada para el insumo {insumo.nombre} debe ser mayor a 0.'}, status=status.HTTP_400_BAD_REQUEST)
-                costo = Decimal(str(item.get('costo_unitario', insumo.costo_unitario or 0)))
-                subtotal = cantidad * costo
-                total += subtotal
-                OrdenCompraItem.objects.create(
-                    orden=orden,
-                    insumo=insumo,
-                    cantidad_solicitada=cantidad,
-                    costo_unitario=costo,
-                    subtotal=subtotal,
-                )
-
-            orden.total_estimado = total
-            orden.save(update_fields=['codigo', 'total_estimado'])
-
+        try:
+            orden = InventarioService.crear_orden(request.data, request.user)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(orden).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='generar-automatica')
     def generar_automatica(self, request):
         """Genera automáticamente una orden con los insumos bajos/agotados."""
-        bajos = list(Insumo.objects.filter(
-            activo=True, stock_real__lte=models.F('stock_minimo')
-        ).select_related('unidad_medida'))
-        if not bajos:
-            return Response({'error': 'No hay insumos por reponer'}, status=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            orden = OrdenCompra.objects.create(
-                codigo='TEMP',
-                proveedor=request.data.get('proveedor', ''),
-                notas='Generada automáticamente desde stock bajo/agotado',
-                creado_por=request.user,
-                estado=OrdenCompra.Estado.BORRADOR,
+        try:
+            orden = InventarioService.generar_orden_automatica(
+                request.user, request.data.get('proveedor', '')
             )
-            ts = timezone.localtime(timezone.now())
-            orden.codigo = f'OC-{ts.strftime("%Y%m%d")}-{orden.pk:04d}'
-
-            total = Decimal('0')
-            for insumo in bajos:
-                objetivo = insumo.stock_minimo * 2
-                sugerida = max(objetivo - insumo.stock_real, insumo.stock_minimo)
-                costo = insumo.costo_unitario or Decimal('0')
-                subtotal = sugerida * costo
-                total += subtotal
-                OrdenCompraItem.objects.create(
-                    orden=orden,
-                    insumo=insumo,
-                    cantidad_solicitada=sugerida,
-                    costo_unitario=costo,
-                    subtotal=subtotal,
-                )
-            orden.total_estimado = total
-            orden.save(update_fields=['codigo', 'total_estimado'])
-
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(orden).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='enviar')
     def enviar(self, request, pk=None):
         """Cambia BORRADOR → ENVIADA."""
-        with transaction.atomic():
-            try:
-                orden = OrdenCompra.objects.select_for_update().get(pk=pk)
-            except OrdenCompra.DoesNotExist:
-                return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
-            if orden.estado != OrdenCompra.Estado.BORRADOR:
-                return Response({'error': f'No se puede enviar desde estado {orden.get_estado_display()}'}, status=status.HTTP_400_BAD_REQUEST)
-            orden.estado = OrdenCompra.Estado.ENVIADA
-            orden.fecha_envio = timezone.now()
-            orden.save(update_fields=['estado', 'fecha_envio'])
+        try:
+            orden = InventarioService.cambiar_estado_orden(pk, OrdenCompra.Estado.ENVIADA)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(orden).data)
 
     @action(detail=True, methods=['post'], url_path='recibir')
@@ -450,70 +287,25 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
         Marca como RECIBIDA y SUMA cada item al stock automáticamente, generando un MovimientoInventario ENTRADA por cada uno.
         body opcional: { items: [{id, cantidad_recibida}] } — si se omite, recibe cantidad_solicitada completa.
         """
-        recepciones = {int(it['id']): Decimal(str(it.get('cantidad_recibida', 0))) for it in request.data.get('items', [])}
-
-        with transaction.atomic():
-            try:
-                orden = OrdenCompra.objects.select_for_update().get(pk=pk)
-            except OrdenCompra.DoesNotExist:
-                return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
-            if orden.estado in (OrdenCompra.Estado.RECIBIDA, OrdenCompra.Estado.CANCELADA):
-                return Response({'error': f'Orden ya está {orden.get_estado_display()}'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Ordenar IDs para prevenir deadlocks en transacciones concurrentes
-            item_insumo_ids = sorted([item.insumo_id for item in orden.items.all()])
-            insumos_bloqueados = {
-                insumo.id: insumo 
-                for insumo in Insumo.objects.select_for_update().filter(id__in=item_insumo_ids)
+        try:
+            recepciones = {
+                int(item['id']): Decimal(str(item.get('cantidad_recibida', 0)))
+                for item in request.data.get('items', [])
             }
-
-            for item in orden.items.select_related('insumo'):
-                cant_recibida = recepciones.get(item.id, item.cantidad_solicitada)
-                if cant_recibida <= 0:
-                    continue
-                insumo = insumos_bloqueados.get(item.insumo_id)
-                if not insumo:
-                    continue
-                stock_anterior = insumo.stock_real
-                insumo.stock_real += cant_recibida
-                insumo.stock_actual += cant_recibida
-                # Actualizar costo unitario al de la orden (más reciente)
-                if item.costo_unitario > 0:
-                    insumo.costo_unitario = item.costo_unitario
-                insumo.save(update_fields=['stock_real', 'stock_actual', 'costo_unitario'])
-
-                MovimientoInventario.objects.create(
-                    insumo=insumo,
-                    tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
-                    cantidad=cant_recibida,
-                    stock_anterior=stock_anterior,
-                    stock_nuevo=insumo.stock_real,
-                    costo_unitario=item.costo_unitario,
-                    referencia_tipo='ORDEN_COMPRA',
-                    referencia_id=orden.id,
-                    usuario=request.user,
-                    observacion=f'Recepción {orden.codigo}',
-                )
-                item.cantidad_recibida = cant_recibida
-                item.save(update_fields=['cantidad_recibida'])
-
-            orden.estado = OrdenCompra.Estado.RECIBIDA
-            orden.fecha_recepcion = timezone.now()
-            orden.recibido_por = request.user
-            orden.save(update_fields=['estado', 'fecha_recepcion', 'recibido_por'])
-
+            orden = InventarioService.cambiar_estado_orden(
+                pk, OrdenCompra.Estado.RECIBIDA, request.user, recepciones
+            )
+        except (KeyError, ValueError):
+            return Response({'error': 'Datos de recepcion invalidos.'}, status=400)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(orden).data)
 
     @action(detail=True, methods=['post'], url_path='cancelar')
     def cancelar(self, request, pk=None):
         """Cancela una orden en BORRADOR o ENVIADA."""
-        with transaction.atomic():
-            try:
-                orden = OrdenCompra.objects.select_for_update().get(pk=pk)
-            except OrdenCompra.DoesNotExist:
-                return Response({'error': 'Orden no encontrada'}, status=status.HTTP_404_NOT_FOUND)
-            if orden.estado == OrdenCompra.Estado.RECIBIDA:
-                return Response({'error': 'No se puede cancelar una orden recibida'}, status=status.HTTP_400_BAD_REQUEST)
-            orden.estado = OrdenCompra.Estado.CANCELADA
-            orden.save(update_fields=['estado'])
+        try:
+            orden = InventarioService.cambiar_estado_orden(pk, OrdenCompra.Estado.CANCELADA)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(orden).data)

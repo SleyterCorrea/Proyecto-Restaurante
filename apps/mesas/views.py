@@ -12,19 +12,19 @@ Vistas HTML:
   GET /mesero/mesas/             → Plano de Mesas (Pantalla 2)
   GET /mesero/nueva-comanda/     → Toma de Pedidos (Pantalla 1)
 """
-import json
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
 from apps.usuarios.decorators import rol_requerido
 from apps.usuarios.utils import log_auditoria
+from apps.core.exceptions import AppError
 
 from .models import Mesa, Zona, UnionMesas
+from .services import MesaService
 from apps.comandas.models import Comanda, LineaComanda
 
 
@@ -286,25 +286,7 @@ def api_mesa_crear(request):
         return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
 
     try:
-        data = request.data
-        numero = data.get('numero')
-        capacidad = data.get('capacidad', 4)
-        zona_id = data.get('zona_id')
-
-        if not numero or not zona_id:
-            return JsonResponse({'ok': False, 'error': 'Número y Zona son requeridos.'}, status=400)
-
-        if Mesa.objects.filter(numero=numero, zona_id=zona_id, activo=True).exists():
-            return JsonResponse({'ok': False, 'error': f'La mesa {numero} ya existe en esa zona.'}, status=400)
-
-        mesa = Mesa.objects.create(
-            numero=numero,
-            capacidad=capacidad,
-            zona_id=zona_id,
-            estado=Mesa.Estado.LIBRE,
-            activo=True
-        )
-
+        mesa = MesaService.crear(request.data)
         log_auditoria(
             usuario=request.user,
             accion='CREACION',
@@ -322,8 +304,8 @@ def api_mesa_crear(request):
                 'piso_label': mesa.zona.nombre
             }
         })
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    except AppError as exc:
+        return JsonResponse(exc.as_dict(), status=exc.status_code)
 
 
 @api_view(['DELETE'])
@@ -337,40 +319,18 @@ def api_mesa_eliminar(request, pk):
         return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
 
     try:
-        mesa = Mesa.objects.get(pk=pk)
-
-        if mesa.estado != Mesa.Estado.LIBRE:
-            return JsonResponse({'ok': False, 'error': 'No podés eliminar una mesa que no esté libre.'}, status=400)
-
-        accion_auditoria = 'ELIMINAR_FISICO'
-        try:
-            mesa_id = mesa.id
-            mesa_num = mesa.numero
-            mesa_zona = mesa.zona.nombre
-            mesa.delete()
-            detalle_auditoria = f"Mesa {mesa_num} ({mesa_zona}) eliminada físicamente."
-        except Exception:
-            mesa.activo = False
-            mesa.save()
-            mesa_id = mesa.id
-            mesa_num = mesa.numero
-            mesa_zona = mesa.zona.nombre
-            detalle_auditoria = f"Mesa {mesa_num} ({mesa_zona}) desactivada lógicamente (historial conservado)."
-
+        mesa = MesaService.desactivar(pk)
         log_auditoria(
             usuario=request.user,
             accion='ELIMINACION',
             entidad='MESA',
-            entidad_id=mesa_id,
-            detalle_anterior={"mensaje": detalle_auditoria, "numero": mesa_num, "zona": mesa_zona},
+            entidad_id=mesa.id,
+            detalle_anterior={"mensaje": "Mesa desactivada", "numero": mesa.numero, "zona": mesa.zona.nombre},
             request=request
         )
-
         return JsonResponse({'ok': True, 'mensaje': 'Mesa eliminada correctamente.'})
-    except Mesa.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'La mesa no existe.'}, status=404)
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    except AppError as exc:
+        return JsonResponse(exc.as_dict(), status=exc.status_code)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -408,77 +368,19 @@ def api_union_crear(request):
     if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
         return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede unir mesas.'}, status=403)
 
-    data = request.data
-    mesa_principal_id = data.get('mesa_principal_id')
-    mesa_secundaria_ids = data.get('mesa_secundaria_ids', [])
-
-    if not mesa_principal_id:
-        return JsonResponse({'ok': False, 'error': 'Falta mesa_principal_id.'}, status=400)
-    if not mesa_secundaria_ids:
-        return JsonResponse({'ok': False, 'error': 'Debes indicar al menos una mesa secundaria.'}, status=400)
-    if len(mesa_secundaria_ids) > 2:
-        return JsonResponse({'ok': False, 'error': 'Máximo 2 mesas secundarias (3 en total).'}, status=400)
-    if mesa_principal_id in mesa_secundaria_ids:
-        return JsonResponse({'ok': False, 'error': 'La mesa principal no puede estar en las secundarias.'}, status=400)
-
-    todos_ids = [mesa_principal_id] + mesa_secundaria_ids
-
     try:
-        with transaction.atomic():
-            # Obtener todas las mesas
-            mesas = {m.id: m for m in Mesa.objects.filter(pk__in=todos_ids)}
-            if len(mesas) != len(todos_ids):
-                return JsonResponse({'ok': False, 'error': 'Una o más mesas no existen.'}, status=404)
-
-            # Verificar que todas estén LIBRES
-            for mesa in mesas.values():
-                if mesa.estado != Mesa.Estado.LIBRE:
-                    return JsonResponse(
-                        {'ok': False, 'error': f'La mesa {mesa.numero} no está libre (estado: {mesa.get_estado_display()}).'},
-                        status=400
-                    )
-
-            # Verificar que ninguna mesa ya esté en una unión activa
-            for mesa_id in todos_ids:
-                mesa = mesas[mesa_id]
-                if hasattr(mesa, 'union_como_principal') and mesa.union_como_principal.activa:
-                    return JsonResponse(
-                        {'ok': False, 'error': f'La mesa {mesa.numero} ya es principal de otra unión.'},
-                        status=400
-                    )
-                if mesa.uniones_como_secundaria.filter(activa=True).exists():
-                    return JsonResponse(
-                        {'ok': False, 'error': f'La mesa {mesa.numero} ya pertenece a otra unión activa.'},
-                        status=400
-                    )
-
-            capacidad_personalizada = data.get('capacidad_personalizada')
-            try:
-                capacidad_personalizada = int(capacidad_personalizada) if capacidad_personalizada else None
-            except ValueError:
-                capacidad_personalizada = None
-
-            mesa_principal = mesas[mesa_principal_id]
-            union = UnionMesas.objects.create(
-                mesa_principal=mesa_principal,
-                activa=True,
-                capacidad_personalizada=capacidad_personalizada
-            )
-            union.mesas_secundarias.set([mesas[sid] for sid in mesa_secundaria_ids])
-
-            log_auditoria(
-                usuario=request.user,
-                accion='CREACION',
-                entidad='UNION_MESAS',
-                entidad_id=union.id,
-                detalle_nuevo={'mesa_principal': mesa_principal.numero, 'secundarias': mesa_secundaria_ids},
-                request=request
-            )
-
-            return JsonResponse({'ok': True, 'union': _serializar_union(union)})
-
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+        union = MesaService.crear_union(request.data)
+        log_auditoria(
+            usuario=request.user,
+            accion='CREACION',
+            entidad='UNION_MESAS',
+            entidad_id=union.id,
+            detalle_nuevo={'mesas': [mesa.numero for mesa in union.todas_las_mesas]},
+            request=request,
+        )
+        return JsonResponse({'ok': True, 'union': _serializar_union(union)})
+    except AppError as exc:
+        return JsonResponse(exc.as_dict(), status=exc.status_code)
 
 
 @api_view(['DELETE'])
@@ -492,24 +394,15 @@ def api_union_disolver(request, pk):
         return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede disolver uniones.'}, status=403)
 
     try:
-        union = UnionMesas.objects.get(pk=pk, activa=True)
-    except UnionMesas.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'Unión no encontrada o ya disuelta.'}, status=404)
-
-    numeros = [m.numero for m in union.todas_las_mesas]
-    union_id = union.pk
-    union.delete()
-
-    log_auditoria(
-        usuario=request.user,
-        accion='ELIMINACION',
-        entidad='UNION_MESAS',
-        entidad_id=union_id,
-        detalle_anterior={'mesas': numeros},
-        request=request
-    )
-
-    return JsonResponse({'ok': True, 'mensaje': f'Unión de mesas {numeros} disuelta correctamente.'})
+        union = MesaService.disolver_union(pk)
+        numeros = [mesa.numero for mesa in union.todas_las_mesas]
+        log_auditoria(
+            usuario=request.user, accion='ELIMINACION', entidad='UNION_MESAS',
+            entidad_id=union.id, detalle_anterior={'mesas': numeros}, request=request,
+        )
+        return JsonResponse({'ok': True, 'mensaje': f'Unión de mesas {numeros} disuelta correctamente.'})
+    except AppError as exc:
+        return JsonResponse(exc.as_dict(), status=exc.status_code)
 
 
 @api_view(['POST'])
@@ -523,16 +416,9 @@ def api_mesa_limpiada(request, pk):
         return JsonResponse({'ok': False, 'error': 'Permiso denegado.'}, status=403)
 
     try:
-        mesa = Mesa.objects.get(pk=pk)
-        if mesa.estado != Mesa.Estado.LIMPIEZA:
-            return JsonResponse({'ok': False, 'error': 'La mesa no está en limpieza.'}, status=400)
-            
-        mesa.estado = Mesa.Estado.LIBRE
-        mesa.save(update_fields=['estado'])
-        
+        mesa = MesaService.marcar_limpiada(pk)
         log_auditoria(request.user, 'ACCION', 'MESAS', mesa.id, 
                       detalle_nuevo={'accion': 'Limpieza terminada'}, request=request)
-                      
         return JsonResponse({'ok': True})
-    except Mesa.DoesNotExist:
-        return JsonResponse({'ok': False, 'error': 'Mesa no encontrada.'}, status=404)
+    except AppError as exc:
+        return JsonResponse(exc.as_dict(), status=exc.status_code)

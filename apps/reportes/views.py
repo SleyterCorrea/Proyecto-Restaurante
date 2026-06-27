@@ -164,7 +164,9 @@ def api_ventas_turno(request):
 
     # 1. Ventas Totales (exitosas)
     ventas_exitosas = base_pagos.filter(estado=Pago.Estado.PAGADO)
-    total_ventas = ventas_exitosas.aggregate(res=Sum('monto'))['res'] or 0
+    total_ventas = ventas_exitosas.aggregate(
+        res=Sum(F('monto') - F('vuelto'))
+    )['res'] or 0
 
     # 2. Cantidad de Comandas Cobradas
     comanda_ids = base_pagos.values_list('comanda_id', flat=True).distinct()
@@ -205,7 +207,9 @@ def api_ventas_turno(request):
             pagos_ant = Pago.objects.filter(caja_turno=turno_anterior)
             
             # Ventas ant
-            total_ant = pagos_ant.filter(estado=Pago.Estado.PAGADO).aggregate(res=Sum('monto'))['res'] or 0
+            total_ant = pagos_ant.filter(estado=Pago.Estado.PAGADO).aggregate(
+                res=Sum(F('monto') - F('vuelto'))
+            )['res'] or 0
             
             # Comandas ant
             cant_ant = pagos_ant.filter(estado=Pago.Estado.PAGADO).values('comanda').distinct().count()
@@ -371,7 +375,7 @@ def api_ventas_por_hora(request):
     ).annotate(
         hora=ExtractHour('fecha_pago')
     ).values('hora').annotate(
-        total=Sum('monto')
+        total=Sum(F('monto') - F('vuelto'))
     ).order_by('hora')
 
     return Response(list(qs))

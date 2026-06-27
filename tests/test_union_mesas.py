@@ -82,13 +82,16 @@ def test_liberacion_grupal_al_cobrar(client, usuario_cajero, usuario_mozo, mesas
     }
     resp_crear = client.post(url_crear, data_crear, content_type='application/json')
     comanda_id = resp_crear.json()['comanda_id']
+
+    # La caja solo recibe comandas cuyos platos ya terminaron en cocina.
+    comanda = Comanda.objects.get(pk=comanda_id)
+    comanda.lineas.update(estado='LISTO')
     
     # 2. Enviar a caja (api_liberar_mesa)
     resp_liberar = client.post(reverse('api_liberar_mesa', kwargs={'mesa_id': m1.id}))
     assert resp_liberar.status_code == 200
     
     # 3. Cobrar en caja
-    comanda = Comanda.objects.get(pk=comanda_id)
     comanda.refresh_from_db()
     
     client.force_login(usuario_cajero)
@@ -100,8 +103,8 @@ def test_liberacion_grupal_al_cobrar(client, usuario_cajero, usuario_mozo, mesas
     resp_pagar = client.post(url_pagar, data_pagar, content_type='application/json')
     assert resp_pagar.status_code == status.HTTP_200_OK
     
-    # 4. Verificar que AMBAS mesas estén LIBRES
+    # 4. Verificar que AMBAS mesas pasen a limpieza
     m1.refresh_from_db()
     m2.refresh_from_db()
-    assert m1.estado == Mesa.Estado.LIBRE
-    assert m2.estado == Mesa.Estado.LIBRE
+    assert m1.estado == Mesa.Estado.LIMPIEZA
+    assert m2.estado == Mesa.Estado.LIMPIEZA
