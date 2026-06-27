@@ -4,9 +4,10 @@ from rest_framework import status
 from apps.comandas.models import Comanda, LineaComanda
 from apps.caja.models import CajaTurno, Pago, MetodoPago
 from apps.mesas.models import Mesa
+from apps.inventario.models import MovimientoInventario
 
 @pytest.mark.django_db
-def test_cobrar_no_descuenta_insumos_en_caja(client, usuario_cajero, turno_caja_abierto, mesa_libre, plato_con_receta, insumo_con_stock, metodos_pago):
+def test_cobrar_descuenta_insumos_atomicamente(client, usuario_cajero, turno_caja_abierto, mesa_libre, plato_con_receta, insumo_con_stock, metodos_pago):
     client.force_login(usuario_cajero)
     
     # Comanda LISTA
@@ -33,13 +34,13 @@ def test_cobrar_no_descuenta_insumos_en_caja(client, usuario_cajero, turno_caja_
     
     # Verificar cambios
     insumo_con_stock.refresh_from_db()
-    assert float(insumo_con_stock.stock_real) == stock_inicial
+    assert float(insumo_con_stock.stock_real) == stock_inicial - 1.0
     
     comanda.refresh_from_db()
     assert comanda.estado == Comanda.Estado.COBRADA
     
     mesa_libre.refresh_from_db()
-    assert mesa_libre.estado == Mesa.Estado.LIBRE
+    assert mesa_libre.estado == Mesa.Estado.LIMPIEZA
     
     turno_caja_abierto.refresh_from_db()
     assert turno_caja_abierto.total_ventas == 30
@@ -59,3 +60,32 @@ def test_no_cobrar_sin_caja_abierta(client, usuario_cajero, mesa_libre, plato_co
     response = client.post(url, {'metodo_pago_id': metodo.id, 'monto_recibido': 30}, content_type='application/json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert 'No hay un turno de caja abierto' in response.json()['error']
+
+
+@pytest.mark.django_db
+def test_cobro_sin_stock_hace_rollback_completo(
+    client, usuario_cajero, turno_caja_abierto, mesa_libre,
+    plato_con_receta, insumo_con_stock, metodos_pago
+):
+    comanda = Comanda.objects.create(
+        mesa=mesa_libre, mozo=usuario_cajero, codigo_comanda='C-ROLLBACK',
+        estado=Comanda.Estado.LISTA, total=15,
+    )
+    LineaComanda.objects.create(
+        comanda=comanda, plato=plato_con_receta, cantidad=1,
+        precio_unitario=15, subtotal=15, estado=LineaComanda.Estado.LISTO,
+    )
+    insumo_con_stock.stock_real = 0
+    insumo_con_stock.save(update_fields=['stock_real'])
+    client.force_login(usuario_cajero)
+
+    response = client.post(reverse('api_comanda_pagar', kwargs={'pk': comanda.id}), {
+        'metodo_pago_id': metodos_pago[0].id,
+        'monto_recibido': 15,
+    }, content_type='application/json')
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert Pago.objects.filter(comanda=comanda).count() == 0
+    assert MovimientoInventario.objects.filter(referencia_tipo='LINEA_COMANDA').count() == 0
+    comanda.refresh_from_db()
+    assert comanda.estado == Comanda.Estado.LISTA

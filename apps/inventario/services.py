@@ -1,14 +1,322 @@
 """Lógica de inventario compartida (descuentos por preparación, etc.)."""
 import io
 import logging
+from collections import defaultdict
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import models, transaction
+from django.utils import timezone
 
 from apps.comandas.models import LineaComanda
-from apps.inventario.models import Insumo, MovimientoInventario, RecetaInsumo
+from apps.core.exceptions import DatosInvalidos, OperacionNoPermitida, RecursoNoEncontrado, StockInsuficiente
+from apps.inventario.models import (
+    Insumo,
+    MovimientoInventario,
+    OrdenCompra,
+    OrdenCompraItem,
+    RecetaInsumo,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class InventarioService:
+    """Coordinates stock validation and inventory movements."""
+
+    @staticmethod
+    def verificar_stock_plato(plato, cantidad=1):
+        recetas = RecetaInsumo.objects.filter(
+            plato=plato, activo=True
+        ).select_related("insumo")
+        for receta in recetas:
+            requerido = receta.cantidad_por_porcion * Decimal(str(cantidad))
+            if not receta.insumo.activo or receta.insumo.stock_real < requerido:
+                raise StockInsuficiente(
+                    receta.insumo.nombre, receta.insumo.stock_real, requerido
+                )
+        return True
+
+    @staticmethod
+    @transaction.atomic
+    def descontar_lineas(lineas, usuario):
+        """Deducts recipe stock once per order line and records every movement."""
+        lineas = list(lineas)
+        if not lineas:
+            return 0
+
+        descontadas = set(
+            MovimientoInventario.objects.filter(
+                referencia_tipo="LINEA_COMANDA",
+                referencia_id__in=[linea.id for linea in lineas],
+                tipo_movimiento=MovimientoInventario.TipoMovimiento.CONSUMO,
+            ).values_list("referencia_id", flat=True)
+        )
+        pendientes = [linea for linea in lineas if linea.id not in descontadas]
+        if not pendientes:
+            return 0
+
+        recetas = list(
+            RecetaInsumo.objects.filter(
+                plato_id__in={linea.plato_id for linea in pendientes}, activo=True
+            ).select_related("insumo")
+        )
+        recetas_por_plato = defaultdict(list)
+        for receta in recetas:
+            recetas_por_plato[receta.plato_id].append(receta)
+
+        insumo_ids = sorted({receta.insumo_id for receta in recetas})
+        insumos = {
+            insumo.id: insumo
+            for insumo in Insumo.objects.select_for_update().filter(pk__in=insumo_ids)
+        }
+        requerimientos = defaultdict(Decimal)
+        for linea in pendientes:
+            for receta in recetas_por_plato[linea.plato_id]:
+                requerimientos[receta.insumo_id] += (
+                    receta.cantidad_por_porcion * Decimal(str(linea.cantidad))
+                )
+        for insumo_id, requerido in requerimientos.items():
+            insumo = insumos[insumo_id]
+            if not insumo.activo or insumo.stock_real < requerido:
+                raise StockInsuficiente(insumo.nombre, insumo.stock_real, requerido)
+
+        movimientos = []
+        for linea in pendientes:
+            for receta in recetas_por_plato[linea.plato_id]:
+                insumo = insumos[receta.insumo_id]
+                cantidad = receta.cantidad_por_porcion * Decimal(str(linea.cantidad))
+                anterior = insumo.stock_real
+                insumo.stock_real -= cantidad
+                movimientos.append(MovimientoInventario(
+                    insumo=insumo,
+                    tipo_movimiento=MovimientoInventario.TipoMovimiento.CONSUMO,
+                    cantidad=cantidad,
+                    stock_anterior=anterior,
+                    stock_nuevo=insumo.stock_real,
+                    usuario=usuario,
+                    referencia_tipo="LINEA_COMANDA",
+                    referencia_id=linea.id,
+                    observacion=f"Consumo por cobro de linea {linea.id} ({linea.plato.nombre})",
+                ))
+
+        Insumo.objects.bulk_update(insumos.values(), ["stock_real"])
+        MovimientoInventario.objects.bulk_create(movimientos)
+        for insumo in insumos.values():
+            actualizar_disponibilidad_platos(insumo)
+        return len(pendientes)
+
+    @staticmethod
+    @transaction.atomic
+    def reponer(insumo_id, cantidad, usuario, observacion=""):
+        cantidad = Decimal(str(cantidad))
+        if cantidad <= 0:
+            raise DatosInvalidos("La cantidad debe ser mayor a cero.")
+        try:
+            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado("Insumo no encontrado.")
+        anterior = insumo.stock_real
+        insumo.stock_real += cantidad
+        insumo.stock_actual += cantidad
+        insumo.save(update_fields=["stock_real", "stock_actual"])
+        MovimientoInventario.objects.create(
+            insumo=insumo,
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
+            cantidad=cantidad,
+            stock_anterior=anterior,
+            stock_nuevo=insumo.stock_real,
+            usuario=usuario,
+            observacion=observacion,
+        )
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def ajustar(insumo_id, cantidad, tipo, motivo, usuario):
+        cantidad = Decimal(str(cantidad))
+        if cantidad <= 0:
+            raise DatosInvalidos("La cantidad debe ser mayor a cero.")
+        if tipo not in (
+            MovimientoInventario.TipoMovimiento.AJUSTE_POS,
+            MovimientoInventario.TipoMovimiento.AJUSTE_NEG,
+        ):
+            raise DatosInvalidos("Tipo de ajuste invalido.")
+        try:
+            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado("Insumo no encontrado.")
+        anterior = insumo.stock_real
+        if tipo == MovimientoInventario.TipoMovimiento.AJUSTE_POS:
+            insumo.stock_real += cantidad
+            insumo.stock_actual += cantidad
+        else:
+            if insumo.stock_real < cantidad:
+                raise StockInsuficiente(insumo.nombre, insumo.stock_real, cantidad)
+            insumo.stock_real -= cantidad
+            insumo.stock_actual -= cantidad
+        insumo.save(update_fields=["stock_real", "stock_actual"])
+        MovimientoInventario.objects.create(
+            insumo=insumo,
+            tipo_movimiento=tipo,
+            cantidad=cantidad,
+            stock_anterior=anterior,
+            stock_nuevo=insumo.stock_real,
+            usuario=usuario,
+            observacion=motivo,
+        )
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def registrar_merma(insumo_id, cantidad, causa, usuario, observacion=""):
+        cantidad = Decimal(str(cantidad))
+        if cantidad <= 0:
+            raise DatosInvalidos("La cantidad debe ser mayor a cero.")
+        try:
+            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado("Insumo no encontrado.")
+        if insumo.stock_real < cantidad:
+            raise StockInsuficiente(insumo.nombre, insumo.stock_real, cantidad)
+        anterior = insumo.stock_real
+        insumo.stock_real -= cantidad
+        insumo.stock_actual -= cantidad
+        insumo.save(update_fields=["stock_real", "stock_actual"])
+        MovimientoInventario.objects.create(
+            insumo=insumo,
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.MERMA,
+            cantidad=cantidad,
+            stock_anterior=anterior,
+            stock_nuevo=insumo.stock_real,
+            causa_merma=causa,
+            usuario=usuario,
+            observacion=observacion,
+        )
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def cambiar_activo(insumo_id, activo):
+        try:
+            insumo = Insumo.objects.select_for_update().get(pk=insumo_id)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado("Insumo no encontrado.")
+        if insumo.activo == activo:
+            raise OperacionNoPermitida("El insumo ya tiene el estado solicitado.")
+        insumo.activo = activo
+        insumo.save(update_fields=["activo"])
+        if not activo:
+            RecetaInsumo.objects.filter(insumo=insumo, activo=True).update(activo=False)
+            actualizar_disponibilidad_platos(insumo)
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def crear_orden(data, usuario):
+        items = data.get("items", [])
+        if not items:
+            raise DatosInvalidos("La orden debe tener al menos un item.")
+        orden = OrdenCompra.objects.create(
+            codigo="TEMP",
+            proveedor=data.get("proveedor", ""),
+            notas=data.get("notas", ""),
+            creado_por=usuario,
+            estado=OrdenCompra.Estado.BORRADOR,
+        )
+        orden.codigo = f"OC-{timezone.localtime():%Y%m%d}-{orden.pk:04d}"
+        total = Decimal("0")
+        for item in items:
+            try:
+                insumo = Insumo.objects.get(pk=item["insumo"], activo=True)
+                cantidad = Decimal(str(item.get("cantidad_solicitada", 0)))
+                costo = Decimal(str(item.get("costo_unitario", insumo.costo_unitario or 0)))
+            except (Insumo.DoesNotExist, KeyError, ValueError):
+                raise DatosInvalidos("La orden contiene un insumo invalido.")
+            if cantidad <= 0 or costo < 0:
+                raise DatosInvalidos("Cantidad o costo invalido en la orden.")
+            subtotal = cantidad * costo
+            total += subtotal
+            OrdenCompraItem.objects.create(
+                orden=orden,
+                insumo=insumo,
+                cantidad_solicitada=cantidad,
+                costo_unitario=costo,
+                subtotal=subtotal,
+            )
+        orden.total_estimado = total
+        orden.save(update_fields=["codigo", "total_estimado"])
+        return orden
+
+    @staticmethod
+    @transaction.atomic
+    def generar_orden_automatica(usuario, proveedor=""):
+        bajos = list(Insumo.objects.filter(
+            activo=True, stock_real__lte=models.F("stock_minimo")
+        ))
+        if not bajos:
+            raise OperacionNoPermitida("No hay insumos por reponer.")
+        data = {"proveedor": proveedor, "notas": "Generada automaticamente", "items": []}
+        for insumo in bajos:
+            objetivo = insumo.stock_minimo * 2
+            data["items"].append({
+                "insumo": insumo.id,
+                "cantidad_solicitada": max(objetivo - insumo.stock_real, insumo.stock_minimo),
+                "costo_unitario": insumo.costo_unitario,
+            })
+        return InventarioService.crear_orden(data, usuario)
+
+    @staticmethod
+    @transaction.atomic
+    def cambiar_estado_orden(orden_id, nuevo_estado, usuario=None, recepciones=None):
+        try:
+            orden = OrdenCompra.objects.select_for_update().get(pk=orden_id)
+        except OrdenCompra.DoesNotExist:
+            raise RecursoNoEncontrado("Orden no encontrada.")
+        if nuevo_estado == OrdenCompra.Estado.ENVIADA:
+            if orden.estado != OrdenCompra.Estado.BORRADOR:
+                raise OperacionNoPermitida("Solo se puede enviar una orden en borrador.")
+            orden.fecha_envio = timezone.now()
+        elif nuevo_estado == OrdenCompra.Estado.CANCELADA:
+            if orden.estado == OrdenCompra.Estado.RECIBIDA:
+                raise OperacionNoPermitida("No se puede cancelar una orden recibida.")
+        elif nuevo_estado == OrdenCompra.Estado.RECIBIDA:
+            if orden.estado in (OrdenCompra.Estado.RECIBIDA, OrdenCompra.Estado.CANCELADA):
+                raise OperacionNoPermitida("La orden no puede ser recibida.")
+            recepciones = recepciones or {}
+            ids = sorted(orden.items.values_list("insumo_id", flat=True))
+            insumos = {i.id: i for i in Insumo.objects.select_for_update().filter(pk__in=ids)}
+            for item in orden.items.select_related("insumo"):
+                cantidad = Decimal(str(recepciones.get(item.id, item.cantidad_solicitada)))
+                if cantidad <= 0:
+                    continue
+                insumo = insumos[item.insumo_id]
+                anterior = insumo.stock_real
+                insumo.stock_real += cantidad
+                insumo.stock_actual += cantidad
+                if item.costo_unitario > 0:
+                    insumo.costo_unitario = item.costo_unitario
+                insumo.save(update_fields=["stock_real", "stock_actual", "costo_unitario"])
+                MovimientoInventario.objects.create(
+                    insumo=insumo,
+                    tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
+                    cantidad=cantidad,
+                    stock_anterior=anterior,
+                    stock_nuevo=insumo.stock_real,
+                    costo_unitario=item.costo_unitario,
+                    referencia_tipo="ORDEN_COMPRA",
+                    referencia_id=orden.id,
+                    usuario=usuario,
+                    observacion=f"Recepcion {orden.codigo}",
+                )
+                item.cantidad_recibida = cantidad
+                item.save(update_fields=["cantidad_recibida"])
+            orden.fecha_recepcion = timezone.now()
+            orden.recibido_por = usuario
+        else:
+            raise DatosInvalidos("Estado de orden invalido.")
+        orden.estado = nuevo_estado
+        orden.save()
+        return orden
 
 
 def descontar_inventario_al_marcar_listo(linea: LineaComanda, usuario):
@@ -19,50 +327,8 @@ def descontar_inventario_al_marcar_listo(linea: LineaComanda, usuario):
     de platos afectados porque bulk_update no dispara señales Django.
     """
     if linea.estado != LineaComanda.Estado.LISTO:
-        return
-
-    recetas = list(RecetaInsumo.objects.filter(plato=linea.plato, activo=True).select_related('insumo'))
-    if not recetas:
-        return
-
-    insumo_ids = [r.insumo_id for r in recetas]
-    insumos_map = {i.id: i for i in Insumo.objects.select_for_update().filter(pk__in=insumo_ids)}
-    movimientos_a_crear = []
-
-    for receta in recetas:
-        insumo = insumos_map.get(receta.insumo_id)
-        if not insumo:
-            continue
-
-        cantidad = Decimal(str(receta.cantidad_por_porcion)) * Decimal(str(linea.cantidad))
-
-        if insumo.stock_real < cantidad:
-            raise ValueError(
-                f'Stock insuficiente para "{insumo.nombre}": '
-                f'disponible {insumo.stock_real}, requerido {cantidad}'
-            )
-
-        stock_anterior = insumo.stock_real
-        insumo.stock_real -= cantidad
-
-        movimientos_a_crear.append(MovimientoInventario(
-            insumo=insumo,
-            tipo_movimiento=MovimientoInventario.TipoMovimiento.CONSUMO,
-            cantidad=cantidad,
-            stock_anterior=stock_anterior,
-            stock_nuevo=insumo.stock_real,
-            usuario=usuario,
-            referencia_tipo='LINEA_COMANDA',
-            referencia_id=linea.id,
-            observacion=f'Consumo cocina — línea {linea.id} ({linea.plato.nombre})',
-        ))
-
-    Insumo.objects.bulk_update(insumos_map.values(), ['stock_real'])
-    MovimientoInventario.objects.bulk_create(movimientos_a_crear)
-
-    # bulk_update no dispara post_save, así que recalculamos disponibilidad manualmente
-    for insumo in insumos_map.values():
-        actualizar_disponibilidad_platos(insumo)
+        return 0
+    return InventarioService.descontar_lineas([linea], usuario)
 
 
 def obtener_insumos_criticos():

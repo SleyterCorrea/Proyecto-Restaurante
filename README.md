@@ -29,6 +29,8 @@ El restaurante necesitaba digitalizar su operación. Este sistema cubre todo el 
 | `reportes` | Ventas por período, platos más vendidos, rendimiento |
 | `notificaciones` | Alertas en tiempo real entre roles |
 
+La lógica de negocio se organiza en una capa de servicios por módulo. Las vistas HTTP mantienen los contratos del frontend y delegan reglas, bloqueos y transacciones a `ComandaService`, `CocinaService`, `CajaService`, `InventarioService`, `MesaService` y `MenuService`.
+
 ---
 
 ## Tecnologías usadas

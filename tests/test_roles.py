@@ -1,4 +1,5 @@
 import pytest
+import sys
 from django.urls import reverse
 from rest_framework import status
 
@@ -19,6 +20,10 @@ def test_cocinero_no_puede_crear_comanda(client, usuario_cocinero):
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 @pytest.mark.django_db
+@pytest.mark.skipif(
+    sys.version_info >= (3, 14),
+    reason='Django 4.2 template test instrumentation is incompatible with Python 3.14',
+)
 def test_admin_puede_acceder_todo(client, usuario_admin):
     client.force_login(usuario_admin)
     urls = ['/mesero/mesas/', '/cocina/kds/', '/admin-panel/dashboard/']

@@ -95,7 +95,7 @@ def test_mozo_puede_marcar_pedido_entregado(client, usuario_mozo, mesa_libre, pl
 
 
 @pytest.mark.django_db
-def test_marcar_listo_descuenta_stock_real(
+def test_marcar_listo_no_descuenta_hasta_el_cobro(
     client, usuario_cocinero, mesa_libre, plato_con_receta, insumo_con_stock
 ):
     comanda = Comanda.objects.create(
@@ -115,4 +115,23 @@ def test_marcar_listo_descuenta_stock_real(
     response = client.patch(url, {'estado': 'LISTO'}, content_type='application/json')
     assert response.status_code == status.HTTP_200_OK
     insumo_con_stock.refresh_from_db()
-    assert float(insumo_con_stock.stock_real) == real_antes - 1.0
+    assert float(insumo_con_stock.stock_real) == real_antes
+
+
+@pytest.mark.django_db
+def test_error_stock_no_deja_comanda_parcial(
+    client, usuario_mozo, mesa_libre, plato_con_receta, insumo_con_stock
+):
+    insumo_con_stock.stock_real = 0
+    insumo_con_stock.save(update_fields=['stock_real'])
+    client.force_login(usuario_mozo)
+
+    response = client.post(reverse('api_crear_comanda'), {
+        'mesa_id': mesa_libre.id,
+        'items': [{'plato_id': plato_con_receta.id, 'cantidad': 1}],
+    }, content_type='application/json')
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert Comanda.objects.count() == 0
+    mesa_libre.refresh_from_db()
+    assert mesa_libre.estado == Mesa.Estado.LIBRE
