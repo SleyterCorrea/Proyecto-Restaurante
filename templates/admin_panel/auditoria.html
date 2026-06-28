@@ -35,12 +35,18 @@
     <div class="row g-3 mb-4">
         <template x-for="card in summaryCards()" :key="card.key">
             <div class="col-6 col-xl-2">
-                <div class="card card-dark shadow-sm h-100 border border-white/5">
+                <button
+                    type="button"
+                    class="card card-dark shadow-sm h-100 w-100 text-start border transition-colors p-0"
+                    :class="isCardActive(card) ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-white/5 hover:border-primary/40 hover:bg-white/5'"
+                    @click="applyCard(card)"
+                    :title="'Filtrar por ' + card.label"
+                >
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-start gap-2">
                             <div>
                                 <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-black mb-1" x-text="card.label"></p>
-                                <div class="text-white text-2xl font-black leading-none" x-text="card.value"></div>
+                                <div class="text-white text-2xl font-black leading-none" x-text="cardCount(card)"></div>
                                 <p class="text-[10px] mb-0 mt-2" :class="card.textClass" x-text="card.caption"></p>
                             </div>
                             <div class="w-10 h-10 rounded-xl bg-surface border border-white/10 d-flex align-items-center justify-content-center">
@@ -48,13 +54,14 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
         </template>
     </div>
 
     <div class="card card-dark shadow-sm mb-4">
         <div class="card-body p-4">
+            <!-- Filtros principales -->
             <div class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Desde</label>
@@ -68,8 +75,8 @@
                     <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Modulo</label>
                     <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.modulo" @change="fetchLogs()">
                         <option value="">Todos los modulos</option>
-                        <template x-for="modulo in filterOptions.modulos" :key="modulo">
-                            <option :value="modulo" x-text="modulo"></option>
+                        <template x-for="opt in moduleOptions" :key="opt.value">
+                            <option :value="opt.value" x-text="opt.label"></option>
                         </template>
                     </select>
                 </div>
@@ -83,47 +90,20 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Usuario</label>
-                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.usuario" @change="fetchLogs()">
-                        <option value="">Todos los usuarios</option>
-                        <template x-for="usuario in normalizedUsuarios()" :key="usuario.id">
-                            <option :value="usuario.id" x-text="usuario.nombre"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Rol</label>
-                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.rol" @change="fetchLogs()">
-                        <option value="">Todos los roles</option>
-                        <template x-for="rol in filterOptions.roles" :key="rol">
-                            <option :value="rol" x-text="rol"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Tipo de evento</label>
-                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.tipo_evento" @change="fetchLogs()">
-                        <option value="">Todos los eventos</option>
-                        <template x-for="evento in filterOptions.tipos_evento" :key="evento">
-                            <option :value="evento" x-text="evento"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Entidad afectada</label>
-                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.entidad" @change="fetchLogs()">
-                        <option value="">Todas las entidades</option>
-                        <template x-for="entidad in filterOptions.entidades" :key="entidad">
-                            <option :value="entidad" x-text="entidad"></option>
-                        </template>
-                    </select>
-                </div>
-                <div class="col-md-3">
                     <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Estado de revision</label>
                     <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.estado_revision" @change="fetchLogs()">
                         <option value="">Todos los estados</option>
                         <template x-for="estado in filterOptions.estados_revision" :key="estado">
                             <option :value="estado" x-text="estado"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Usuario</label>
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.usuario" @change="fetchLogs()">
+                        <option value="">Todos los usuarios</option>
+                        <template x-for="usuario in normalizedUsuarios()" :key="usuario.id">
+                            <option :value="usuario.id" x-text="usuario.nombre"></option>
                         </template>
                     </select>
                 </div>
@@ -142,6 +122,53 @@
                         >
                     </div>
                 </div>
+            </div>
+
+            <!-- Acciones de filtros -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+                <button
+                    type="button"
+                    class="btn btn-sm rounded-lg d-flex align-items-center gap-1 text-on-surface-variant hover:text-primary font-bold bg-surface/60 border border-white/5"
+                    @click="showAdvanced = !showAdvanced"
+                >
+                    <span class="material-symbols-outlined text-sm">tune</span>
+                    Filtros avanzados
+                    <span class="material-symbols-outlined text-sm" x-text="showAdvanced ? 'expand_less' : 'expand_more'"></span>
+                </button>
+                <button class="btn btn-sm btn-outline-light rounded-lg" @click="clearFilters()">
+                    Limpiar filtros
+                </button>
+            </div>
+
+            <!-- Filtros avanzados (desplegables) -->
+            <div class="row g-3 mt-1" x-show="showAdvanced" x-transition.opacity x-cloak>
+                <div class="col-md-3">
+                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Rol</label>
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.rol" @change="fetchLogs()">
+                        <option value="">Todos los roles</option>
+                        <template x-for="rol in filterOptions.roles" :key="rol">
+                            <option :value="rol" x-text="rol"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Entidad afectada</label>
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.entidad" @change="fetchLogs()">
+                        <option value="">Todas las entidades</option>
+                        <template x-for="entidad in filterOptions.entidades" :key="entidad">
+                            <option :value="entidad" x-text="entidad"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Tipo de evento</label>
+                    <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.tipo_evento" @change="fetchLogs()">
+                        <option value="">Todos los eventos</option>
+                        <template x-for="evento in filterOptions.tipos_evento" :key="evento">
+                            <option :value="evento" x-text="evento"></option>
+                        </template>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Solo con motivo</label>
                     <select class="form-select border-0 bg-surface text-sm font-bold" x-model="filters.motivo_obligatorio" @change="fetchLogs()">
@@ -149,11 +176,6 @@
                         <option value="true">Con motivo</option>
                         <option value="false">Sin motivo</option>
                     </select>
-                </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button class="btn btn-sm btn-outline-light rounded-lg w-100" @click="clearFilters()">
-                        Limpiar filtros
-                    </button>
                 </div>
             </div>
         </div>
@@ -164,8 +186,8 @@
             <template x-for="tab in tabs" :key="tab.key">
                 <button
                     class="btn btn-sm rounded-lg px-3 py-2"
-                    :class="activeTab === tab.key ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold bg-surface/60 border border-white/5'"
-                    @click="activeTab = tab.key"
+                    :class="(!focus && activeTab === tab.key) ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold bg-surface/60 border border-white/5'"
+                    @click="selectTab(tab.key)"
                 >
                     <span x-text="tab.label"></span>
                     <span class="ml-1 opacity-80" x-text="'(' + sectionCount(tab.key) + ')'"></span>
@@ -179,12 +201,26 @@
             <div class="card card-dark shadow-sm overflow-hidden h-100">
                 <div class="card-header border-0 bg-transparent p-4 pb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
-                        <h5 class="text-white font-black mb-1" x-text="activeTabLabel()"></h5>
+                        <h5 class="text-white font-black mb-1" x-text="currentViewLabel()"></h5>
                         <p class="text-[11px] text-on-surface-variant mb-0">
                             Se muestran eventos auditables del negocio y seguridad. No se priorizan acciones normales del flujo operativo.
                         </p>
                     </div>
-                    <span class="badge bg-surface border border-white/10 text-white font-bold px-3 py-2" x-text="filteredLogs().length + ' eventos visibles'"></span>
+                    <div class="d-flex align-items-center gap-2">
+                        <template x-if="focus">
+                            <button
+                                type="button"
+                                class="badge bg-primary/15 border border-primary/30 text-primary font-bold px-3 py-2 d-flex align-items-center gap-1"
+                                @click="clearFocus()"
+                                title="Quitar acceso rapido"
+                            >
+                                <span class="material-symbols-outlined text-[14px]">filter_alt</span>
+                                <span x-text="focusLabel()"></span>
+                                <span class="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                        </template>
+                        <span class="badge bg-surface border border-white/10 text-white font-bold px-3 py-2" x-text="filteredLogs().length + ' eventos visibles'"></span>
+                    </div>
                 </div>
 
                 <div class="table-responsive">
@@ -399,12 +435,23 @@ function auditApp() {
         logs: [],
         selectedLog: null,
         activeTab: 'criticos',
+        focus: null,
+        showAdvanced: false,
         tabs: [
             { key: 'criticos', label: 'Eventos criticos' },
+            { key: 'comandas', label: 'Comandas y KDS' },
             { key: 'caja', label: 'Caja y pagos' },
             { key: 'inventario', label: 'Inventario y perdidas' },
             { key: 'menu', label: 'Menu, precios y recetas' },
             { key: 'usuarios', label: 'Usuarios y seguridad' }
+        ],
+        moduleOptions: [
+            { value: 'COMANDAS', label: 'Comandas y KDS' },
+            { value: 'CAJA', label: 'Caja y pagos' },
+            { value: 'INVENTARIO', label: 'Inventario y perdidas' },
+            { value: 'MENU', label: 'Menu, precios y recetas' },
+            { value: 'USUARIOS', label: 'Usuarios y seguridad' },
+            { value: 'AUDITORIA', label: 'Auditoria interna' }
         ],
         filterOptions: {
             usuarios: [],
@@ -517,7 +564,80 @@ function auditApp() {
                 estado_revision: '',
                 motivo_obligatorio: ''
             };
+            this.focus = null;
             this.fetchLogs();
+        },
+
+        selectTab(key) {
+            this.activeTab = key;
+            this.focus = null;
+        },
+
+        clearFocus() {
+            this.focus = null;
+        },
+
+        applyCard(card) {
+            // Convierte el indicador superior en un acceso rapido funcional:
+            // activa la pestaña relacionada, aplica el foco y, si solo hay un
+            // registro asociado, abre directamente su detalle.
+            this.focus = card.focus || null;
+            if (card.tab) {
+                this.activeTab = card.tab;
+            }
+            const asociados = this.filteredLogs();
+            if (asociados.length === 1) {
+                this.openDetail(asociados[0].id);
+            }
+        },
+
+        focusPredicate(key) {
+            if (key === 'anulaciones') {
+                return (log) => {
+                    const evento = this.eventLabel(log);
+                    return evento.includes('ANULADO') || evento.includes('ANULADA');
+                };
+            }
+            if (key === 'descuadres') {
+                return (log) => this.eventLabel(log) === 'CAJA_DESCUADRE_DETECTADO';
+            }
+            if (key === 'seguridad') {
+                return (log) => [
+                    'ACCESO_DENEGADO',
+                    'LOGIN_FALLIDO_REITERADO',
+                    'USUARIO_ESCALAMIENTO_PRIVILEGIOS'
+                ].includes(this.eventLabel(log));
+            }
+            if (key === 'pendientes') {
+                return (log) => log.estado_revision === 'PENDIENTE';
+            }
+            return () => true;
+        },
+
+        cardCount(card) {
+            if (card.focus) {
+                return this.logs.filter(this.focusPredicate(card.focus)).length;
+            }
+            return this.sectionCount(card.tab);
+        },
+
+        isCardActive(card) {
+            if (card.focus) {
+                return this.focus === card.focus;
+            }
+            return !this.focus && this.activeTab === card.tab;
+        },
+
+        focusLabel() {
+            const card = this.summaryCards().find((item) => item.focus === this.focus);
+            return card ? card.label : '';
+        },
+
+        currentViewLabel() {
+            if (this.focus) {
+                return this.focusLabel();
+            }
+            return this.activeTabLabel();
         },
 
         exportLogs() {
@@ -529,6 +649,9 @@ function auditApp() {
         },
 
         filteredLogs() {
+            if (this.focus) {
+                return this.logs.filter(this.focusPredicate(this.focus));
+            }
             return this.logs.filter((log) => this.matchesTab(log));
         },
 
@@ -564,6 +687,10 @@ function auditApp() {
                 );
             }
 
+            if (tab === 'comandas') {
+                return modulo === 'COMANDAS' || evento.startsWith('COMANDA_');
+            }
+
             if (tab === 'caja') {
                 return modulo === 'CAJA' || evento.startsWith('CAJA_') || evento.startsWith('PAGO_');
             }
@@ -591,62 +718,73 @@ function auditApp() {
         },
 
         summaryCards() {
+            // Cada indicador es un acceso rapido. tab = pestaña a activar al
+            // hacer clic; focus = predicado client-side que define el subconjunto
+            // mostrado y el conteo (cardCount), de modo que el numero del
+            // indicador siempre coincide con lo que muestra la tabla.
             return [
                 {
                     key: 'criticos',
                     label: 'Eventos criticos',
-                    value: this.logs.filter((log) => log.severidad === 'CRITICA').length,
                     caption: 'Atencion inmediata',
                     icon: 'warning',
-                    textClass: 'text-red-400'
+                    textClass: 'text-red-400',
+                    tab: 'criticos',
+                    focus: null
                 },
                 {
                     key: 'anulaciones',
                     label: 'Anulaciones',
-                    value: this.logs.filter((log) => this.eventLabel(log).includes('ANULADO') || this.eventLabel(log).includes('ANULADA')).length,
                     caption: 'Comandas o pagos sensibles',
                     icon: 'cancel',
-                    textClass: 'text-red-400'
+                    textClass: 'text-red-400',
+                    tab: 'criticos',
+                    focus: 'anulaciones'
                 },
                 {
-                    key: 'caja',
+                    key: 'descuadres',
                     label: 'Descuadres caja',
-                    value: this.logs.filter((log) => this.eventLabel(log) === 'CAJA_DESCUADRE_DETECTADO').length,
                     caption: 'Riesgo financiero',
                     icon: 'payments',
-                    textClass: 'text-yellow-400'
+                    textClass: 'text-yellow-400',
+                    tab: 'caja',
+                    focus: 'descuadres'
                 },
                 {
                     key: 'inventario',
                     label: 'Alertas inventario',
-                    value: this.logs.filter((log) => this.eventLabel(log).startsWith('INVENTARIO_')).length,
                     caption: 'Merma, stock o costo',
                     icon: 'inventory_2',
-                    textClass: 'text-orange-300'
+                    textClass: 'text-orange-300',
+                    tab: 'inventario',
+                    focus: null
                 },
                 {
                     key: 'menu',
                     label: 'Precio o receta',
-                    value: this.logs.filter((log) => this.eventLabel(log).startsWith('PLATO_') || this.eventLabel(log).startsWith('RECETA_')).length,
                     caption: 'Cambios comerciales',
                     icon: 'restaurant_menu',
-                    textClass: 'text-blue-300'
+                    textClass: 'text-blue-300',
+                    tab: 'menu',
+                    focus: null
                 },
                 {
                     key: 'seguridad',
                     label: 'Seguridad',
-                    value: this.logs.filter((log) => ['ACCESO_DENEGADO', 'LOGIN_FALLIDO_REITERADO', 'USUARIO_ESCALAMIENTO_PRIVILEGIOS'].includes(this.eventLabel(log))).length,
                     caption: 'Acceso o privilegios',
                     icon: 'shield_locked',
-                    textClass: 'text-secondary'
+                    textClass: 'text-secondary',
+                    tab: 'usuarios',
+                    focus: 'seguridad'
                 },
                 {
                     key: 'pendientes',
                     label: 'Pendientes revision',
-                    value: this.logs.filter((log) => log.estado_revision === 'PENDIENTE').length,
                     caption: 'Requieren seguimiento',
                     icon: 'pending_actions',
-                    textClass: 'text-primary'
+                    textClass: 'text-primary',
+                    tab: null,
+                    focus: 'pendientes'
                 }
             ];
         },
