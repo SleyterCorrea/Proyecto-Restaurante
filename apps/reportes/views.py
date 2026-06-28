@@ -13,8 +13,11 @@ from rest_framework import status
 
 from apps.usuarios.permissions import EsCajeroOAdmin, EsAdmin
 from apps.usuarios.decorators import rol_requerido
+from apps.auditoria.views import (
+    admin_auditoria as auditoria_admin_view,
+    api_auditoria_logs as auditoria_logs_api_view,
+)
 from apps.comandas.models import Comanda, LineaComanda
-from apps.usuarios.models import AuditLog
 from apps.caja.models import CajaTurno, Pago
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,7 +88,7 @@ def admin_dashboard(request):
 @login_required
 @rol_requerido('ADMIN')
 def admin_auditoria(request):
-    return render(request, 'admin_panel/auditoria.html')
+    return auditoria_admin_view(request)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -591,3 +594,9 @@ def api_auditoria_logs(request):
         })
         
     return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([EsAdmin])
+def api_auditoria_logs(request):
+    return auditoria_logs_api_view(request)
