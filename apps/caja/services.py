@@ -11,6 +11,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
+from apps.auditoria.models import AuditLog
+from apps.auditoria.services import AuditoriaService
 from .models import CajaTurno, Pago, MetodoPago
 from apps.core.exceptions import (
     CajaNoAbierta,
@@ -277,7 +279,7 @@ class CajaService:
 
     @staticmethod
     @transaction.atomic
-    def abrir_turno(data, usuario):
+    def abrir_turno(data, usuario, request=None):
         if CajaTurno.objects.select_for_update().filter(estado=CajaTurno.Estado.ABIERTA).exists():
             raise OperacionNoPermitida("Ya existe un turno de caja abierto.")
         try:
@@ -288,17 +290,34 @@ class CajaService:
             raise DatosInvalidos("El saldo inicial no puede ser negativo.")
         ahora = timezone.now()
         codigo = f"TUR-{ahora:%Y%m%d}-{uuid.uuid4().hex[:8].upper()}"
-        return CajaTurno.objects.create(
+        turno = CajaTurno.objects.create(
             codigo_turno=codigo,
             cajero=usuario,
             saldo_inicial=saldo,
             punto_caja=data.get("punto_caja", "PLANTA_BAJA"),
             estado=CajaTurno.Estado.ABIERTA,
         )
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='CAJA_TURNO_ABIERTO',
+            modulo='CAJA',
+            entidad='CAJA_TURNO',
+            entidad_id=turno.id,
+            severidad=AuditLog.Severidad.INFO,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se abrio el turno {turno.codigo_turno}.',
+            valores_nuevos={
+                'estado': turno.estado,
+                'saldo_inicial': str(turno.saldo_inicial),
+                'punto_caja': turno.punto_caja,
+            },
+            request=request,
+        )
+        return turno
 
     @staticmethod
     @transaction.atomic
-    def cerrar_turno(data):
+    def cerrar_turno(data, usuario=None, request=None):
         try:
             turno = CajaTurno.objects.select_for_update().get(estado=CajaTurno.Estado.ABIERTA)
         except CajaTurno.DoesNotExist:
@@ -333,6 +352,49 @@ class CajaService:
         turno.estado = CajaTurno.Estado.CERRADA
         turno.fecha_cierre = timezone.now()
         turno.save()
+        usuario_auditoria = usuario or turno.cajero
+        AuditoriaService.registrar(
+            usuario=usuario_auditoria,
+            accion='CAJA_TURNO_CERRADO',
+            modulo='CAJA',
+            entidad='CAJA_TURNO',
+            entidad_id=turno.id,
+            severidad=AuditLog.Severidad.INFO,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se cerro el turno {turno.codigo_turno}.',
+            valores_anteriores={'estado': CajaTurno.Estado.ABIERTA},
+            valores_nuevos={
+                'estado': turno.estado,
+                'saldo_final': str(turno.saldo_final),
+                'arqueo_fisico': (
+                    str(turno.arqueo_fisico)
+                    if turno.arqueo_fisico is not None
+                    else None
+                ),
+                'diferencia': (
+                    str(turno.diferencia)
+                    if turno.diferencia is not None
+                    else None
+                ),
+            },
+            request=request,
+        )
+        if turno.diferencia not in (None, Decimal('0')):
+            AuditoriaService.registrar(
+                usuario=usuario_auditoria,
+                accion='CAJA_DESCUADRE_DETECTADO',
+                modulo='CAJA',
+                entidad='CAJA_TURNO',
+                entidad_id=turno.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se detecto un descuadre en {turno.codigo_turno}.',
+                valores_nuevos={'diferencia': str(turno.diferencia)},
+                request=request,
+                datos_contextuales={
+                    'impacto_economico_estimado': abs(turno.diferencia),
+                },
+            )
         return turno
 
     cobrar = staticmethod(procesar_cobro)

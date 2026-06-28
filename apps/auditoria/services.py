@@ -134,35 +134,6 @@ class AuditoriaService:
             metadata=metadata,
         )
 
-    @classmethod
-    def _registrar_legacy(
-        cls,
-        usuario,
-        accion,
-        entidad,
-        entidad_id,
-        detalle_anterior=None,
-        detalle_nuevo=None,
-        request=None,
-    ):
-        """Puente privado hasta reemplazar las llamadas historicas."""
-        return cls._crear_registro(
-            usuario=usuario,
-            accion=accion,
-            modulo=entidad,
-            entidad=entidad,
-            entidad_id=entidad_id,
-            severidad=AuditLog.Severidad.INFO,
-            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-            descripcion='',
-            motivo=None,
-            valores_anteriores=detalle_anterior,
-            valores_nuevos=detalle_nuevo,
-            rol=getattr(getattr(usuario, 'rol', None), 'nombre', None),
-            impacto_economico_estimado=None,
-            metadata=cls._resolver_metadata(request, {}),
-        )
-
     @staticmethod
     def _crear_registro(
         *,

@@ -12,8 +12,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 
+from apps.auditoria.models import AuditLog
+from apps.auditoria.services import AuditoriaService
 from apps.usuarios.permissions import EsAdmin
-from apps.usuarios.utils import log_auditoria
 from apps.inventario.services import obtener_insumos_criticos
 from apps.core.exceptions import AppError
 from .models import Categoria, Plato
@@ -28,31 +29,42 @@ def _receta_data(request):
         return request.data.getlist('receta')
     return request.data.get('receta') or []
 
+
+def _receta_snapshot(plato):
+    return sorted(
+        (
+            receta.insumo_id,
+            receta.cantidad_por_porcion,
+            receta.merma_porcentaje,
+            receta.activo,
+        )
+        for receta in plato.receta.filter(activo=True)
+    )
+
+
+def _receta_propuesta_snapshot(receta_data):
+    return sorted(
+        item
+        for item in MenuService._normalizar_receta(receta_data)
+        if item[3]
+    )
+
 class CategoriaViewSet(viewsets.ModelViewSet):
     queryset = Categoria.objects.all().order_by('orden', 'nombre')
     serializer_class = CategoriaSerializer
     permission_classes = [IsAuthenticated, EsAdmin]
 
     def perform_create(self, serializer):
-        instance = MenuService.guardar_categoria(serializer)
-        log_auditoria(self.request.user, 'CREACION', 'CATEGORIA', instance.id, 
-                      detalle_nuevo=serializer.data, request=self.request)
+        MenuService.guardar_categoria(serializer)
 
     def perform_update(self, serializer):
-        old_instance = self.get_object()
-        old_data = CategoriaSerializer(old_instance).data
-        instance = MenuService.guardar_categoria(serializer)
-        log_auditoria(self.request.user, 'EDICION', 'CATEGORIA', instance.id, 
-                      detalle_anterior=old_data, detalle_nuevo=serializer.data, request=self.request)
+        MenuService.guardar_categoria(serializer)
 
     def perform_destroy(self, instance):
-        old_data = CategoriaSerializer(instance).data
         try:
             MenuService.desactivar_categoria(instance)
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'ELIMINACION', 'CATEGORIA', instance.id,
-                      detalle_anterior=old_data, request=self.request)
 
 class PlatoViewSet(viewsets.ModelViewSet):
     queryset = Plato.objects.prefetch_related('receta__insumo__unidad_medida').order_by('categoria__orden', 'nombre')
@@ -65,25 +77,87 @@ class PlatoViewSet(viewsets.ModelViewSet):
             instance = MenuService.guardar_plato(serializer, _receta_data(self.request))
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'CREACION', 'PLATOS', instance.id, 
-                      detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
 
     def perform_update(self, serializer):
-        # Obtener detalle anterior
         old_instance = self.get_object()
         old_data = PlatoSerializer(old_instance).data
+        precio_anterior = old_instance.precio_actual
+        receta_data = _receta_data(self.request)
+        nuevo_precio = serializer.validated_data.get(
+            'precio_actual',
+            precio_anterior,
+        )
+        cambio_precio = nuevo_precio != precio_anterior
         try:
-            instance = MenuService.guardar_plato(serializer, _receta_data(self.request))
+            cambio_receta = (
+                receta_data is not None
+                and _receta_propuesta_snapshot(receta_data)
+                != _receta_snapshot(old_instance)
+            )
+            motivo = str(self.request.data.get('motivo', '')).strip()
+            if (cambio_precio or cambio_receta) and not motivo:
+                raise ValidationError({
+                    'motivo': 'El motivo es obligatorio al cambiar precio o receta.'
+                })
+            instance = MenuService.guardar_plato(serializer, receta_data)
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'EDICION', 'PLATOS', instance.id, 
-                      detalle_anterior=old_data, detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
+        new_data = PlatoSerializer(instance).data
+
+        if cambio_precio:
+            AuditoriaService.registrar(
+                usuario=self.request.user,
+                accion='PLATO_PRECIO_MODIFICADO',
+                modulo='MENU',
+                entidad='PLATO',
+                entidad_id=instance.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se modifico el precio de {instance.nombre}.',
+                motivo=motivo,
+                valores_anteriores={'precio_actual': str(precio_anterior)},
+                valores_nuevos={'precio_actual': str(instance.precio_actual)},
+                request=self.request,
+            )
+
+        if cambio_receta:
+            AuditoriaService.registrar(
+                usuario=self.request.user,
+                accion='RECETA_MODIFICADA',
+                modulo='MENU',
+                entidad='PLATO',
+                entidad_id=instance.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se modifico la receta de {instance.nombre}.',
+                motivo=motivo,
+                valores_anteriores={'receta': old_data.get('receta', [])},
+                valores_nuevos={'receta': new_data.get('receta', [])},
+                request=self.request,
+            )
 
     def perform_destroy(self, instance):
         old_data = PlatoSerializer(instance).data
+        motivo = str(self.request.data.get('motivo', '')).strip()
+        if not motivo:
+            raise ValidationError({
+                'motivo': 'El motivo es obligatorio para desactivar un plato.'
+            })
         MenuService.desactivar_plato(instance)
-        log_auditoria(self.request.user, 'ELIMINACION', 'PLATOS', instance.id,
-                      detalle_anterior=old_data, request=self.request)
+        AuditoriaService.registrar(
+            usuario=self.request.user,
+            accion='PLATO_SOFT_DELETE',
+            modulo='MENU',
+            entidad='PLATO',
+            entidad_id=instance.id,
+            severidad=AuditLog.Severidad.ADVERTENCIA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se desactivo el plato {instance.nombre}.',
+            motivo=motivo,
+            valores_anteriores=old_data,
+            valores_nuevos={'activo': False, 'disponible': False},
+            request=self.request,
+        )
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, EsAdmin])
     def insumos_criticos(self, request):

@@ -1,8 +1,9 @@
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics, permissions
+from apps.auditoria.models import AuditLog
+from apps.auditoria.services import AuditoriaService
 from .models import Usuario
 from .serializers import UsuarioSerializer, CustomTokenObtainPairSerializer
-from .utils import log_auditoria
 import urllib.request
 import urllib.parse
 import json as _json
@@ -10,20 +11,6 @@ import json as _json
 class LoginView(TokenObtainPairView):
     """Vista de login personalizada que usa el serializer con claims extendidos."""
     serializer_class = CustomTokenObtainPairSerializer
-
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            # Si el login fue exitoso, el usuario ya debería estar identificado por el username en el request
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            username = request.data.get('username')
-            try:
-                user = User.objects.get(username=username)
-                log_auditoria(user, 'LOGIN', 'USUARIO', user.id, request=request)
-            except User.DoesNotExist:
-                pass
-        return response
 
 class UsuarioProfileView(generics.RetrieveAPIView):
     """Vista para obtener el perfil del usuario autenticado."""
@@ -74,22 +61,89 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         instance = serializer.save()
-        log_auditoria(self.request.user, 'CREACION', 'USUARIO', instance.id, 
-                      detalle_nuevo=serializer.data, request=self.request)
+        AuditoriaService.registrar(
+            usuario=self.request.user,
+            accion='USUARIO_CREADO',
+            modulo='USUARIOS',
+            entidad='USUARIO',
+            entidad_id=instance.id,
+            severidad=AuditLog.Severidad.INFO,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se creo el usuario {instance.username}.',
+            valores_nuevos=serializer.data,
+            request=self.request,
+        )
 
     def perform_update(self, serializer):
         old_instance = self.get_object()
-        old_data = UsuarioSerializer(old_instance).data
+        old_rol = old_instance.rol.nombre
+        old_activo = old_instance.activo
+        password_modificado = bool(serializer.validated_data.get('password'))
         instance = serializer.save()
-        log_auditoria(self.request.user, 'EDICION', 'USUARIO', instance.id, 
-                      detalle_anterior=old_data, detalle_nuevo=serializer.data, request=self.request)
+
+        if old_rol != instance.rol.nombre:
+            escalamiento = old_rol != 'ADMIN' and instance.rol.nombre == 'ADMIN'
+            AuditoriaService.registrar(
+                usuario=self.request.user,
+                accion=(
+                    'USUARIO_ESCALAMIENTO_PRIVILEGIOS'
+                    if escalamiento
+                    else 'USUARIO_ROL_MODIFICADO'
+                ),
+                modulo='USUARIOS',
+                entidad='USUARIO',
+                entidad_id=instance.id,
+                severidad=(
+                    AuditLog.Severidad.CRITICA
+                    if escalamiento
+                    else AuditLog.Severidad.ADVERTENCIA
+                ),
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=(
+                    f'El rol de {instance.username} cambio de '
+                    f'{old_rol} a {instance.rol.nombre}.'
+                ),
+                valores_anteriores={'rol': old_rol},
+                valores_nuevos={'rol': instance.rol.nombre},
+                request=self.request,
+            )
+
+        if old_activo != instance.activo:
+            AuditoriaService.registrar(
+                usuario=self.request.user,
+                accion=(
+                    'USUARIO_REACTIVADO'
+                    if instance.activo
+                    else 'USUARIO_DESACTIVADO'
+                ),
+                modulo='USUARIOS',
+                entidad='USUARIO',
+                entidad_id=instance.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se cambio el estado activo de {instance.username}.',
+                valores_anteriores={'activo': old_activo},
+                valores_nuevos={'activo': instance.activo},
+                request=self.request,
+            )
+
+        if password_modificado:
+            AuditoriaService.registrar(
+                usuario=self.request.user,
+                accion='USUARIO_PASSWORD_MODIFICADO',
+                modulo='USUARIOS',
+                entidad='USUARIO',
+                entidad_id=instance.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se modifico la clave de {instance.username}.',
+                valores_anteriores={'password': 'PROTEGIDO'},
+                valores_nuevos={'password': 'PROTEGIDO'},
+                request=self.request,
+            )
 
     def perform_destroy(self, instance):
-        old_data = UsuarioSerializer(instance).data
-        instance_id = instance.id
         instance.delete()
-        log_auditoria(self.request.user, 'ELIMINACION', 'USUARIO', instance_id, 
-                      detalle_anterior=old_data, request=self.request)
 
 class RolListView(generics.ListAPIView):
     """Lista de roles para el selector del formulario."""

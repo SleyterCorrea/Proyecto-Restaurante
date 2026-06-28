@@ -219,7 +219,7 @@ def descargar_boleta_view(request, pago_id):
 def api_abrir_turno(request):
     """Abre un nuevo turno de caja con saldo inicial y punto de caja."""
     try:
-        turno = CajaService.abrir_turno(request.data, request.user)
+        turno = CajaService.abrir_turno(request.data, request.user, request=request)
     except AppError as exc:
         return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True, 'codigo': turno.codigo_turno})
@@ -230,7 +230,7 @@ def api_abrir_turno(request):
 def api_cerrar_turno(request):
     """Cierra el turno activo con arqueo físico opcional."""
     try:
-        CajaService.cerrar_turno(request.data)
+        CajaService.cerrar_turno(request.data, request.user, request=request)
     except AppError as exc:
         return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True})

@@ -216,7 +216,7 @@ def api_linea_estado(request, pk):
     """
     try:
         linea, _ = CocinaService.cambiar_estado(
-            pk, request.data.get('estado'), request.user
+            pk, request.data.get('estado'), request.user, request=request
         )
     except AppError as exc:
         return _error_response(exc)
@@ -229,7 +229,7 @@ def api_enviar_linea_cocina(request, pk):
     """Explicit endpoint required by the KDS contract: PENDIENTE -> EN_PREP."""
     try:
         linea, _ = CocinaService.cambiar_estado(
-            pk, LineaComanda.Estado.EN_PREP, request.user
+            pk, LineaComanda.Estado.EN_PREP, request.user, request=request
         )
     except AppError as exc:
         return _error_response(exc)
@@ -354,7 +354,12 @@ def api_cocina_cambiar_estado(request, pk):
     try:
         cantidad_parcial = int(request.data.get('cantidad_parcial', 0))
         linea, nueva_linea_parcial = CocinaService.cambiar_estado(
-            pk, nuevo_estado, request.user, motivo, cantidad_parcial
+            pk,
+            nuevo_estado,
+            request.user,
+            motivo,
+            cantidad_parcial,
+            request=request,
         )
     except (TypeError, ValueError):
         return Response({'error': 'Cantidad parcial invalida.'}, status=400)

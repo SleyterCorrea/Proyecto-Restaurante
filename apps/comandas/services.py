@@ -10,6 +10,8 @@ from channels.layers import get_channel_layer
 from django.db import transaction
 from django.utils import timezone
 
+from apps.auditoria.models import AuditLog
+from apps.auditoria.services import AuditoriaService
 from apps.core.exceptions import (
     DatosInvalidos,
     MesaConComandaActiva,
@@ -316,7 +318,14 @@ class CocinaService:
 
     @staticmethod
     @transaction.atomic
-    def cambiar_estado(linea_id, nuevo_estado, usuario, motivo="", cantidad_parcial=0):
+    def cambiar_estado(
+        linea_id,
+        nuevo_estado,
+        usuario,
+        motivo="",
+        cantidad_parcial=0,
+        request=None,
+    ):
         try:
             linea = LineaComanda.objects.select_for_update().select_related(
                 "plato", "comanda", "comanda__mesa"
@@ -370,6 +379,45 @@ class CocinaService:
             motivo=motivo or "Cambio de estado via KDS",
             origen=ComandaHistorialEstado.Origen.KDS,
         )
+        if nuevo_estado == LineaComanda.Estado.ANULADO:
+            post_cocina = anterior in (
+                LineaComanda.Estado.EN_PREP,
+                LineaComanda.Estado.LISTO,
+            )
+            AuditoriaService.registrar(
+                usuario=usuario,
+                accion=(
+                    'COMANDA_PLATO_ANULADO_POST_COCINA'
+                    if post_cocina
+                    else 'COMANDA_PLATO_ANULADO'
+                ),
+                modulo='COMANDAS',
+                entidad='LINEA_COMANDA',
+                entidad_id=linea.id,
+                severidad=(
+                    AuditLog.Severidad.CRITICA
+                    if post_cocina
+                    else AuditLog.Severidad.ADVERTENCIA
+                ),
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=(
+                    f'Se anulo {linea.plato.nombre} en la comanda '
+                    f'{linea.comanda.codigo_comanda}.'
+                ),
+                motivo=motivo,
+                valores_anteriores={
+                    'estado': anterior,
+                    'cantidad': linea.cantidad,
+                },
+                valores_nuevos={
+                    'estado': nuevo_estado,
+                    'cantidad_parcial': cantidad_parcial,
+                },
+                request=request,
+                datos_contextuales={
+                    'impacto_economico_estimado': linea.subtotal,
+                },
+            )
         linea.comanda.marcar_como_lista()
         transaction.on_commit(
             lambda: _emitir_kds("estado_cambiado", {"linea_id": linea_id, "nuevo_estado": nuevo_estado})

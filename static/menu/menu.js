@@ -39,6 +39,7 @@ function menuApp() {
             activo: true,
             recetas: [],
         },
+        platoOriginal: null,
         platoEliminarId: null,
         platoEliminarNombre: "",
         platoEliminarMensaje: "Esta acción no se puede deshacer.",
@@ -261,10 +262,20 @@ function menuApp() {
         async confirmarEliminarPlato() {
             if (!this.platoEliminarId) return;
 
+            const motivo = window.prompt("Indica el motivo para desactivar este plato:");
+            if (!motivo || !motivo.trim()) {
+                this.platoEliminarMensaje = "El motivo es obligatorio.";
+                return;
+            }
+
             try {
                 const res = await fetch(`/api/menu/platos/${this.platoEliminarId}/`, {
                     method: "DELETE",
-                    headers: { "X-CSRFToken": this.getCsrfToken() },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": this.getCsrfToken(),
+                    },
+                    body: JSON.stringify({ motivo: motivo.trim() }),
                 });
 
                 if (res.ok) {
@@ -281,6 +292,7 @@ function menuApp() {
         },
 
         abrirModalPlato() {
+            this.platoOriginal = null;
             this.platoForm = {
                 id: null,
                 categoria: this.filtroCategoriaPlatos || "",
@@ -300,6 +312,7 @@ function menuApp() {
         },
 
         editarPlato(plato) {
+            this.platoOriginal = JSON.parse(JSON.stringify(plato));
             const recetasMapeadas = (plato.receta || []).map((r) => ({
                 id: r.id,
                 insumo_id: r.insumo_id,
@@ -382,6 +395,31 @@ function menuApp() {
             this.platoForm.recetas.forEach((receta) => {
                 formData.append(`receta`, JSON.stringify(receta));
             });
+
+            if (this.platoForm.id && this.platoOriginal) {
+                const normalizarReceta = (recetas) => (recetas || [])
+                    .filter((item) => item.activo !== false)
+                    .map((item) => ({
+                        insumo_id: Number(item.insumo_id),
+                        cantidad: Number(item.cantidad_por_porcion),
+                        merma: Number(item.merma_porcentaje || 0),
+                    }))
+                    .sort((a, b) => a.insumo_id - b.insumo_id);
+                const cambioPrecio = Number(this.platoOriginal.precio_actual)
+                    !== Number(this.platoForm.precio_actual);
+                const cambioReceta = JSON.stringify(normalizarReceta(this.platoOriginal.receta))
+                    !== JSON.stringify(normalizarReceta(this.platoForm.recetas));
+
+                if (cambioPrecio || cambioReceta) {
+                    const motivo = window.prompt(
+                        "Indica el motivo del cambio de precio o receta:"
+                    );
+                    if (!motivo || !motivo.trim()) {
+                        return this.mostrarError("El motivo es obligatorio para este cambio");
+                    }
+                    formData.append("motivo", motivo.trim());
+                }
+            }
 
             try {
                 const res = await fetch(url, {

@@ -5,6 +5,9 @@ from django.test import RequestFactory
 
 from apps.auditoria.models import AuditLog
 from apps.auditoria.services import AuditoriaService
+from apps.caja.services import CajaService
+from apps.comandas.models import Comanda, ComandaHistorialEstado, LineaComanda
+from apps.comandas.services import CocinaService
 from apps.usuarios.models import AuditLog as AuditLogLegado
 from apps.usuarios.utils import log_auditoria
 
@@ -60,7 +63,7 @@ def test_audit_log_pertenece_a_auditoria_y_conserva_alias_temporal():
 
 
 @pytest.mark.django_db
-def test_flujo_legado_completa_contexto_del_evento(usuario_admin):
+def test_adaptador_ignora_accion_legacy_sin_fallar(usuario_admin):
     request = RequestFactory().post(
         '/admin-panel/mesas/',
         HTTP_USER_AGENT='pytest-auditoria',
@@ -76,15 +79,28 @@ def test_flujo_legado_completa_contexto_del_evento(usuario_admin):
         request=request,
     )
 
+    assert log is None
+    assert not AuditLog.objects.exists()
+
+
+@pytest.mark.django_db
+def test_adaptador_delega_accion_final_y_parametros_compatibles(usuario_admin):
+    log = log_auditoria(
+        usuario_admin,
+        'USUARIO_CREADO',
+        'USUARIO',
+        10,
+        detalle_anterior={'existe': False},
+        valores_nuevos={'username': 'nuevo'},
+        ip='127.0.0.2',
+        modulo='USUARIOS',
+    )
+
     assert isinstance(log, AuditLog)
-    assert log.rol == 'ADMIN'
-    assert log.modulo == 'MESAS'
-    assert log.codigo_evento == 'EDICION'
-    assert log.severidad == AuditLog.Severidad.INFO
-    assert log.ruta == '/admin-panel/mesas/'
-    assert log.metodo_http == 'POST'
-    assert log.ip == '127.0.0.1'
-    assert AuditoriaService.listar_logs(accion='EDICION').get() == log
+    assert log.codigo_evento == 'USUARIO_CREADO'
+    assert log.detalle_anterior == {'existe': False}
+    assert log.detalle_nuevo == {'username': 'nuevo'}
+    assert log.ip == '127.0.0.2'
 
 
 def test_catalogo_oficial_contiene_solo_las_acciones_aprobadas():
@@ -183,3 +199,109 @@ def test_registrar_acepta_evento_sensible_con_motivo(usuario_admin):
     )
 
     assert log.motivo == 'Pago registrado dos veces.'
+
+
+@pytest.mark.django_db
+def test_kds_audita_solo_anulacion_y_conserva_historial(
+    usuario_cocinero,
+    usuario_mozo,
+    mesa_libre,
+    plato_con_receta,
+):
+    comanda = Comanda.objects.create(
+        mesa=mesa_libre,
+        mozo=usuario_mozo,
+        codigo_comanda='AUD-KDS',
+    )
+    linea = LineaComanda.objects.create(
+        comanda=comanda,
+        plato=plato_con_receta,
+        cantidad=1,
+        precio_unitario=15,
+        subtotal=15,
+    )
+    request = RequestFactory().patch('/api/cocina/lineas/1/cambiar-estado/')
+
+    CocinaService.cambiar_estado(
+        linea.id,
+        LineaComanda.Estado.EN_PREP,
+        usuario_cocinero,
+        request=request,
+    )
+    assert ComandaHistorialEstado.objects.count() == 1
+    assert not AuditLog.objects.exists()
+
+    CocinaService.cambiar_estado(
+        linea.id,
+        LineaComanda.Estado.ANULADO,
+        usuario_cocinero,
+        motivo='Ingrediente no disponible.',
+        request=request,
+    )
+
+    assert ComandaHistorialEstado.objects.count() == 2
+    log = AuditLog.objects.get()
+    assert log.accion == 'COMANDA_PLATO_ANULADO_POST_COCINA'
+    assert log.motivo == 'Ingrediente no disponible.'
+
+
+@pytest.mark.django_db
+def test_caja_audita_turno_y_descuadre(usuario_cajero):
+    turno = CajaService.abrir_turno({'saldo_inicial': 100}, usuario_cajero)
+    CajaService.cerrar_turno({
+        'saldo_final': 90,
+        'arqueo_fisico': 90,
+    }, usuario_cajero)
+
+    assert list(
+        AuditLog.objects.filter(entidad_id=turno.id)
+        .order_by('fecha_evento')
+        .values_list('accion', flat=True)
+    ) == [
+        'CAJA_TURNO_ABIERTO',
+        'CAJA_TURNO_CERRADO',
+        'CAJA_DESCUADRE_DETECTADO',
+    ]
+
+
+@pytest.mark.django_db
+def test_endpoints_registran_usuario_y_precio(
+    client,
+    usuario_admin,
+    db_roles,
+    plato_con_receta,
+):
+    client.force_login(usuario_admin)
+    response = client.post('/api/trabajadores/', {
+        'username': 'auditable',
+        'email': 'auditable@test.com',
+        'nombres': 'Usuario',
+        'apellidos': 'Auditable',
+        'rol': db_roles['MOZO'].id,
+        'password': 'pass12345',
+    })
+    assert response.status_code == 201
+    assert AuditLog.objects.filter(accion='USUARIO_CREADO').exists()
+
+    response = client.patch(
+        f'/api/menu/platos/{plato_con_receta.id}/',
+        {'precio_actual': '18.00'},
+        content_type='application/json',
+    )
+    assert response.status_code == 400
+    plato_con_receta.refresh_from_db()
+    assert str(plato_con_receta.precio_actual) == '15.00'
+
+    response = client.patch(
+        f'/api/menu/platos/{plato_con_receta.id}/',
+        {
+            'precio_actual': '18.00',
+            'motivo': 'Actualizacion por costo de insumos.',
+        },
+        content_type='application/json',
+    )
+    assert response.status_code == 200
+    assert AuditLog.objects.filter(
+        accion='PLATO_PRECIO_MODIFICADO',
+        entidad_id=plato_con_receta.id,
+    ).exists()
