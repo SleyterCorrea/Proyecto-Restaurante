@@ -21,7 +21,6 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.usuarios.decorators import rol_requerido
 from apps.usuarios.services import UsuarioService
-from apps.usuarios.utils import log_auditoria
 from apps.core.exceptions import AppError
 
 from .models import Mesa, Zona, UnionMesas
@@ -291,14 +290,8 @@ def api_mesa_crear(request):
 
     try:
         mesa = MesaService.crear(request.data)
-        log_auditoria(
-            usuario=request.user,
-            accion='CREACION',
-            entidad='MESA',
-            entidad_id=mesa.id,
-            detalle_nuevo={"mensaje": f"Mesa {mesa.numero} creada en {mesa.zona.nombre}", "numero": mesa.numero, "capacidad": mesa.capacidad},
-            request=request
-        )
+        # La gestion de mesas pertenece al flujo operativo normal del restaurante,
+        # no a la auditoria critica de riesgos. No se registra en AuditLog.
 
         return JsonResponse({
             'ok': True,
@@ -327,14 +320,7 @@ def api_mesa_eliminar(request, pk):
 
     try:
         mesa = MesaService.desactivar(pk)
-        log_auditoria(
-            usuario=request.user,
-            accion='ELIMINACION',
-            entidad='MESA',
-            entidad_id=mesa.id,
-            detalle_anterior={"mensaje": "Mesa desactivada", "numero": mesa.numero, "zona": mesa.zona.nombre},
-            request=request
-        )
+        # Operacion de mesas: flujo operativo normal, fuera de la auditoria critica.
         return JsonResponse({'ok': True, 'mensaje': 'Mesa eliminada correctamente.'})
     except AppError as exc:
         return JsonResponse(exc.as_dict(), status=exc.status_code)
@@ -380,14 +366,7 @@ def api_union_crear(request):
 
     try:
         union = MesaService.crear_union(request.data)
-        log_auditoria(
-            usuario=request.user,
-            accion='CREACION',
-            entidad='UNION_MESAS',
-            entidad_id=union.id,
-            detalle_nuevo={'mesas': [mesa.numero for mesa in union.todas_las_mesas]},
-            request=request,
-        )
+        # Union de mesas: flujo operativo normal, fuera de la auditoria critica.
         return JsonResponse({'ok': True, 'union': _serializar_union(union)})
     except AppError as exc:
         return JsonResponse(exc.as_dict(), status=exc.status_code)
@@ -409,10 +388,7 @@ def api_union_disolver(request, pk):
     try:
         union = MesaService.disolver_union(pk)
         numeros = [mesa.numero for mesa in union.todas_las_mesas]
-        log_auditoria(
-            usuario=request.user, accion='ELIMINACION', entidad='UNION_MESAS',
-            entidad_id=union.id, detalle_anterior={'mesas': numeros}, request=request,
-        )
+        # Disolucion de union de mesas: flujo operativo normal, sin auditoria critica.
         return JsonResponse({'ok': True, 'mensaje': f'Unión de mesas {numeros} disuelta correctamente.'})
     except AppError as exc:
         return JsonResponse(exc.as_dict(), status=exc.status_code)
@@ -433,8 +409,7 @@ def api_mesa_limpiada(request, pk):
 
     try:
         mesa = MesaService.marcar_limpiada(pk)
-        log_auditoria(request.user, 'ACCION', 'MESAS', mesa.id, 
-                      detalle_nuevo={'accion': 'Limpieza terminada'}, request=request)
+        # Cambio de estado de mesa: flujo operativo normal, fuera de la auditoria critica.
         return JsonResponse({'ok': True})
     except AppError as exc:
         return JsonResponse(exc.as_dict(), status=exc.status_code)
