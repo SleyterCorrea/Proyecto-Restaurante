@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from apps.auditoria import views as auditoria_views
 
 from apps.usuarios.views import GestionTrabajadoresView
 
@@ -12,7 +13,7 @@ urlpatterns = [
     path('recetas/', views.admin_recetas, name='admin_recetas'),
     path('reportes/', views.admin_reportes, name='admin_reportes'),
     path('trabajadores/', GestionTrabajadoresView.as_view(), name='admin_trabajadores'),
-    path('auditoria/', views.admin_auditoria, name='admin_auditoria'),
+    path('auditoria/', auditoria_views.admin_auditoria, name='admin_auditoria'),
 
 
     # API Endpoints
@@ -20,6 +21,9 @@ urlpatterns = [
     path('api/top-platos/', views.api_top_platos, name='api_top_platos'),
     path('api/ventas-por-hora/', views.api_ventas_por_hora, name='api_ventas_por_hora'),
     path('api/ventas-historial/', views.api_ventas_historial, name='api_ventas_historial'),
-    path('api/auditoria-logs/', views.api_auditoria_logs, name='api_auditoria_logs'),
+    path('api/auditoria-logs/', auditoria_views.api_auditoria_logs, name='api_auditoria_logs'),
+    path('api/auditoria-logs/filtros/', auditoria_views.api_auditoria_filtros, name='api_auditoria_filtros'),
+    path('api/auditoria-logs/export/', auditoria_views.api_auditoria_exportar, name='api_auditoria_exportar'),
+    path('api/auditoria-logs/<int:log_id>/', auditoria_views.api_auditoria_log_detalle, name='api_auditoria_log_detalle'),
     path('api/exportar-csv/', views.api_exportar_csv, name='api_exportar_csv'),
 ]

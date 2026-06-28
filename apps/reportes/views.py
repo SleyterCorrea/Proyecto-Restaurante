@@ -15,6 +15,9 @@ from apps.usuarios.permissions import EsCajeroOAdmin, EsAdmin
 from apps.usuarios.decorators import rol_requerido
 from apps.auditoria.views import (
     admin_auditoria as auditoria_admin_view,
+    api_auditoria_exportar as auditoria_exportar_api_view,
+    api_auditoria_filtros as auditoria_filtros_api_view,
+    api_auditoria_log_detalle as auditoria_log_detalle_api_view,
     api_auditoria_logs as auditoria_logs_api_view,
 )
 from apps.comandas.models import Comanda, LineaComanda
@@ -555,6 +558,20 @@ def api_exportar_csv(request):
     return response
 
 @api_view(['GET'])
-@permission_classes([EsAdmin])
 def api_auditoria_logs(request):
     return auditoria_logs_api_view(request)
+
+
+@api_view(['GET'])
+def api_auditoria_log_detalle(request, log_id):
+    return auditoria_log_detalle_api_view(request, log_id)
+
+
+@api_view(['GET'])
+def api_auditoria_filtros(request):
+    return auditoria_filtros_api_view(request)
+
+
+@api_view(['GET'])
+def api_auditoria_exportar(request):
+    return auditoria_exportar_api_view(request)

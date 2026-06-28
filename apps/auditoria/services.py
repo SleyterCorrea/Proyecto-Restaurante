@@ -1,5 +1,10 @@
+import csv
+from datetime import datetime, time
+
+from django.http import HttpResponse
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import AuditLog
 
@@ -257,30 +262,72 @@ class AuditoriaService:
             'metodo_http': getattr(request, 'method', None),
         }
 
-    @staticmethod
+    @classmethod
     def listar_logs(
+        cls,
         search='',
+        fecha_desde='',
+        fecha_hasta='',
+        turno_caja='',
+        usuario_id='',
+        rol='',
         entidad='',
+        entidad_id='',
         accion='',
         modulo='',
         severidad='',
+        motivo_obligatorio='',
         estado_resultado='',
         estado_revision='',
+        responsable_revision_id='',
+        mesa='',
+        plato='',
+        insumo='',
     ):
-        logs = AuditLog.objects.select_related('usuario').order_by('-fecha_evento')
+        logs = AuditLog.objects.select_related(
+            'usuario',
+            'responsable_revision',
+        ).order_by('-fecha_evento')
 
         if search:
             logs = logs.filter(
                 Q(usuario__username__icontains=search)
+                | Q(rol__icontains=search)
                 | Q(codigo_evento__icontains=search)
+                | Q(entidad__icontains=search)
                 | Q(descripcion__icontains=search)
                 | Q(motivo__icontains=search)
                 | Q(detalle_nuevo__icontains=search)
                 | Q(detalle_anterior__icontains=search)
             )
 
+        fecha_desde_dt = AuditoriaService._parse_fecha(fecha_desde, end_of_day=False)
+        if fecha_desde_dt:
+            logs = logs.filter(fecha_evento__gte=fecha_desde_dt)
+
+        fecha_hasta_dt = AuditoriaService._parse_fecha(fecha_hasta, end_of_day=True)
+        if fecha_hasta_dt:
+            logs = logs.filter(fecha_evento__lte=fecha_hasta_dt)
+
+        if turno_caja:
+            logs = logs.filter(
+                Q(entidad='CAJA_TURNO', entidad_id=turno_caja)
+                | Q(descripcion__icontains=turno_caja)
+                | Q(detalle_nuevo__icontains=turno_caja)
+                | Q(detalle_anterior__icontains=turno_caja)
+            )
+
+        if usuario_id:
+            logs = logs.filter(usuario_id=usuario_id)
+
+        if rol:
+            logs = logs.filter(rol=rol)
+
         if entidad:
             logs = logs.filter(entidad=entidad)
+
+        if entidad_id:
+            logs = logs.filter(entidad_id=entidad_id)
 
         if accion:
             logs = logs.filter(Q(accion=accion) | Q(codigo_evento=accion))
@@ -291,10 +338,148 @@ class AuditoriaService:
         if severidad:
             logs = logs.filter(severidad=severidad)
 
+        if motivo_obligatorio == 'true':
+            logs = logs.exclude(motivo__isnull=True).exclude(motivo__exact='')
+        elif motivo_obligatorio == 'false':
+            logs = logs.filter(Q(motivo__isnull=True) | Q(motivo__exact=''))
+
         if estado_resultado:
             logs = logs.filter(estado_resultado=estado_resultado)
 
         if estado_revision:
             logs = logs.filter(estado_revision=estado_revision)
 
+        if responsable_revision_id:
+            logs = logs.filter(responsable_revision_id=responsable_revision_id)
+
+        if mesa:
+            logs = logs.filter(cls._build_entidad_relacionada_q('MESA', mesa))
+
+        if plato:
+            logs = logs.filter(cls._build_entidad_relacionada_q('PLATO', plato))
+
+        if insumo:
+            logs = logs.filter(cls._build_entidad_relacionada_q('INSUMO', insumo))
+
         return logs
+
+    @staticmethod
+    def obtener_log(log_id):
+        return AuditLog.objects.select_related(
+            'usuario',
+            'responsable_revision',
+        ).get(pk=log_id)
+
+    @staticmethod
+    def obtener_opciones_filtro():
+        base = AuditLog.objects.select_related('usuario', 'responsable_revision')
+        return {
+            'usuarios': list(
+                base.exclude(usuario__isnull=True)
+                .values('usuario_id', 'usuario__username')
+                .distinct()
+                .order_by('usuario__username')
+            ),
+            'roles': list(
+                base.exclude(rol__exact='')
+                .exclude(rol__isnull=True)
+                .values_list('rol', flat=True)
+                .distinct()
+                .order_by('rol')
+            ),
+            'modulos': list(
+                base.exclude(modulo__exact='')
+                .values_list('modulo', flat=True)
+                .distinct()
+                .order_by('modulo')
+            ),
+            'severidades': list(AuditLog.Severidad.values),
+            'tipos_evento': list(
+                base.exclude(codigo_evento__exact='')
+                .values_list('codigo_evento', flat=True)
+                .distinct()
+                .order_by('codigo_evento')
+            ),
+            'entidades': list(
+                base.exclude(entidad__exact='')
+                .values_list('entidad', flat=True)
+                .distinct()
+                .order_by('entidad')
+            ),
+            'estados_revision': list(AuditLog.EstadoRevision.values),
+            'responsables_revision': list(
+                base.exclude(responsable_revision__isnull=True)
+                .values(
+                    'responsable_revision_id',
+                    'responsable_revision__username',
+                )
+                .distinct()
+                .order_by('responsable_revision__username')
+            ),
+        }
+
+    @classmethod
+    def exportar_logs_csv(cls, logs):
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="auditoria_logs.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'Fecha',
+            'Usuario',
+            'Rol',
+            'Modulo',
+            'Evento',
+            'Severidad',
+            'Resultado',
+            'Entidad',
+            'Entidad ID',
+            'Descripcion',
+            'Motivo',
+            'Estado revision',
+            'Responsable revision',
+            'IP',
+            'Ruta',
+            'Metodo',
+        ])
+        for log in logs:
+            writer.writerow([
+                timezone.localtime(log.fecha_evento).strftime('%Y-%m-%d %H:%M:%S'),
+                getattr(log.usuario, 'username', ''),
+                log.rol,
+                log.modulo,
+                log.codigo_evento or log.accion,
+                log.severidad,
+                log.estado_resultado,
+                log.entidad,
+                log.entidad_id,
+                log.descripcion,
+                log.motivo or '',
+                log.estado_revision,
+                getattr(log.responsable_revision, 'username', ''),
+                log.ip or '',
+                log.ruta or '',
+                log.metodo_http or '',
+            ])
+        return response
+
+    @staticmethod
+    def _parse_fecha(valor, *, end_of_day):
+        if not valor:
+            return None
+        try:
+            fecha = datetime.strptime(valor, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValidationError({'fecha': f'Fecha invalida: {valor}.'})
+        hora = time.max if end_of_day else time.min
+        return timezone.make_aware(datetime.combine(fecha, hora))
+
+    @staticmethod
+    def _build_entidad_relacionada_q(entidad, valor):
+        filtros = (
+            Q(descripcion__icontains=valor)
+            | Q(detalle_nuevo__icontains=valor)
+            | Q(detalle_anterior__icontains=valor)
+        )
+        if str(valor).isdigit():
+            filtros |= Q(entidad=entidad, entidad_id=int(valor))
+        return filtros

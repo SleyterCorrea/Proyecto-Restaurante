@@ -16,6 +16,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'entidad',
         'entidad_id',
         'estado_revision',
+        'responsable_revision',
     ]
     list_filter = [
         'modulo',
@@ -24,6 +25,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'estado_resultado',
         'entidad',
         'estado_revision',
+        'responsable_revision',
     ]
     search_fields = [
         'usuario__username',
@@ -31,6 +33,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'entidad',
         'descripcion',
         'motivo',
+        'responsable_revision__username',
     ]
     date_hierarchy = 'fecha_evento'
     readonly_fields = [
@@ -55,4 +58,5 @@ class AuditLogAdmin(admin.ModelAdmin):
         'user_agent',
         'ruta',
         'metodo_http',
+        'responsable_revision',
     ]

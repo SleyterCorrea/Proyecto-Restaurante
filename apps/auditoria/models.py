@@ -63,6 +63,13 @@ class AuditLog(models.Model):
         choices=EstadoRevision.choices,
         default=EstadoRevision.PENDIENTE,
     )
+    responsable_revision = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='audit_logs_revisados',
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

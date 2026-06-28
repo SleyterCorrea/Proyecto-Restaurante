@@ -1,6 +1,7 @@
 import pytest
 from django.contrib import admin
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.test import RequestFactory
 
 from apps.auditoria.models import AuditLog
@@ -304,4 +305,101 @@ def test_endpoints_registran_usuario_y_precio(
     assert AuditLog.objects.filter(
         accion='PLATO_PRECIO_MODIFICADO',
         entidad_id=plato_con_receta.id,
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_api_auditoria_admin_puede_filtrar_detallar_y_exportar(
+    client,
+    usuario_admin,
+    usuario_cajero,
+):
+    log_turno = AuditoriaService.registrar(
+        usuario=usuario_admin,
+        accion='CAJA_TURNO_ABIERTO',
+        modulo='CAJA',
+        entidad='CAJA_TURNO',
+        entidad_id=77,
+        severidad=AuditLog.Severidad.INFO,
+        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+        descripcion='Apertura del turno MANANA.',
+        valores_nuevos={'turno': 'MANANA', 'mesa': '5', 'plato': 'Lomo', 'insumo': 'Papa'},
+    )
+    log_turno.estado_revision = AuditLog.EstadoRevision.REVISADO
+    log_turno.responsable_revision = usuario_admin
+    log_turno.save(update_fields=['estado_revision', 'responsable_revision'])
+
+    AuditoriaService.registrar(
+        usuario=usuario_cajero,
+        accion='CAJA_DESCUADRE_DETECTADO',
+        modulo='CAJA',
+        entidad='CAJA_TURNO',
+        entidad_id=78,
+        severidad=AuditLog.Severidad.ADVERTENCIA,
+        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+        descripcion='Descuadre en turno NOCHE.',
+        motivo='Faltante de caja.',
+        valores_nuevos={'turno': 'NOCHE', 'mesa': '9', 'plato': 'Tallarin', 'insumo': 'Aceite'},
+    )
+
+    client.force_login(usuario_admin)
+
+    response = client.get('/admin-panel/auditoria/')
+    assert response.status_code == 200
+    assert AuditLog.objects.filter(accion='AUDITORIA_ACCESO_PANEL').exists()
+
+    filtros = client.get('/admin-panel/api/auditoria-logs/filtros/')
+    assert filtros.status_code == 200
+    assert 'CAJA' in filtros.json()['modulos']
+
+    listado = client.get(
+        '/admin-panel/api/auditoria-logs/',
+        {
+            'fecha_desde': log_turno.fecha_evento.strftime('%Y-%m-%d'),
+            'fecha_hasta': log_turno.fecha_evento.strftime('%Y-%m-%d'),
+            'turno_caja': '77',
+            'usuario': str(usuario_admin.id),
+            'rol': 'ADMIN',
+            'modulo': 'CAJA',
+            'severidad': 'INFO',
+            'tipo_evento': 'CAJA_TURNO_ABIERTO',
+            'entidad': 'CAJA_TURNO',
+            'entidad_id': '77',
+            'mesa': '5',
+            'plato': 'Lomo',
+            'insumo': 'Papa',
+            'motivo_obligatorio': 'false',
+            'estado_revision': AuditLog.EstadoRevision.REVISADO,
+            'responsable_revision': str(usuario_admin.id),
+        },
+    )
+    data = listado.json()
+    assert listado.status_code == 200
+    assert len(data) == 1
+    assert data[0]['id'] == log_turno.id
+
+    detalle = client.get(f'/admin-panel/api/auditoria-logs/{log_turno.id}/')
+    assert detalle.status_code == 200
+    assert detalle.json()['codigo_evento'] == 'CAJA_TURNO_ABIERTO'
+
+    exportacion = client.get(
+        '/admin-panel/api/auditoria-logs/export/',
+        {'tipo_evento': 'CAJA_TURNO_ABIERTO'},
+    )
+    assert exportacion.status_code == 200
+    assert exportacion['Content-Type'].startswith('text/csv')
+    assert AuditLog.objects.filter(accion='AUDITORIA_EXPORTADA').exists()
+
+
+@pytest.mark.django_db
+def test_api_auditoria_deniega_a_no_admin(client, usuario_cajero):
+    client.force_login(usuario_cajero)
+
+    response = client.get(reverse('api_auditoria_logs'))
+
+    assert response.status_code == 403
+    assert AuditLog.objects.filter(
+        accion='ACCESO_DENEGADO',
+        usuario=usuario_cajero,
+        modulo='AUDITORIA',
     ).exists()
