@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.usuarios.models import AuditLog as AuditLogModel
+from .models import AuditLog
 
 
 class AuditoriaService:
@@ -13,26 +13,51 @@ class AuditoriaService:
         detalle_anterior=None,
         detalle_nuevo=None,
         request=None,
+        rol=None,
+        modulo=None,
+        codigo_evento=None,
+        severidad=AuditLog.Severidad.INFO,
+        descripcion='',
+        motivo=None,
+        impacto_economico_estimado=None,
     ):
-        ip, user_agent = AuditoriaService._extraer_metadata_request(request)
-        return AuditLogModel.objects.create(
+        metadata = AuditoriaService._extraer_metadata_request(request)
+        nombre_rol = rol or getattr(getattr(usuario, 'rol', None), 'nombre', None)
+
+        return AuditLog.objects.create(
             usuario=usuario,
+            rol=nombre_rol,
+            modulo=modulo or entidad,
+            codigo_evento=codigo_evento or accion,
+            severidad=severidad,
             accion=accion,
             entidad=entidad,
             entidad_id=entidad_id,
+            descripcion=descripcion,
+            motivo=motivo,
             detalle_anterior=detalle_anterior,
             detalle_nuevo=detalle_nuevo,
-            ip=ip,
-            user_agent=user_agent,
+            impacto_economico_estimado=impacto_economico_estimado,
+            **metadata,
         )
 
     @staticmethod
-    def listar_logs(search='', entidad='', accion=''):
-        logs = AuditLogModel.objects.select_related('usuario').order_by('-fecha_evento')
+    def listar_logs(
+        search='',
+        entidad='',
+        accion='',
+        modulo='',
+        severidad='',
+        estado_revision='',
+    ):
+        logs = AuditLog.objects.select_related('usuario').order_by('-fecha_evento')
 
         if search:
             logs = logs.filter(
                 Q(usuario__username__icontains=search)
+                | Q(codigo_evento__icontains=search)
+                | Q(descripcion__icontains=search)
+                | Q(motivo__icontains=search)
                 | Q(detalle_nuevo__icontains=search)
                 | Q(detalle_anterior__icontains=search)
             )
@@ -41,14 +66,28 @@ class AuditoriaService:
             logs = logs.filter(entidad=entidad)
 
         if accion:
-            logs = logs.filter(accion=accion)
+            logs = logs.filter(Q(accion=accion) | Q(codigo_evento=accion))
+
+        if modulo:
+            logs = logs.filter(modulo=modulo)
+
+        if severidad:
+            logs = logs.filter(severidad=severidad)
+
+        if estado_revision:
+            logs = logs.filter(estado_revision=estado_revision)
 
         return logs
 
     @staticmethod
     def _extraer_metadata_request(request):
         if not request:
-            return None, None
+            return {
+                'ip': None,
+                'user_agent': None,
+                'ruta': None,
+                'metodo_http': None,
+            }
 
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
@@ -56,6 +95,9 @@ class AuditoriaService:
         else:
             ip = request.META.get('REMOTE_ADDR')
 
-        user_agent = request.META.get('HTTP_USER_AGENT')
-        return ip, user_agent
-
+        return {
+            'ip': ip,
+            'user_agent': request.META.get('HTTP_USER_AGENT'),
+            'ruta': request.path[:255],
+            'metodo_http': request.method[:10],
+        }

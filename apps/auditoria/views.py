@@ -23,12 +23,17 @@ def api_auditoria_logs(request):
     search = request.GET.get('search', '').strip()
     entidad = request.GET.get('entidad', '').strip()
     accion = request.GET.get('accion', '').strip()
+    modulo = request.GET.get('modulo', '').strip()
+    severidad = request.GET.get('severidad', '').strip()
+    estado_revision = request.GET.get('estado_revision', '').strip()
 
     logs = AuditoriaService.listar_logs(
         search=search,
         entidad=entidad,
         accion=accion,
+        modulo=modulo,
+        severidad=severidad,
+        estado_revision=estado_revision,
     )[:500]
     serializer = AuditLogSerializer(logs, many=True)
     return Response(serializer.data)
-

@@ -288,7 +288,7 @@ class ComandaService:
         except Mesa.DoesNotExist:
             raise RecursoNoEncontrado("Mesa no encontrada.")
         from django.db.models import Q
-        comanda = Comanda.objects.select_for_update().filter(
+        comanda = Comanda.objects.select_for_update(of=('self',)).filter(
             Q(mesa=mesa) | Q(mesas_adicionales=mesa), estado__in=cls.ESTADOS_ACTIVOS
         ).order_by("-fecha_apertura").first()
         if not comanda:

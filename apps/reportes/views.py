@@ -557,46 +557,4 @@ def api_exportar_csv(request):
 @api_view(['GET'])
 @permission_classes([EsAdmin])
 def api_auditoria_logs(request):
-    """
-    Lista los registros de auditoría con filtros.
-    """
-    search = request.GET.get('search', '').strip()
-    entidad = request.GET.get('entidad', '').strip()
-    accion = request.GET.get('accion', '').strip()
-    
-    logs = AuditLog.objects.all().select_related('usuario').order_by('-fecha_evento')
-    
-    if search:
-        logs = logs.filter(
-            Q(usuario__username__icontains=search) |
-            Q(detalle_nuevo__icontains=search) |
-            Q(detalle_anterior__icontains=search)
-        )
-    
-    if entidad:
-        logs = logs.filter(entidad=entidad)
-    
-    if accion:
-        logs = logs.filter(accion=accion)
-        
-    data = []
-    for log in logs[:500]: # Limitar a los últimos 500 para performance
-        data.append({
-            'id': log.id,
-            'fecha': log.fecha_evento.strftime('%Y-%m-%d %H:%M:%S'),
-            'usuario': log.usuario.username,
-            'accion': log.accion,
-            'entidad': log.entidad,
-            'entidad_id': log.entidad_id,
-            'detalle_anterior': log.detalle_anterior,
-            'detalle_nuevo': log.detalle_nuevo,
-            'ip': log.ip
-        })
-        
-    return Response(data)
-
-
-@api_view(['GET'])
-@permission_classes([EsAdmin])
-def api_auditoria_logs(request):
     return auditoria_logs_api_view(request)
