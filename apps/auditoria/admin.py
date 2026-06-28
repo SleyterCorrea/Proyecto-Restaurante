@@ -12,6 +12,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'codigo_evento',
         'modulo',
         'severidad',
+        'estado_resultado',
         'entidad',
         'entidad_id',
         'estado_revision',
@@ -20,6 +21,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'modulo',
         'codigo_evento',
         'severidad',
+        'estado_resultado',
         'entidad',
         'estado_revision',
     ]
@@ -40,6 +42,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'modulo',
         'codigo_evento',
         'severidad',
+        'estado_resultado',
         'accion',
         'entidad',
         'entidad_id',

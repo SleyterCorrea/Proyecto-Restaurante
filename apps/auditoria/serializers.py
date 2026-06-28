@@ -17,6 +17,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'modulo',
             'codigo_evento',
             'severidad',
+            'estado_resultado',
             'accion',
             'entidad',
             'entidad_id',

@@ -15,7 +15,7 @@ def log_auditoria(
     progresivamente al nuevo modulo propietario.
     """
 
-    return AuditoriaService.registrar(
+    return AuditoriaService._registrar_legacy(
         usuario=usuario,
         accion=accion,
         entidad=entidad,

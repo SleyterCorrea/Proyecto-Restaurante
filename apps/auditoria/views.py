@@ -25,6 +25,7 @@ def api_auditoria_logs(request):
     accion = request.GET.get('accion', '').strip()
     modulo = request.GET.get('modulo', '').strip()
     severidad = request.GET.get('severidad', '').strip()
+    estado_resultado = request.GET.get('estado_resultado', '').strip()
     estado_revision = request.GET.get('estado_revision', '').strip()
 
     logs = AuditoriaService.listar_logs(
@@ -33,6 +34,7 @@ def api_auditoria_logs(request):
         accion=accion,
         modulo=modulo,
         severidad=severidad,
+        estado_resultado=estado_resultado,
         estado_revision=estado_revision,
     )[:500]
     serializer = AuditLogSerializer(logs, many=True)

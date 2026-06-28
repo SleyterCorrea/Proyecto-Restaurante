@@ -14,6 +14,11 @@ class AuditLog(models.Model):
         REVISADO = 'REVISADO', 'Revisado'
         DESCARTADO = 'DESCARTADO', 'Descartado'
 
+    class EstadoResultado(models.TextChoices):
+        EXITOSO = 'EXITOSO', 'Exitoso'
+        FALLIDO = 'FALLIDO', 'Fallido'
+        DENEGADO = 'DENEGADO', 'Denegado'
+
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -26,6 +31,11 @@ class AuditLog(models.Model):
         max_length=20,
         choices=Severidad.choices,
         default=Severidad.INFO,
+    )
+    estado_resultado = models.CharField(
+        max_length=20,
+        choices=EstadoResultado.choices,
+        default=EstadoResultado.EXITOSO,
     )
 
     # Campo legado: las llamadas actuales aun expresan el evento como accion.
