@@ -37,8 +37,9 @@ class MesaConComandaActiva(ReglaNegocioViolada):
 class StockInsuficiente(ReglaNegocioViolada):
     code = "stock_insuficiente"
 
-    def __init__(self, insumo, disponible=None, requerido=None):
+    def __init__(self, insumo, disponible=None, requerido=None, insumo_id=None):
         self.insumo = insumo
+        self.insumo_id = insumo_id
         self.disponible = disponible
         self.requerido = requerido
         super().__init__(f'Stock insuficiente para "{insumo}".')
@@ -49,6 +50,7 @@ class StockInsuficiente(ReglaNegocioViolada):
             "insumo": self.insumo,
             "stock_disponible": float(self.disponible) if self.disponible is not None else None,
             "stock_requerido": float(self.requerido) if self.requerido is not None else None,
+            "insumo_id": self.insumo_id,
         })
         return data
 

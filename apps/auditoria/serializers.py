@@ -35,6 +35,8 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'metodo_http',
             'estado_revision',
             'responsable_revision',
+            'alerta_activa',
+            'clave_alerta',
         ]
 
 

@@ -36,7 +36,8 @@ from apps.comandas.models import Comanda, LineaComanda
 from .models import CajaTurno, MetodoPago, Pago
 from apps.mesas.models import UnionMesas, Mesa
 from .services import CajaService
-from apps.core.exceptions import AppError
+from apps.core.exceptions import AppError, StockInsuficiente
+from apps.inventario.services import InventarioService
 from .utils import generar_pdf_boleta
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -292,6 +293,7 @@ def api_pagar_comanda(request, pk):
             usuario=request.user,
             linea_ids=linea_ids,
             observacion=observacion,
+            request=request,
         )
         return Response({
             'ok': True,
@@ -299,6 +301,10 @@ def api_pagar_comanda(request, pk):
             'boleta_url': f'/caja/boleta/{pagos[0].id}/',
         })
     except AppError as e:
+        if isinstance(e, StockInsuficiente):
+            InventarioService.registrar_excepcion_stock(
+                e, request.user, request=request
+            )
         return Response(e.as_dict(), status=e.status_code)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

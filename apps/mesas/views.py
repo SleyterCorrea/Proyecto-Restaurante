@@ -20,6 +20,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
 from apps.usuarios.decorators import rol_requerido
+from apps.usuarios.services import UsuarioService
 from apps.usuarios.utils import log_auditoria
 from apps.core.exceptions import AppError
 
@@ -283,6 +284,9 @@ def api_mesa_crear(request):
     Crea una nueva mesa. Solo ADMIN.
     """
     if request.user.rol.nombre != 'ADMIN':
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
 
     try:
@@ -316,6 +320,9 @@ def api_mesa_eliminar(request, pk):
     Elimina una mesa o la desactiva si tiene historial. Solo ADMIN.
     """
     if request.user.rol.nombre != 'ADMIN':
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'No tenés permisos para realizar esta acción.'}, status=403)
 
     try:
@@ -366,6 +373,9 @@ def api_union_crear(request):
     - Una mesa no puede pertenecer a más de una unión activa.
     """
     if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede unir mesas.'}, status=403)
 
     try:
@@ -391,6 +401,9 @@ def api_union_disolver(request, pk):
     Disuelve una unión de mesas. Solo ADMIN.
     """
     if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'Solo ADMIN o MOZO puede disolver uniones.'}, status=403)
 
     try:
@@ -413,6 +426,9 @@ def api_mesa_limpiada(request, pk):
     Cambia el estado de una mesa de LIMPIEZA a LIBRE.
     """
     if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'Permiso denegado.'}, status=403)
 
     try:

@@ -17,6 +17,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'entidad_id',
         'estado_revision',
         'responsable_revision',
+        'alerta_activa',
     ]
     list_filter = [
         'modulo',
@@ -26,6 +27,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         'entidad',
         'estado_revision',
         'responsable_revision',
+        'alerta_activa',
     ]
     search_fields = [
         'usuario__username',
@@ -59,4 +61,6 @@ class AuditLogAdmin(admin.ModelAdmin):
         'ruta',
         'metodo_http',
         'responsable_revision',
+        'alerta_activa',
+        'clave_alerta',
     ]

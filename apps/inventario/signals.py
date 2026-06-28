@@ -5,7 +5,11 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from .models import Insumo, RecetaInsumo
-from .services import actualizar_disponibilidad_platos, notificar_stock_critico_si_aplica
+from .services import (
+    InventarioService,
+    actualizar_disponibilidad_platos,
+    notificar_stock_critico_si_aplica,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,12 @@ def auto_desactivar_platos(sender, instance, created=False, update_fields=None, 
     if update_fields is not None and not campos_relevantes.intersection(set(update_fields)):
         return
 
-    actualizar_disponibilidad_platos(instance)
+    usuario = getattr(instance, '_auditoria_usuario', None)
+    request = getattr(instance, '_auditoria_request', None)
+    actualizar_disponibilidad_platos(instance, usuario=usuario, request=request)
+    InventarioService.evaluar_alertas_stock(
+        instance, usuario=usuario, request=request
+    )
     logger.debug("Disponibilidad actualizada para insumo '%s'", instance.nombre)
 
     # ¿Cruzó el umbral hacia bajo/agotado en este save?

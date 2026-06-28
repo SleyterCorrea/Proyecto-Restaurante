@@ -112,7 +112,9 @@ class ComandaService:
         for insumo_id, requerido in requerimientos.items():
             insumo = insumos[insumo_id]
             if not insumo.activo or insumo.stock_real < requerido:
-                raise StockInsuficiente(insumo.nombre, insumo.stock_real, requerido)
+                raise StockInsuficiente(
+                    insumo.nombre, insumo.stock_real, requerido, insumo_id=insumo.id
+                )
         for item in items:
             plato = platos[item["plato_id"]]
             if not plato.disponible:
@@ -269,6 +271,83 @@ class ComandaService:
 
     @staticmethod
     @transaction.atomic
+    def anular(comanda_id, usuario, motivo, request=None):
+        motivo = str(motivo or '').strip()
+        if not motivo:
+            raise DatosInvalidos('Se requiere un motivo para anular la comanda.')
+        try:
+            comanda = Comanda.objects.select_for_update().prefetch_related(
+                'lineas', 'mesas_adicionales'
+            ).get(pk=comanda_id)
+        except Comanda.DoesNotExist:
+            raise RecursoNoEncontrado('Comanda no encontrada.')
+        if comanda.estado in (Comanda.Estado.COBRADA, Comanda.Estado.ANULADA):
+            raise OperacionNoPermitida('La comanda no puede ser anulada en su estado actual.')
+
+        estado_anterior = comanda.estado
+        lineas = list(comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO))
+        con_produccion = any(
+            linea.fecha_envio_cocina is not None
+            or linea.estado in (
+                LineaComanda.Estado.EN_PREP,
+                LineaComanda.Estado.LISTO,
+                LineaComanda.Estado.ENTREGADO,
+            )
+            for linea in lineas
+        )
+        impacto = sum((linea.subtotal for linea in lineas), Decimal('0'))
+        ahora = timezone.now()
+        for linea in lineas:
+            linea.estado = LineaComanda.Estado.ANULADO
+            linea.motivo_anulacion = motivo
+        LineaComanda.objects.bulk_update(lineas, ['estado', 'motivo_anulacion'])
+        comanda.estado = Comanda.Estado.ANULADA
+        comanda.fecha_cierre = ahora
+        comanda.save(update_fields=['estado', 'fecha_cierre'])
+        Mesa.objects.filter(
+            pk__in=[mesa.pk for mesa in comanda.todas_las_mesas]
+        ).update(estado=Mesa.Estado.LIBRE)
+        ComandaHistorialEstado.objects.create(
+            comanda=comanda,
+            estado_anterior=estado_anterior,
+            estado_nuevo=Comanda.Estado.ANULADA,
+            usuario=usuario,
+            motivo=motivo,
+            origen=ComandaHistorialEstado.Origen.API,
+        )
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion=(
+                'COMANDA_ANULADA_CON_PRODUCCION'
+                if con_produccion else 'COMANDA_ANULADA'
+            ),
+            modulo='COMANDAS',
+            entidad='COMANDA',
+            entidad_id=comanda.id,
+            severidad=(
+                AuditLog.Severidad.CRITICA
+                if con_produccion else AuditLog.Severidad.ADVERTENCIA
+            ),
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se anulo la comanda {comanda.codigo_comanda}.',
+            motivo=motivo,
+            valores_anteriores={
+                'estado': estado_anterior,
+                'lineas_activas': len(lineas),
+            },
+            valores_nuevos={
+                'estado': Comanda.Estado.ANULADA,
+                'con_produccion': con_produccion,
+            },
+            request=request,
+            datos_contextuales={
+                'impacto_economico_estimado': impacto,
+            },
+        )
+        return comanda
+
+    @staticmethod
+    @transaction.atomic
     def marcar_entregado(comanda_id):
         try:
             comanda = Comanda.objects.select_for_update().get(pk=comanda_id)
@@ -380,7 +459,7 @@ class CocinaService:
             origen=ComandaHistorialEstado.Origen.KDS,
         )
         if nuevo_estado == LineaComanda.Estado.ANULADO:
-            post_cocina = anterior in (
+            post_cocina = linea.fecha_envio_cocina is not None or anterior in (
                 LineaComanda.Estado.EN_PREP,
                 LineaComanda.Estado.LISTO,
             )

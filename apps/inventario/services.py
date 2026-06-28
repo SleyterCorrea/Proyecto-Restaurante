@@ -2,11 +2,16 @@
 import io
 import logging
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.db import models, transaction
 from django.utils import timezone
 
+from apps.auditoria.constants import obtener_umbral
+from apps.auditoria.models import AuditLog
+from apps.auditoria.services import AuditoriaService
 from apps.comandas.models import LineaComanda
 from apps.core.exceptions import DatosInvalidos, OperacionNoPermitida, RecursoNoEncontrado, StockInsuficiente
 from apps.inventario.models import (
@@ -24,6 +29,182 @@ class InventarioService:
     """Coordinates stock validation and inventory movements."""
 
     @staticmethod
+    def _contextualizar_cambio(insumo, usuario=None, request=None):
+        insumo._auditoria_usuario = usuario
+        insumo._auditoria_request = request
+
+    @staticmethod
+    def _registrar_alerta(
+        *, accion, insumo, usuario, descripcion, valores_nuevos,
+        severidad=AuditLog.Severidad.ADVERTENCIA, request=None,
+        impacto=None, clave_alerta=None,
+    ):
+        return AuditoriaService.registrar(
+            usuario=usuario,
+            accion=accion,
+            modulo='INVENTARIO',
+            entidad='INSUMO',
+            entidad_id=insumo.id,
+            severidad=severidad,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=descripcion,
+            valores_nuevos=valores_nuevos,
+            request=request,
+            datos_contextuales={
+                'impacto_economico_estimado': impacto,
+            } if impacto is not None else None,
+            deduplicar_alerta=True,
+            clave_alerta=clave_alerta,
+        )
+
+    @staticmethod
+    def evaluar_alertas_stock(insumo, usuario=None, request=None, ahora=None):
+        """Evalua agotamiento y bajo stock persistentes, y resuelve recuperaciones."""
+        ahora = ahora or timezone.now()
+        campos = []
+
+        if insumo.stock_real <= 0:
+            if insumo.agotado_desde is None:
+                insumo.agotado_desde = ahora
+                campos.append('agotado_desde')
+            if insumo.stock_bajo_desde is not None:
+                insumo.stock_bajo_desde = None
+                campos.append('stock_bajo_desde')
+            AuditoriaService.resolver_alerta(
+                accion='INVENTARIO_STOCK_BAJO_PERSISTENTE',
+                entidad='INSUMO',
+                entidad_id=insumo.id,
+            )
+            limite_horas = obtener_umbral(
+                'INVENTARIO_AGOTADO_CRITICO_HORAS'
+                if insumo.es_critico
+                else 'INVENTARIO_AGOTADO_NO_CRITICO_HORAS'
+            )
+            if ahora - insumo.agotado_desde >= timedelta(hours=limite_horas):
+                InventarioService._registrar_alerta(
+                    accion='INVENTARIO_INSUMO_AGOTADO_SIN_REPOSICION',
+                    insumo=insumo,
+                    usuario=usuario,
+                    descripcion=f'{insumo.nombre} permanece agotado sin reposicion.',
+                    valores_nuevos={
+                        'stock_real': str(insumo.stock_real),
+                        'agotado_desde': insumo.agotado_desde.isoformat(),
+                        'limite_horas': limite_horas,
+                        'es_critico': insumo.es_critico,
+                    },
+                    severidad=AuditLog.Severidad.CRITICA,
+                    request=request,
+                )
+        elif insumo.stock_real <= insumo.stock_minimo:
+            if insumo.stock_bajo_desde is None:
+                insumo.stock_bajo_desde = ahora
+                campos.append('stock_bajo_desde')
+            if insumo.agotado_desde is not None:
+                insumo.agotado_desde = None
+                campos.append('agotado_desde')
+            AuditoriaService.resolver_alerta(
+                accion='INVENTARIO_INSUMO_AGOTADO_SIN_REPOSICION',
+                entidad='INSUMO',
+                entidad_id=insumo.id,
+            )
+            limite_dias = obtener_umbral('INVENTARIO_STOCK_BAJO_DIAS')
+            if ahora - insumo.stock_bajo_desde >= timedelta(days=limite_dias):
+                InventarioService._registrar_alerta(
+                    accion='INVENTARIO_STOCK_BAJO_PERSISTENTE',
+                    insumo=insumo,
+                    usuario=usuario,
+                    descripcion=f'{insumo.nombre} mantiene stock bajo de forma persistente.',
+                    valores_nuevos={
+                        'stock_real': str(insumo.stock_real),
+                        'stock_minimo': str(insumo.stock_minimo),
+                        'stock_bajo_desde': insumo.stock_bajo_desde.isoformat(),
+                        'limite_dias': limite_dias,
+                    },
+                    request=request,
+                )
+        else:
+            if insumo.agotado_desde is not None:
+                insumo.agotado_desde = None
+                campos.append('agotado_desde')
+            if insumo.stock_bajo_desde is not None:
+                insumo.stock_bajo_desde = None
+                campos.append('stock_bajo_desde')
+            for accion in (
+                'INVENTARIO_INSUMO_AGOTADO_SIN_REPOSICION',
+                'INVENTARIO_STOCK_BAJO_PERSISTENTE',
+                'INVENTARIO_STOCK_INSUFICIENTE_REITERADO',
+            ):
+                AuditoriaService.resolver_alerta(
+                    accion=accion,
+                    entidad='INSUMO',
+                    entidad_id=insumo.id,
+                )
+
+        if campos:
+            Insumo.objects.filter(pk=insumo.pk).update(**{
+                campo: getattr(insumo, campo) for campo in campos
+            })
+        return insumo
+
+    @staticmethod
+    def evaluar_alertas_persistentes(usuario=None, request=None, ahora=None):
+        for insumo in Insumo.objects.filter(activo=True):
+            InventarioService.evaluar_alertas_stock(
+                insumo, usuario=usuario, request=request, ahora=ahora
+            )
+
+    @staticmethod
+    def registrar_bloqueo_stock(insumo, usuario, requerido, request=None):
+        """Cuenta bloqueos por turno y audita solo al alcanzar el limite."""
+        from apps.caja.models import CajaTurno
+
+        turno = CajaTurno.objects.filter(
+            estado=CajaTurno.Estado.ABIERTA
+        ).only('id').first()
+        turno_clave = turno.id if turno else timezone.localdate().isoformat()
+        limite = obtener_umbral('INVENTARIO_BLOQUEOS_STOCK_TURNO')
+        cache_key = f'audit:stock-bloqueado:{turno_clave}:{insumo.id}'
+        cache.add(cache_key, 0, timeout=24 * 60 * 60)
+        intentos = cache.incr(cache_key)
+        if intentos < limite:
+            return None
+        return InventarioService._registrar_alerta(
+            accion='INVENTARIO_STOCK_INSUFICIENTE_REITERADO',
+            insumo=insumo,
+            usuario=usuario,
+            descripcion=f'{insumo.nombre} bloqueo pedidos reiteradamente por falta de stock.',
+            valores_nuevos={
+                'intentos': intentos,
+                'limite': limite,
+                'turno_caja_id': getattr(turno, 'id', None),
+                'stock_real': str(insumo.stock_real),
+                'requerido': str(requerido),
+            },
+            severidad=AuditLog.Severidad.CRITICA,
+            request=request,
+            clave_alerta=(
+                f'INVENTARIO_STOCK_INSUFICIENTE_REITERADO:'
+                f'{insumo.id}:{turno_clave}'
+            ),
+        )
+
+    @staticmethod
+    def registrar_excepcion_stock(exc, usuario, request=None):
+        insumo_id = getattr(exc, 'insumo_id', None)
+        if not insumo_id:
+            return None
+        try:
+            insumo = Insumo.objects.get(pk=insumo_id)
+        except Insumo.DoesNotExist:
+            return None
+        return InventarioService.registrar_bloqueo_stock(
+            insumo,
+            usuario,
+            getattr(exc, 'requerido', None),
+            request=request,
+        )
+
+    @staticmethod
     def verificar_stock_plato(plato, cantidad=1):
         recetas = RecetaInsumo.objects.filter(
             plato=plato, activo=True
@@ -32,13 +213,16 @@ class InventarioService:
             requerido = receta.cantidad_por_porcion * Decimal(str(cantidad))
             if not receta.insumo.activo or receta.insumo.stock_real < requerido:
                 raise StockInsuficiente(
-                    receta.insumo.nombre, receta.insumo.stock_real, requerido
+                    receta.insumo.nombre,
+                    receta.insumo.stock_real,
+                    requerido,
+                    insumo_id=receta.insumo.id,
                 )
         return True
 
     @staticmethod
     @transaction.atomic
-    def descontar_lineas(lineas, usuario):
+    def descontar_lineas(lineas, usuario, request=None):
         """Deducts recipe stock once per order line and records every movement."""
         lineas = list(lineas)
         if not lineas:
@@ -78,7 +262,9 @@ class InventarioService:
         for insumo_id, requerido in requerimientos.items():
             insumo = insumos[insumo_id]
             if not insumo.activo or insumo.stock_real < requerido:
-                raise StockInsuficiente(insumo.nombre, insumo.stock_real, requerido)
+                raise StockInsuficiente(
+                    insumo.nombre, insumo.stock_real, requerido, insumo_id=insumo.id
+                )
 
         movimientos = []
         for linea in pendientes:
@@ -102,12 +288,19 @@ class InventarioService:
         Insumo.objects.bulk_update(insumos.values(), ["stock_real"])
         MovimientoInventario.objects.bulk_create(movimientos)
         for insumo in insumos.values():
-            actualizar_disponibilidad_platos(insumo)
+            actualizar_disponibilidad_platos(insumo, usuario=usuario, request=request)
+            InventarioService.evaluar_alertas_stock(
+                insumo, usuario=usuario, request=request
+            )
         return len(pendientes)
 
     @staticmethod
     @transaction.atomic
-    def reponer(insumo_id, cantidad, usuario, observacion=""):
+    def reponer(
+        insumo_id, cantidad, usuario, observacion="", lote=None,
+        costo_unitario=None, request=None, referencia_tipo=None,
+        referencia_id=None,
+    ):
         cantidad = Decimal(str(cantidad))
         if cantidad <= 0:
             raise DatosInvalidos("La cantidad debe ser mayor a cero.")
@@ -115,24 +308,77 @@ class InventarioService:
             insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
+        lote = str(lote or '').strip() or None
+        lote_repetido = bool(lote and MovimientoInventario.objects.filter(
+            insumo=insumo,
+            lote=lote,
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
+        ).exists())
         anterior = insumo.stock_real
+        costo_anterior = insumo.costo_unitario
+        costo_informado = costo_unitario not in (None, '')
+        costo_nuevo = (
+            Decimal(str(costo_unitario))
+            if costo_unitario not in (None, '')
+            else costo_anterior
+        )
+        if costo_nuevo < 0:
+            raise DatosInvalidos("El costo unitario no puede ser negativo.")
         insumo.stock_real += cantidad
         insumo.stock_actual += cantidad
-        insumo.save(update_fields=["stock_real", "stock_actual"])
-        MovimientoInventario.objects.create(
+        insumo.costo_unitario = costo_nuevo
+        InventarioService._contextualizar_cambio(insumo, usuario, request)
+        insumo.save(update_fields=["stock_real", "stock_actual", "costo_unitario"])
+        movimiento = MovimientoInventario.objects.create(
             insumo=insumo,
             tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
             cantidad=cantidad,
             stock_anterior=anterior,
             stock_nuevo=insumo.stock_real,
+            costo_unitario=costo_nuevo,
+            lote=lote,
+            referencia_tipo=referencia_tipo,
+            referencia_id=referencia_id,
             usuario=usuario,
             observacion=observacion,
         )
+        if lote_repetido:
+            InventarioService._registrar_alerta(
+                accion='INVENTARIO_LOTE_REPETIDO',
+                insumo=insumo,
+                usuario=usuario,
+                descripcion=f'Se ingreso nuevamente el lote {lote} para {insumo.nombre}.',
+                valores_nuevos={'lote': lote, 'movimiento_id': movimiento.id},
+                request=request,
+                clave_alerta=f'INVENTARIO_LOTE_REPETIDO:{insumo.id}:{lote}',
+            )
+        if costo_informado and costo_anterior > 0:
+            variacion = abs(costo_nuevo - costo_anterior) / costo_anterior * Decimal('100')
+            if variacion > obtener_umbral('INVENTARIO_VARIACION_COSTO_PORCENTAJE'):
+                InventarioService._registrar_alerta(
+                    accion='INVENTARIO_COSTO_UNITARIO_VARIACION_ALTA',
+                    insumo=insumo,
+                    usuario=usuario,
+                    descripcion=f'El costo unitario de {insumo.nombre} tuvo una variacion alta.',
+                    valores_nuevos={
+                        'costo_anterior': str(costo_anterior),
+                        'costo_nuevo': str(costo_nuevo),
+                        'variacion_porcentaje': str(variacion),
+                        'movimiento_id': movimiento.id,
+                    },
+                    request=request,
+                )
+            else:
+                AuditoriaService.resolver_alerta(
+                    accion='INVENTARIO_COSTO_UNITARIO_VARIACION_ALTA',
+                    entidad='INSUMO', entidad_id=insumo.id,
+                )
+        InventarioService.evaluar_alertas_stock(insumo, usuario, request)
         return insumo
 
     @staticmethod
     @transaction.atomic
-    def ajustar(insumo_id, cantidad, tipo, motivo, usuario):
+    def ajustar(insumo_id, cantidad, tipo, motivo, usuario, request=None):
         cantidad = Decimal(str(cantidad))
         if cantidad <= 0:
             raise DatosInvalidos("La cantidad debe ser mayor a cero.")
@@ -151,11 +397,14 @@ class InventarioService:
             insumo.stock_actual += cantidad
         else:
             if insumo.stock_real < cantidad:
-                raise StockInsuficiente(insumo.nombre, insumo.stock_real, cantidad)
+                raise StockInsuficiente(
+                    insumo.nombre, insumo.stock_real, cantidad, insumo_id=insumo.id
+                )
             insumo.stock_real -= cantidad
             insumo.stock_actual -= cantidad
+        InventarioService._contextualizar_cambio(insumo, usuario, request)
         insumo.save(update_fields=["stock_real", "stock_actual"])
-        MovimientoInventario.objects.create(
+        movimiento = MovimientoInventario.objects.create(
             insumo=insumo,
             tipo_movimiento=tipo,
             cantidad=cantidad,
@@ -164,11 +413,76 @@ class InventarioService:
             usuario=usuario,
             observacion=motivo,
         )
+        porcentaje = (
+            cantidad / anterior * Decimal('100')
+            if anterior > 0 else Decimal('100')
+        )
+        impacto = cantidad * insumo.costo_unitario
+        if (
+            porcentaje > obtener_umbral('INVENTARIO_AJUSTE_PORCENTAJE')
+            or impacto > obtener_umbral('INVENTARIO_AJUSTE_IMPACTO')
+        ):
+            AuditoriaService.registrar(
+                usuario=usuario,
+                accion='INVENTARIO_AJUSTE_MANUAL_ELEVADO',
+                modulo='INVENTARIO',
+                entidad='MOVIMIENTO_INVENTARIO',
+                entidad_id=movimiento.id,
+                severidad=AuditLog.Severidad.CRITICA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se realizo un ajuste manual elevado de {insumo.nombre}.',
+                motivo=motivo,
+                valores_anteriores={'stock_real': str(anterior)},
+                valores_nuevos={
+                    'stock_real': str(insumo.stock_real),
+                    'cantidad': str(cantidad),
+                    'porcentaje': str(porcentaje),
+                    'tipo': tipo,
+                },
+                request=request,
+                datos_contextuales={
+                    'impacto_economico_estimado': impacto,
+                },
+            )
+
+        ventana = timezone.now() - timedelta(
+            hours=obtener_umbral('INVENTARIO_AJUSTES_REPETIDOS_HORAS')
+        )
+        cantidad_ajustes = MovimientoInventario.objects.filter(
+            insumo=insumo,
+            tipo_movimiento__in=(
+                MovimientoInventario.TipoMovimiento.AJUSTE_POS,
+                MovimientoInventario.TipoMovimiento.AJUSTE_NEG,
+            ),
+            created_at__gte=ventana,
+        ).count()
+        if cantidad_ajustes >= obtener_umbral('INVENTARIO_AJUSTES_REPETIDOS_CANTIDAD'):
+            InventarioService._registrar_alerta(
+                accion='INVENTARIO_AJUSTES_REPETIDOS',
+                insumo=insumo,
+                usuario=usuario,
+                descripcion=f'{insumo.nombre} acumula ajustes manuales reiterados.',
+                valores_nuevos={
+                    'cantidad_ajustes': cantidad_ajustes,
+                    'ventana_horas': obtener_umbral(
+                        'INVENTARIO_AJUSTES_REPETIDOS_HORAS'
+                    ),
+                },
+                request=request,
+            )
+        else:
+            AuditoriaService.resolver_alerta(
+                accion='INVENTARIO_AJUSTES_REPETIDOS',
+                entidad='INSUMO', entidad_id=insumo.id,
+            )
+        InventarioService.evaluar_alertas_stock(insumo, usuario, request)
         return insumo
 
     @staticmethod
     @transaction.atomic
-    def registrar_merma(insumo_id, cantidad, causa, usuario, observacion=""):
+    def registrar_merma(
+        insumo_id, cantidad, causa, usuario, observacion="", request=None
+    ):
         cantidad = Decimal(str(cantidad))
         if cantidad <= 0:
             raise DatosInvalidos("La cantidad debe ser mayor a cero.")
@@ -177,12 +491,15 @@ class InventarioService:
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
         if insumo.stock_real < cantidad:
-            raise StockInsuficiente(insumo.nombre, insumo.stock_real, cantidad)
+            raise StockInsuficiente(
+                insumo.nombre, insumo.stock_real, cantidad, insumo_id=insumo.id
+            )
         anterior = insumo.stock_real
         insumo.stock_real -= cantidad
         insumo.stock_actual -= cantidad
+        InventarioService._contextualizar_cambio(insumo, usuario, request)
         insumo.save(update_fields=["stock_real", "stock_actual"])
-        MovimientoInventario.objects.create(
+        movimiento = MovimientoInventario.objects.create(
             insumo=insumo,
             tipo_movimiento=MovimientoInventario.TipoMovimiento.MERMA,
             cantidad=cantidad,
@@ -192,6 +509,100 @@ class InventarioService:
             usuario=usuario,
             observacion=observacion,
         )
+        hoy = timezone.localdate()
+        movimientos_hoy = MovimientoInventario.objects.filter(
+            insumo=insumo,
+            created_at__date=hoy,
+        ).order_by('created_at', 'id')
+        primero = movimientos_hoy.first()
+        stock_inicial = primero.stock_anterior if primero else anterior
+        total_merma = movimientos_hoy.filter(
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.MERMA
+        ).aggregate(total=models.Sum('cantidad'))['total'] or Decimal('0')
+        porcentaje = (
+            total_merma / stock_inicial * Decimal('100')
+            if stock_inicial > 0 else Decimal('100')
+        )
+        if porcentaje > obtener_umbral('INVENTARIO_MERMA_PORCENTAJE'):
+            InventarioService._registrar_alerta(
+                accion='INVENTARIO_MERMA_ELEVADA',
+                insumo=insumo,
+                usuario=usuario,
+                descripcion=f'La merma diaria de {insumo.nombre} supero el limite.',
+                valores_nuevos={
+                    'movimiento_id': movimiento.id,
+                    'stock_inicial_dia': str(stock_inicial),
+                    'merma_acumulada': str(total_merma),
+                    'porcentaje': str(porcentaje),
+                    'fecha': hoy.isoformat(),
+                },
+                severidad=AuditLog.Severidad.CRITICA,
+                request=request,
+                impacto=total_merma * insumo.costo_unitario,
+                clave_alerta=f'INVENTARIO_MERMA_ELEVADA:{insumo.id}:{hoy}',
+            )
+        InventarioService.evaluar_alertas_stock(insumo, usuario, request)
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def registrar_egreso(
+        insumo_id, cantidad, consumo_teorico, usuario, observacion='', request=None
+    ):
+        cantidad = Decimal(str(cantidad))
+        consumo_teorico = Decimal(str(consumo_teorico))
+        if cantidad <= 0 or consumo_teorico < 0:
+            raise DatosInvalidos('Las cantidades del egreso no son validas.')
+        try:
+            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado('Insumo no encontrado.')
+        if insumo.stock_real < cantidad:
+            raise StockInsuficiente(
+                insumo.nombre, insumo.stock_real, cantidad, insumo_id=insumo.id
+            )
+        anterior = insumo.stock_real
+        insumo.stock_real -= cantidad
+        insumo.stock_actual -= cantidad
+        InventarioService._contextualizar_cambio(insumo, usuario, request)
+        insumo.save(update_fields=['stock_real', 'stock_actual'])
+        movimiento = MovimientoInventario.objects.create(
+            insumo=insumo,
+            tipo_movimiento=MovimientoInventario.TipoMovimiento.SALIDA,
+            cantidad=cantidad,
+            stock_anterior=anterior,
+            stock_nuevo=insumo.stock_real,
+            costo_unitario=insumo.costo_unitario,
+            usuario=usuario,
+            observacion=observacion,
+        )
+        desviacion = (
+            (cantidad - consumo_teorico) / consumo_teorico * Decimal('100')
+            if consumo_teorico > 0 else Decimal('100')
+        )
+        if desviacion > obtener_umbral('INVENTARIO_EGRESO_DESVIACION_PORCENTAJE'):
+            AuditoriaService.registrar(
+                usuario=usuario,
+                accion='INVENTARIO_EGRESO_INCOHERENTE',
+                modulo='INVENTARIO',
+                entidad='MOVIMIENTO_INVENTARIO',
+                entidad_id=movimiento.id,
+                severidad=AuditLog.Severidad.CRITICA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'El egreso de {insumo.nombre} supera el consumo teorico.',
+                valores_nuevos={
+                    'cantidad': str(cantidad),
+                    'consumo_teorico': str(consumo_teorico),
+                    'desviacion_porcentaje': str(desviacion),
+                },
+                request=request,
+                datos_contextuales={
+                    'impacto_economico_estimado': (
+                        cantidad - consumo_teorico
+                    ) * insumo.costo_unitario,
+                },
+            )
+        InventarioService.evaluar_alertas_stock(insumo, usuario, request)
         return insumo
 
     @staticmethod
@@ -267,7 +678,9 @@ class InventarioService:
 
     @staticmethod
     @transaction.atomic
-    def cambiar_estado_orden(orden_id, nuevo_estado, usuario=None, recepciones=None):
+    def cambiar_estado_orden(
+        orden_id, nuevo_estado, usuario=None, recepciones=None, request=None
+    ):
         try:
             orden = OrdenCompra.objects.select_for_update().get(pk=orden_id)
         except OrdenCompra.DoesNotExist:
@@ -286,27 +699,30 @@ class InventarioService:
             ids = sorted(orden.items.values_list("insumo_id", flat=True))
             insumos = {i.id: i for i in Insumo.objects.select_for_update().filter(pk__in=ids)}
             for item in orden.items.select_related("insumo"):
-                cantidad = Decimal(str(recepciones.get(item.id, item.cantidad_solicitada)))
+                recepcion = recepciones.get(item.id, item.cantidad_solicitada)
+                if isinstance(recepcion, dict):
+                    cantidad = Decimal(str(
+                        recepcion.get('cantidad', item.cantidad_solicitada)
+                    ))
+                    lote = recepcion.get('lote')
+                    costo = recepcion.get('costo_unitario', item.costo_unitario)
+                else:
+                    cantidad = Decimal(str(recepcion))
+                    lote = None
+                    costo = item.costo_unitario
                 if cantidad <= 0:
                     continue
                 insumo = insumos[item.insumo_id]
-                anterior = insumo.stock_real
-                insumo.stock_real += cantidad
-                insumo.stock_actual += cantidad
-                if item.costo_unitario > 0:
-                    insumo.costo_unitario = item.costo_unitario
-                insumo.save(update_fields=["stock_real", "stock_actual", "costo_unitario"])
-                MovimientoInventario.objects.create(
-                    insumo=insumo,
-                    tipo_movimiento=MovimientoInventario.TipoMovimiento.ENTRADA,
-                    cantidad=cantidad,
-                    stock_anterior=anterior,
-                    stock_nuevo=insumo.stock_real,
-                    costo_unitario=item.costo_unitario,
-                    referencia_tipo="ORDEN_COMPRA",
+                InventarioService.reponer(
+                    insumo.id,
+                    cantidad,
+                    usuario,
+                    observacion=f'Recepcion {orden.codigo}',
+                    lote=lote,
+                    costo_unitario=costo,
+                    request=request,
+                    referencia_tipo='ORDEN_COMPRA',
                     referencia_id=orden.id,
-                    usuario=usuario,
-                    observacion=f"Recepcion {orden.codigo}",
                 )
                 item.cantidad_recibida = cantidad
                 item.save(update_fields=["cantidad_recibida"])
@@ -337,6 +753,7 @@ def obtener_insumos_criticos():
     Incluye información de platos afectados (aquellos que usan ese insumo).
     """
     # Importación diferida para evitar circular imports
+    InventarioService.evaluar_alertas_persistentes()
     from apps.menu.models import Plato
 
     criticos = Insumo.objects.criticos().select_related('unidad_medida')
@@ -393,7 +810,7 @@ def verificar_disponibilidad_plato(plato):
     return True, "Disponible"
 
 
-def actualizar_disponibilidad_platos(insumo):
+def actualizar_disponibilidad_platos(insumo, usuario=None, request=None):
     """
     Sincroniza la disponibilidad de todos los platos que usan este insumo.
     Se activa automáticamente cuando cambia el stock de un insumo.
@@ -411,16 +828,43 @@ def actualizar_disponibilidad_platos(insumo):
         platos_afectados = Plato.objects.select_for_update().filter(pk__in=platos_ids)
 
         for plato in platos_afectados:
-            disponible, _motivo = verificar_disponibilidad_plato(plato)
+            disponible, motivo = verificar_disponibilidad_plato(plato)
             if plato.disponible != disponible:
+                estado_anterior = plato.disponible
                 plato.disponible = disponible
                 plato.save(update_fields=['disponible'])
+                if not disponible:
+                    AuditoriaService.registrar(
+                        usuario=usuario,
+                        accion='PLATO_DESHABILITADO_STOCK',
+                        modulo='MENU',
+                        entidad='PLATO',
+                        entidad_id=plato.id,
+                        severidad=AuditLog.Severidad.ADVERTENCIA,
+                        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                        descripcion=f'{plato.nombre} se deshabilito por falta de stock.',
+                        valores_anteriores={'disponible': estado_anterior},
+                        valores_nuevos={
+                            'disponible': disponible,
+                            'motivo': motivo,
+                            'insumo_id': insumo.id,
+                        },
+                        request=request,
+                        deduplicar_alerta=True,
+                    )
+                else:
+                    AuditoriaService.resolver_alerta(
+                        accion='PLATO_DESHABILITADO_STOCK',
+                        entidad='PLATO',
+                        entidad_id=plato.id,
+                    )
 
 
 def obtener_stock_bajo():
     """
     Retorna insumos con stock bajo (entre 0 y stock_minimo exclusive).
     """
+    InventarioService.evaluar_alertas_persistentes()
     bajo = Insumo.objects.bajo_stock().select_related('unidad_medida')
 
     resultado = []

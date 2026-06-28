@@ -98,7 +98,15 @@ class InsumoViewSet(viewsets.ModelViewSet):
         observacion = serializer.validated_data.get('observacion', '') or 'Reposición de inventario'
 
         try:
-            insumo = InventarioService.reponer(pk, cantidad, request.user, observacion)
+            insumo = InventarioService.reponer(
+                pk,
+                cantidad,
+                request.user,
+                observacion,
+                lote=serializer.validated_data.get('lote'),
+                costo_unitario=serializer.validated_data.get('costo_unitario'),
+                request=request,
+            )
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(insumo).data)
@@ -134,7 +142,9 @@ class InsumoViewSet(viewsets.ModelViewSet):
         tipo = serializer.validated_data['tipo']
 
         try:
-            insumo = InventarioService.ajustar(pk, cantidad, tipo, motivo, request.user)
+            insumo = InventarioService.ajustar(
+                pk, cantidad, tipo, motivo, request.user, request=request
+            )
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
         return Response(self.get_serializer(insumo).data)
@@ -172,7 +182,7 @@ class InsumoViewSet(viewsets.ModelViewSet):
 
         try:
             insumo = InventarioService.registrar_merma(
-                pk, cantidad, causa, request.user, observacion
+                pk, cantidad, causa, request.user, observacion, request=request
             )
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
@@ -289,11 +299,16 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
         """
         try:
             recepciones = {
-                int(item['id']): Decimal(str(item.get('cantidad_recibida', 0)))
+                int(item['id']): {
+                    'cantidad': Decimal(str(item.get('cantidad_recibida', 0))),
+                    'lote': item.get('lote'),
+                    'costo_unitario': item.get('costo_unitario'),
+                }
                 for item in request.data.get('items', [])
             }
             orden = InventarioService.cambiar_estado_orden(
-                pk, OrdenCompra.Estado.RECIBIDA, request.user, recepciones
+                pk, OrdenCompra.Estado.RECIBIDA, request.user, recepciones,
+                request=request,
             )
         except (KeyError, ValueError):
             return Response({'error': 'Datos de recepcion invalidos.'}, status=400)

@@ -23,6 +23,8 @@ class AuditLog(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='logs',
+        null=True,
+        blank=True,
     )
     rol = models.CharField(max_length=50, null=True, blank=True)
     modulo = models.CharField(max_length=50, blank=True, default='')
@@ -70,6 +72,8 @@ class AuditLog(models.Model):
         null=True,
         blank=True,
     )
+    alerta_activa = models.BooleanField(default=False, db_index=True)
+    clave_alerta = models.CharField(max_length=180, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -78,6 +82,13 @@ class AuditLog(models.Model):
         verbose_name = 'Log de auditoria'
         verbose_name_plural = 'Logs de auditoria'
         ordering = ['-fecha_evento']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['clave_alerta'],
+                condition=models.Q(alerta_activa=True, clave_alerta__isnull=False),
+                name='audit_alerta_activa_unica',
+            ),
+        ]
 
     def __str__(self):
         evento = self.codigo_evento or self.accion

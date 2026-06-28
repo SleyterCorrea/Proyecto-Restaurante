@@ -1,9 +1,11 @@
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import generics, permissions
-from apps.auditoria.models import AuditLog
-from apps.auditoria.services import AuditoriaService
+from rest_framework.exceptions import APIException
+from django.contrib.auth import views as auth_views
 from .models import Usuario
 from .serializers import UsuarioSerializer, CustomTokenObtainPairSerializer
+from .services import UsuarioService
+from .permissions import EsAdmin
 import urllib.request
 import urllib.parse
 import json as _json
@@ -11,6 +13,35 @@ import json as _json
 class LoginView(TokenObtainPairView):
     """Vista de login personalizada que usa el serializer con claims extendidos."""
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username')
+        try:
+            response = super().post(request, *args, **kwargs)
+        except APIException:
+            UsuarioService.registrar_login_fallido(username, request=request)
+            raise
+        if response.status_code >= 400:
+            UsuarioService.registrar_login_fallido(username, request=request)
+        else:
+            UsuarioService.registrar_login_exitoso(username)
+        return response
+
+
+class LoginWebView(auth_views.LoginView):
+    template_name = 'registration/login.html'
+
+    def form_invalid(self, form):
+        UsuarioService.registrar_login_fallido(
+            self.request.POST.get('username'), request=self.request
+        )
+        return super().form_invalid(form)
+
+    def form_valid(self, form):
+        UsuarioService.registrar_login_exitoso(
+            self.request.POST.get('username')
+        )
+        return super().form_valid(form)
 
 class UsuarioProfileView(generics.RetrieveAPIView):
     """Vista para obtener el perfil del usuario autenticado."""
@@ -52,7 +83,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     """ViewSet para la gestión de trabajadores (CRUD)."""
     queryset = Usuario.objects.all().order_by('-created_at')
     serializer_class = UsuarioSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, EsAdmin]
 
     def get_queryset(self):
         if self.request.user.rol.nombre == 'ADMIN':
@@ -60,90 +91,13 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         return Usuario.objects.filter(id=self.request.user.id)
 
     def perform_create(self, serializer):
-        instance = serializer.save()
-        AuditoriaService.registrar(
-            usuario=self.request.user,
-            accion='USUARIO_CREADO',
-            modulo='USUARIOS',
-            entidad='USUARIO',
-            entidad_id=instance.id,
-            severidad=AuditLog.Severidad.INFO,
-            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-            descripcion=f'Se creo el usuario {instance.username}.',
-            valores_nuevos=serializer.data,
-            request=self.request,
-        )
+        UsuarioService.crear(serializer, self.request.user, request=self.request)
 
     def perform_update(self, serializer):
-        old_instance = self.get_object()
-        old_rol = old_instance.rol.nombre
-        old_activo = old_instance.activo
-        password_modificado = bool(serializer.validated_data.get('password'))
-        instance = serializer.save()
-
-        if old_rol != instance.rol.nombre:
-            escalamiento = old_rol != 'ADMIN' and instance.rol.nombre == 'ADMIN'
-            AuditoriaService.registrar(
-                usuario=self.request.user,
-                accion=(
-                    'USUARIO_ESCALAMIENTO_PRIVILEGIOS'
-                    if escalamiento
-                    else 'USUARIO_ROL_MODIFICADO'
-                ),
-                modulo='USUARIOS',
-                entidad='USUARIO',
-                entidad_id=instance.id,
-                severidad=(
-                    AuditLog.Severidad.CRITICA
-                    if escalamiento
-                    else AuditLog.Severidad.ADVERTENCIA
-                ),
-                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-                descripcion=(
-                    f'El rol de {instance.username} cambio de '
-                    f'{old_rol} a {instance.rol.nombre}.'
-                ),
-                valores_anteriores={'rol': old_rol},
-                valores_nuevos={'rol': instance.rol.nombre},
-                request=self.request,
-            )
-
-        if old_activo != instance.activo:
-            AuditoriaService.registrar(
-                usuario=self.request.user,
-                accion=(
-                    'USUARIO_REACTIVADO'
-                    if instance.activo
-                    else 'USUARIO_DESACTIVADO'
-                ),
-                modulo='USUARIOS',
-                entidad='USUARIO',
-                entidad_id=instance.id,
-                severidad=AuditLog.Severidad.ADVERTENCIA,
-                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-                descripcion=f'Se cambio el estado activo de {instance.username}.',
-                valores_anteriores={'activo': old_activo},
-                valores_nuevos={'activo': instance.activo},
-                request=self.request,
-            )
-
-        if password_modificado:
-            AuditoriaService.registrar(
-                usuario=self.request.user,
-                accion='USUARIO_PASSWORD_MODIFICADO',
-                modulo='USUARIOS',
-                entidad='USUARIO',
-                entidad_id=instance.id,
-                severidad=AuditLog.Severidad.ADVERTENCIA,
-                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-                descripcion=f'Se modifico la clave de {instance.username}.',
-                valores_anteriores={'password': 'PROTEGIDO'},
-                valores_nuevos={'password': 'PROTEGIDO'},
-                request=self.request,
-            )
+        UsuarioService.actualizar(serializer, self.request.user, request=self.request)
 
     def perform_destroy(self, instance):
-        instance.delete()
+        UsuarioService.desactivar(instance, self.request.user, request=self.request)
 
 class RolListView(generics.ListAPIView):
     """Lista de roles para el selector del formulario."""
@@ -157,6 +111,10 @@ class GestionTrabajadoresView(LoginRequiredMixin, TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated or request.user.rol.nombre != 'ADMIN':
+            if request.user.is_authenticated:
+                UsuarioService.registrar_acceso_denegado(
+                    request.user, request=request, recurso=request.path
+                )
             return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
@@ -175,6 +133,9 @@ def api_toggle_tema(request):
     """
     if request.method == 'POST':
         if request.user.rol.nombre not in ['ADMIN', 'MOZO']:
+            UsuarioService.registrar_acceso_denegado(
+                request.user, request=request, recurso=request.path
+            )
             return JsonResponse({'ok': False, 'error': 'No tienes permisos para cambiar el tema global.'}, status=403)
         
         config = ConfiguracionSistema.get_instancia()
@@ -197,6 +158,9 @@ def api_consultar_reniec(request):
     Solo accesible por usuarios ADMIN autenticados.
     """
     if request.user.rol.nombre != 'ADMIN':
+        UsuarioService.registrar_acceso_denegado(
+            request.user, request=request, recurso=request.path
+        )
         return JsonResponse({'ok': False, 'error': 'Sin permisos.'}, status=403)
 
     dni = request.GET.get('dni', '').strip()

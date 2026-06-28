@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 
 from apps.auditoria.models import AuditLog
 from apps.auditoria.services import AuditoriaService
+from apps.auditoria.constants import obtener_umbral
 from .models import CajaTurno, Pago, MetodoPago
 from apps.core.exceptions import (
     CajaNoAbierta,
@@ -57,7 +58,9 @@ def _liberar_mesas_comanda(comanda):
         m.save(update_fields=['estado'])
 
 
-def procesar_cobro(comanda_id, pagos_data, usuario, linea_ids=None, observacion=None):
+def procesar_cobro(
+    comanda_id, pagos_data, usuario, linea_ids=None, observacion=None, request=None
+):
     """
     Procesa el cobro de una comanda con soporte multi-pago.
 
@@ -181,7 +184,7 @@ def procesar_cobro(comanda_id, pagos_data, usuario, linea_ids=None, observacion=
 
         # La deduccion forma parte de la misma transaccion del pago. El servicio
         # es idempotente para lineas descontadas por versiones anteriores.
-        InventarioService.descontar_lineas(lineas, usuario)
+        InventarioService.descontar_lineas(lineas, usuario, request=request)
 
         # Determinar si con este pago se completa toda la comanda
         lineas_activas = comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO)
@@ -336,32 +339,46 @@ class CajaService:
         comandas_abiertas = Comanda.objects.filter(
             estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA]
         ).count()
-        if pendientes_cocina or pendientes_servicio or comandas_abiertas:
+        forzar = data.get('forzar', False) in (True, 1, '1', 'true', 'TRUE')
+        motivo = str(data.get('motivo') or data.get('observacion') or '').strip()
+        if (pendientes_cocina or pendientes_servicio or comandas_abiertas) and not forzar:
             raise OperacionNoPermitida(
                 "No se puede cerrar la caja mientras existan comandas o platos pendientes."
             )
+        if forzar and not motivo:
+            raise DatosInvalidos('El motivo es obligatorio para forzar el cierre.')
         try:
             turno.saldo_final = Decimal(str(data.get("saldo_final", 0)))
             arqueo = data.get("arqueo_fisico")
             if arqueo not in (None, ""):
                 turno.arqueo_fisico = Decimal(str(arqueo))
                 turno.diferencia = turno.arqueo_fisico - (turno.saldo_inicial + turno.total_efectivo)
+            else:
+                turno.arqueo_fisico = None
+                turno.diferencia = None
         except InvalidOperation:
             raise DatosInvalidos("Los montos de cierre no son validos.")
-        turno.observacion = data.get("observacion", "")
+        turno.observacion = motivo or data.get("observacion", "")
         turno.estado = CajaTurno.Estado.CERRADA
         turno.fecha_cierre = timezone.now()
         turno.save()
         usuario_auditoria = usuario or turno.cajero
         AuditoriaService.registrar(
             usuario=usuario_auditoria,
-            accion='CAJA_TURNO_CERRADO',
+            accion='CAJA_CIERRE_FORZADO' if forzar else 'CAJA_TURNO_CERRADO',
             modulo='CAJA',
             entidad='CAJA_TURNO',
             entidad_id=turno.id,
-            severidad=AuditLog.Severidad.INFO,
+            severidad=(
+                AuditLog.Severidad.CRITICA
+                if forzar else AuditLog.Severidad.INFO
+            ),
             estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-            descripcion=f'Se cerro el turno {turno.codigo_turno}.',
+            descripcion=(
+                f'Se forzo el cierre del turno {turno.codigo_turno}.'
+                if forzar else f'Se cerro el turno {turno.codigo_turno}.'
+            ),
+            motivo=motivo if forzar else None,
             valores_anteriores={'estado': CajaTurno.Estado.ABIERTA},
             valores_nuevos={
                 'estado': turno.estado,
@@ -376,10 +393,17 @@ class CajaService:
                     if turno.diferencia is not None
                     else None
                 ),
+                'cierre_forzado': forzar,
+                'pendientes_cocina': pendientes_cocina,
+                'pendientes_servicio': pendientes_servicio,
+                'comandas_abiertas': comandas_abiertas,
             },
             request=request,
         )
-        if turno.diferencia not in (None, Decimal('0')):
+        if (
+            turno.diferencia is not None
+            and abs(turno.diferencia) > obtener_umbral('CAJA_MARGEN_DESCUADRE')
+        ):
             AuditoriaService.registrar(
                 usuario=usuario_auditoria,
                 accion='CAJA_DESCUADRE_DETECTADO',
@@ -396,6 +420,161 @@ class CajaService:
                 },
             )
         return turno
+
+    @staticmethod
+    @transaction.atomic
+    def reabrir_turno(turno_id, usuario, motivo, request=None):
+        motivo = str(motivo or '').strip()
+        if not motivo:
+            raise DatosInvalidos('El motivo es obligatorio para reabrir el turno.')
+        if CajaTurno.objects.select_for_update().filter(
+            estado=CajaTurno.Estado.ABIERTA
+        ).exists():
+            raise OperacionNoPermitida('Ya existe un turno de caja abierto.')
+        try:
+            turno = CajaTurno.objects.select_for_update().get(pk=turno_id)
+        except CajaTurno.DoesNotExist:
+            raise RecursoNoEncontrado('Turno de caja no encontrado.')
+        if turno.estado != CajaTurno.Estado.CERRADA:
+            raise OperacionNoPermitida('Solo se puede reabrir un turno cerrado.')
+        turno.estado = CajaTurno.Estado.ABIERTA
+        turno.fecha_cierre = None
+        turno.saldo_final = None
+        turno.arqueo_fisico = None
+        turno.diferencia = None
+        turno.save(update_fields=[
+            'estado', 'fecha_cierre', 'saldo_final', 'arqueo_fisico', 'diferencia'
+        ])
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='CAJA_TURNO_REABIERTO',
+            modulo='CAJA',
+            entidad='CAJA_TURNO',
+            entidad_id=turno.id,
+            severidad=AuditLog.Severidad.CRITICA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se reabrio el turno {turno.codigo_turno}.',
+            motivo=motivo,
+            valores_anteriores={'estado': CajaTurno.Estado.CERRADA},
+            valores_nuevos={'estado': CajaTurno.Estado.ABIERTA},
+            request=request,
+        )
+        return turno
+
+    @staticmethod
+    @transaction.atomic
+    def modificar_metodo_pago(pago_id, metodo_pago_id, usuario, motivo='', request=None):
+        try:
+            pago = Pago.objects.select_for_update().select_related(
+                'metodo_pago', 'caja_turno'
+            ).get(pk=pago_id, activo=True)
+            nuevo_metodo = MetodoPago.objects.get(pk=metodo_pago_id, activo=True)
+        except Pago.DoesNotExist:
+            raise RecursoNoEncontrado('Pago no encontrado.')
+        except MetodoPago.DoesNotExist:
+            raise RecursoNoEncontrado('Metodo de pago no encontrado.')
+        anterior = pago.metodo_pago
+        if anterior.id == nuevo_metodo.id:
+            raise OperacionNoPermitida('El pago ya usa el metodo solicitado.')
+        neto = pago.monto - pago.vuelto
+        turno = pago.caja_turno
+        if anterior.codigo == 'EFECTIVO':
+            turno.total_efectivo -= neto
+        else:
+            turno.total_tarjeta -= neto
+        if nuevo_metodo.codigo == 'EFECTIVO':
+            turno.total_efectivo += neto
+        else:
+            turno.total_tarjeta += neto
+        turno.save(update_fields=['total_efectivo', 'total_tarjeta'])
+        pago.metodo_pago = nuevo_metodo
+        pago.save(update_fields=['metodo_pago'])
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='PAGO_METODO_MODIFICADO',
+            modulo='CAJA',
+            entidad='PAGO',
+            entidad_id=pago.id,
+            severidad=AuditLog.Severidad.ADVERTENCIA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se modifico el metodo del pago {pago.id}.',
+            motivo=str(motivo or '').strip() or None,
+            valores_anteriores={'metodo_pago': anterior.codigo},
+            valores_nuevos={'metodo_pago': nuevo_metodo.codigo},
+            request=request,
+        )
+        return pago
+
+    @staticmethod
+    @transaction.atomic
+    def anular_pago(pago_id, usuario, motivo, request=None):
+        motivo = str(motivo or '').strip()
+        if not motivo:
+            raise DatosInvalidos('El motivo es obligatorio para anular un pago.')
+        try:
+            pago = Pago.objects.select_for_update().select_related(
+                'metodo_pago', 'caja_turno'
+            ).get(pk=pago_id, activo=True)
+        except Pago.DoesNotExist:
+            raise RecursoNoEncontrado('Pago no encontrado.')
+        if pago.estado != Pago.Estado.PAGADO:
+            raise OperacionNoPermitida('Solo se puede anular un pago confirmado.')
+        turno = pago.caja_turno
+        neto = pago.monto - pago.vuelto
+        turno.total_ventas -= neto
+        if pago.metodo_pago.codigo == 'EFECTIVO':
+            turno.total_efectivo -= neto
+        else:
+            turno.total_tarjeta -= neto
+        turno.save(update_fields=['total_ventas', 'total_efectivo', 'total_tarjeta'])
+        pago.estado = Pago.Estado.ANULADO
+        pago.save(update_fields=['estado'])
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='PAGO_ANULADO',
+            modulo='CAJA',
+            entidad='PAGO',
+            entidad_id=pago.id,
+            severidad=AuditLog.Severidad.CRITICA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se anulo el pago {pago.id}.',
+            motivo=motivo,
+            valores_anteriores={'estado': Pago.Estado.PAGADO},
+            valores_nuevos={'estado': Pago.Estado.ANULADO},
+            request=request,
+            datos_contextuales={'impacto_economico_estimado': neto},
+        )
+        return pago
+
+    @staticmethod
+    @transaction.atomic
+    def eliminar_pago(pago_id, usuario, motivo, request=None):
+        motivo = str(motivo or '').strip()
+        if not motivo:
+            raise DatosInvalidos('El motivo es obligatorio para eliminar un pago.')
+        try:
+            pago = Pago.objects.select_for_update().get(pk=pago_id, activo=True)
+        except Pago.DoesNotExist:
+            raise RecursoNoEncontrado('Pago no encontrado.')
+        if pago.estado != Pago.Estado.ANULADO:
+            raise OperacionNoPermitida('Solo se puede eliminar logicamente un pago anulado.')
+        pago.activo = False
+        pago.save(update_fields=['activo'])
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='PAGO_SOFT_DELETE',
+            modulo='CAJA',
+            entidad='PAGO',
+            entidad_id=pago.id,
+            severidad=AuditLog.Severidad.ADVERTENCIA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=f'Se elimino logicamente el pago {pago.id}.',
+            motivo=motivo,
+            valores_anteriores={'activo': True},
+            valores_nuevos={'activo': False},
+            request=request,
+        )
+        return pago
 
     cobrar = staticmethod(procesar_cobro)
     registrar_perdida = staticmethod(registrar_perdida)

@@ -2,6 +2,8 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from functools import wraps
 
+from .services import UsuarioService
+
 def rol_requerido(*roles_permitidos):
     """
     Decorador para vistas HTML que verifica el rol del usuario.
@@ -16,6 +18,12 @@ def rol_requerido(*roles_permitidos):
             rol_actual = request.user.rol.nombre
             if rol_actual in roles_permitidos or rol_actual == 'ADMIN':
                 return view_func(request, *args, **kwargs)
+
+            UsuarioService.registrar_acceso_denegado(
+                request.user,
+                request=request,
+                recurso=request.path,
+            )
             
             # Si no tiene permiso, mensaje de error y redirección
             messages.error(request, f"Acceso denegado: No tenés permiso para acceder a esta sección.")

@@ -1,72 +1,22 @@
 import csv
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from django.http import HttpResponse
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from .constants import (
+    ACCIONES_AUDITABLES,
+    ACCIONES_CON_MOTIVO_OBLIGATORIO,
+)
 from .models import AuditLog
 
 
 class AuditoriaService:
-    ACCIONES_PERMITIDAS = frozenset({
-        'COMANDA_PLATO_ANULADO',
-        'COMANDA_PLATO_ANULADO_POST_COCINA',
-        'COMANDA_ANULADA',
-        'COMANDA_ANULADA_CON_PRODUCCION',
-        'CAJA_TURNO_ABIERTO',
-        'CAJA_TURNO_CERRADO',
-        'CAJA_DESCUADRE_DETECTADO',
-        'CAJA_CIERRE_FORZADO',
-        'CAJA_TURNO_REABIERTO',
-        'PAGO_METODO_MODIFICADO',
-        'PAGO_ANULADO',
-        'PAGO_SOFT_DELETE',
-        'INVENTARIO_INSUMO_AGOTADO_SIN_REPOSICION',
-        'INVENTARIO_STOCK_BAJO_PERSISTENTE',
-        'INVENTARIO_MERMA_ELEVADA',
-        'INVENTARIO_EGRESO_INCOHERENTE',
-        'INVENTARIO_AJUSTE_MANUAL_ELEVADO',
-        'INVENTARIO_AJUSTES_REPETIDOS',
-        'INVENTARIO_LOTE_REPETIDO',
-        'INVENTARIO_COSTO_UNITARIO_VARIACION_ALTA',
-        'INVENTARIO_STOCK_INSUFICIENTE_REITERADO',
-        'RECETA_MODIFICADA',
-        'RECETA_INSUMO_ELIMINADO',
-        'PLATO_DESHABILITADO_STOCK',
-        'PLATO_REACTIVADO_SIN_STOCK',
-        'PLATO_PRECIO_MODIFICADO',
-        'PLATO_CAMBIO_MASIVO_PRECIOS',
-        'PLATO_SOFT_DELETE',
-        'LOGIN_FALLIDO_REITERADO',
-        'USUARIO_CREADO',
-        'USUARIO_ROL_MODIFICADO',
-        'USUARIO_ESCALAMIENTO_PRIVILEGIOS',
-        'USUARIO_DESACTIVADO',
-        'USUARIO_REACTIVADO',
-        'USUARIO_PASSWORD_MODIFICADO',
-        'ACCESO_DENEGADO',
-        'AUDITORIA_ACCESO_PANEL',
-        'AUDITORIA_EXPORTADA',
-    })
-
-    ACCIONES_CON_MOTIVO_OBLIGATORIO = frozenset({
-        'COMANDA_PLATO_ANULADO',
-        'COMANDA_PLATO_ANULADO_POST_COCINA',
-        'COMANDA_ANULADA',
-        'COMANDA_ANULADA_CON_PRODUCCION',
-        'PAGO_ANULADO',
-        'PLATO_PRECIO_MODIFICADO',
-        'PLATO_CAMBIO_MASIVO_PRECIOS',
-        'RECETA_MODIFICADA',
-        'RECETA_INSUMO_ELIMINADO',
-        'CAJA_CIERRE_FORZADO',
-        'CAJA_TURNO_REABIERTO',
-        'PAGO_SOFT_DELETE',
-        'PLATO_SOFT_DELETE',
-        'INVENTARIO_AJUSTE_MANUAL_ELEVADO',
-    })
+    ACCIONES_PERMITIDAS = ACCIONES_AUDITABLES
+    ACCIONES_CON_MOTIVO_OBLIGATORIO = ACCIONES_CON_MOTIVO_OBLIGATORIO
 
     CLAVES_CONTEXTO_PERMITIDAS = frozenset({
         'rol',
@@ -93,6 +43,9 @@ class AuditoriaService:
         valores_nuevos=None,
         request=None,
         datos_contextuales=None,
+        deduplicar_alerta=False,
+        clave_alerta=None,
+        deduplicar_durante_minutos=None,
     ):
         """Registra un evento critico luego de validar el contrato oficial."""
         accion = cls._validar_accion(accion)
@@ -120,7 +73,24 @@ class AuditoriaService:
             None,
         )
 
-        return cls._crear_registro(
+        clave_alerta = cls._normalizar_clave_alerta(
+            accion,
+            entidad,
+            entidad_id,
+            deduplicar_alerta,
+            clave_alerta,
+        )
+        existente = cls._buscar_duplicado(
+            accion=accion,
+            entidad=entidad,
+            entidad_id=entidad_id,
+            clave_alerta=clave_alerta,
+            deduplicar_durante_minutos=deduplicar_durante_minutos,
+        )
+        if existente:
+            return existente
+
+        datos_registro = dict(
             usuario=usuario,
             accion=accion,
             modulo=str(modulo).strip(),
@@ -137,7 +107,19 @@ class AuditoriaService:
                 'impacto_economico_estimado'
             ),
             metadata=metadata,
+            alerta_activa=bool(deduplicar_alerta),
+            clave_alerta=clave_alerta,
         )
+        try:
+            with transaction.atomic():
+                return cls._crear_registro(**datos_registro)
+        except IntegrityError:
+            if not clave_alerta:
+                raise
+            return AuditLog.objects.get(
+                clave_alerta=clave_alerta,
+                alerta_activa=True,
+            )
 
     @staticmethod
     def _crear_registro(
@@ -156,6 +138,8 @@ class AuditoriaService:
         rol,
         impacto_economico_estimado,
         metadata,
+        alerta_activa,
+        clave_alerta,
     ):
         return AuditLog.objects.create(
             usuario=usuario,
@@ -172,8 +156,64 @@ class AuditoriaService:
             detalle_anterior=valores_anteriores,
             detalle_nuevo=valores_nuevos,
             impacto_economico_estimado=impacto_economico_estimado,
+            alerta_activa=alerta_activa,
+            clave_alerta=clave_alerta,
             **metadata,
         )
+
+    @staticmethod
+    def _normalizar_clave_alerta(
+        accion,
+        entidad,
+        entidad_id,
+        deduplicar_alerta,
+        clave_alerta,
+    ):
+        if not deduplicar_alerta:
+            return None
+        clave = clave_alerta or f'{accion}:{entidad}:{entidad_id}'
+        return str(clave).strip()[:180]
+
+    @staticmethod
+    def _buscar_duplicado(
+        *,
+        accion,
+        entidad,
+        entidad_id,
+        clave_alerta,
+        deduplicar_durante_minutos,
+    ):
+        if clave_alerta:
+            return AuditLog.objects.filter(
+                clave_alerta=clave_alerta,
+                alerta_activa=True,
+            ).first()
+        if deduplicar_durante_minutos:
+            desde = timezone.now() - timedelta(
+                minutes=deduplicar_durante_minutos
+            )
+            return AuditLog.objects.filter(
+                accion=accion,
+                entidad=entidad,
+                entidad_id=entidad_id,
+                fecha_evento__gte=desde,
+            ).first()
+        return None
+
+    @staticmethod
+    def resolver_alerta(*, accion=None, entidad=None, entidad_id=None, clave_alerta=None):
+        """Marca una condicion como resuelta para permitir una alerta futura."""
+        filtros = {'alerta_activa': True}
+        if clave_alerta:
+            filtros['clave_alerta'] = clave_alerta
+        else:
+            if accion:
+                filtros['accion'] = accion
+            if entidad:
+                filtros['entidad'] = entidad
+            if entidad_id is not None:
+                filtros['entidad_id'] = entidad_id
+        return AuditLog.objects.filter(**filtros).update(alerta_activa=False)
 
     @classmethod
     def _validar_accion(cls, accion):
