@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_filters',
     # Apps del restaurante
+    'apps.auditoria',
     'apps.usuarios',
     'apps.mesas',
     'apps.menu',

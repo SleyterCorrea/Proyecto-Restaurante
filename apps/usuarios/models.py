@@ -85,23 +85,6 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f'{self.username} ({self.rol.nombre})'
 
-class AuditLog(models.Model):
-    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name='logs')
-    accion = models.CharField(max_length=50)
-    entidad = models.CharField(max_length=50)
-    entidad_id = models.BigIntegerField()
-    detalle_anterior = models.JSONField(null=True, blank=True)
-    detalle_nuevo = models.JSONField(null=True, blank=True)
-    ip = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.CharField(max_length=255, blank=True, null=True)
-    fecha_evento = models.DateTimeField(auto_now_add=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'audit_log'
-        verbose_name = 'Log de Auditoría'
-
 class ConfiguracionSistema(models.Model):
     """Modelo Singleton para almacenar configuraciones globales del sistema (ej. Modo Claro/Oscuro)."""
     tema_oscuro = models.BooleanField(default=True, help_text="Define si todo el sistema debe estar en modo oscuro.")
@@ -118,3 +101,8 @@ class ConfiguracionSistema(models.Model):
 
     def __str__(self):
         return f"Configuración Global (Oscuro: {self.tema_oscuro})"
+
+
+# Compatibilidad temporal para importaciones historicas. El modelo pertenece
+# y queda registrado en Django bajo la app auditoria.
+from apps.auditoria.models import AuditLog  # noqa: E402,F401

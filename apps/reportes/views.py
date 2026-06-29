@@ -13,8 +13,14 @@ from rest_framework import status
 
 from apps.usuarios.permissions import EsCajeroOAdmin, EsAdmin
 from apps.usuarios.decorators import rol_requerido
+from apps.auditoria.views import (
+    admin_auditoria as auditoria_admin_view,
+    api_auditoria_exportar as auditoria_exportar_api_view,
+    api_auditoria_filtros as auditoria_filtros_api_view,
+    api_auditoria_log_detalle as auditoria_log_detalle_api_view,
+    api_auditoria_logs as auditoria_logs_api_view,
+)
 from apps.comandas.models import Comanda, LineaComanda
-from apps.usuarios.models import AuditLog
 from apps.caja.models import CajaTurno, Pago
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,7 +91,7 @@ def admin_dashboard(request):
 @login_required
 @rol_requerido('ADMIN')
 def admin_auditoria(request):
-    return render(request, 'admin_panel/auditoria.html')
+    return auditoria_admin_view(request)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -552,42 +558,20 @@ def api_exportar_csv(request):
     return response
 
 @api_view(['GET'])
-@permission_classes([EsAdmin])
 def api_auditoria_logs(request):
-    """
-    Lista los registros de auditoría con filtros.
-    """
-    search = request.GET.get('search', '').strip()
-    entidad = request.GET.get('entidad', '').strip()
-    accion = request.GET.get('accion', '').strip()
-    
-    logs = AuditLog.objects.all().select_related('usuario').order_by('-fecha_evento')
-    
-    if search:
-        logs = logs.filter(
-            Q(usuario__username__icontains=search) |
-            Q(detalle_nuevo__icontains=search) |
-            Q(detalle_anterior__icontains=search)
-        )
-    
-    if entidad:
-        logs = logs.filter(entidad=entidad)
-    
-    if accion:
-        logs = logs.filter(accion=accion)
-        
-    data = []
-    for log in logs[:500]: # Limitar a los últimos 500 para performance
-        data.append({
-            'id': log.id,
-            'fecha': log.fecha_evento.strftime('%Y-%m-%d %H:%M:%S'),
-            'usuario': log.usuario.username,
-            'accion': log.accion,
-            'entidad': log.entidad,
-            'entidad_id': log.entidad_id,
-            'detalle_anterior': log.detalle_anterior,
-            'detalle_nuevo': log.detalle_nuevo,
-            'ip': log.ip
-        })
-        
-    return Response(data)
+    return auditoria_logs_api_view(request)
+
+
+@api_view(['GET'])
+def api_auditoria_log_detalle(request, log_id):
+    return auditoria_log_detalle_api_view(request, log_id)
+
+
+@api_view(['GET'])
+def api_auditoria_filtros(request):
+    return auditoria_filtros_api_view(request)
+
+
+@api_view(['GET'])
+def api_auditoria_exportar(request):
+    return auditoria_exportar_api_view(request)

@@ -37,6 +37,9 @@ class Insumo(models.Model):
     stock_real = models.DecimalField(max_digits=12, decimal_places=3, default=0, db_index=True)
     stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     costo_unitario = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    es_critico = models.BooleanField(default=False, db_index=True)
+    agotado_desde = models.DateTimeField(null=True, blank=True)
+    stock_bajo_desde = models.DateTimeField(null=True, blank=True)
     activo = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -109,6 +112,7 @@ class MovimientoInventario(models.Model):
     stock_anterior = models.DecimalField(max_digits=12, decimal_places=3)
     stock_nuevo = models.DecimalField(max_digits=12, decimal_places=3)
     costo_unitario = models.DecimalField(max_digits=12, decimal_places=4, default=0)
+    lote = models.CharField(max_length=80, blank=True, null=True, db_index=True)
     referencia_tipo = models.CharField(max_length=30, blank=True, null=True)
     referencia_id = models.BigIntegerField(blank=True, null=True)
     causa_merma = models.CharField(max_length=20, choices=CausaMerma.choices, blank=True, null=True,

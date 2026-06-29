@@ -36,7 +36,8 @@ from apps.comandas.models import Comanda, LineaComanda
 from .models import CajaTurno, MetodoPago, Pago
 from apps.mesas.models import UnionMesas, Mesa
 from .services import CajaService
-from apps.core.exceptions import AppError
+from apps.core.exceptions import AppError, StockInsuficiente
+from apps.inventario.services import InventarioService
 from .utils import generar_pdf_boleta
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -219,7 +220,7 @@ def descargar_boleta_view(request, pago_id):
 def api_abrir_turno(request):
     """Abre un nuevo turno de caja con saldo inicial y punto de caja."""
     try:
-        turno = CajaService.abrir_turno(request.data, request.user)
+        turno = CajaService.abrir_turno(request.data, request.user, request=request)
     except AppError as exc:
         return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True, 'codigo': turno.codigo_turno})
@@ -230,7 +231,7 @@ def api_abrir_turno(request):
 def api_cerrar_turno(request):
     """Cierra el turno activo con arqueo físico opcional."""
     try:
-        CajaService.cerrar_turno(request.data)
+        CajaService.cerrar_turno(request.data, request.user, request=request)
     except AppError as exc:
         return Response(exc.as_dict(), status=exc.status_code)
     return Response({'ok': True})
@@ -292,6 +293,7 @@ def api_pagar_comanda(request, pk):
             usuario=request.user,
             linea_ids=linea_ids,
             observacion=observacion,
+            request=request,
         )
         return Response({
             'ok': True,
@@ -299,6 +301,10 @@ def api_pagar_comanda(request, pk):
             'boleta_url': f'/caja/boleta/{pagos[0].id}/',
         })
     except AppError as e:
+        if isinstance(e, StockInsuficiente):
+            InventarioService.registrar_excepcion_stock(
+                e, request.user, request=request
+            )
         return Response(e.as_dict(), status=e.status_code)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -312,9 +318,14 @@ def api_registrar_perdida(request, pk):
     Marca una comanda como pérdida (cliente no pagó).
     Body: { "observacion": "motivo..." }
     """
-    observacion = request.data.get('observacion', 'Cliente no pagó')
+    observacion = request.data.get('observacion', '')
     try:
-        pago = CajaService.registrar_perdida(comanda_id=pk, usuario=request.user, observacion=observacion)
+        pago = CajaService.registrar_perdida(
+            comanda_id=pk,
+            usuario=request.user,
+            observacion=observacion,
+            request=request,
+        )
         return Response({'ok': True, 'pago_id': pago.id})
     except AppError as e:
         return Response(e.as_dict(), status=e.status_code)

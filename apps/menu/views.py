@@ -13,7 +13,6 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 
 from apps.usuarios.permissions import EsAdmin
-from apps.usuarios.utils import log_auditoria
 from apps.inventario.services import obtener_insumos_criticos
 from apps.core.exceptions import AppError
 from .models import Categoria, Plato
@@ -28,31 +27,42 @@ def _receta_data(request):
         return request.data.getlist('receta')
     return request.data.get('receta') or []
 
+
+def _receta_snapshot(plato):
+    return sorted(
+        (
+            receta.insumo_id,
+            receta.cantidad_por_porcion,
+            receta.merma_porcentaje,
+            receta.activo,
+        )
+        for receta in plato.receta.filter(activo=True)
+    )
+
+
+def _receta_propuesta_snapshot(receta_data):
+    return sorted(
+        item
+        for item in MenuService._normalizar_receta(receta_data)
+        if item[3]
+    )
+
 class CategoriaViewSet(viewsets.ModelViewSet):
     queryset = Categoria.objects.all().order_by('orden', 'nombre')
     serializer_class = CategoriaSerializer
     permission_classes = [IsAuthenticated, EsAdmin]
 
     def perform_create(self, serializer):
-        instance = MenuService.guardar_categoria(serializer)
-        log_auditoria(self.request.user, 'CREACION', 'CATEGORIA', instance.id, 
-                      detalle_nuevo=serializer.data, request=self.request)
+        MenuService.guardar_categoria(serializer)
 
     def perform_update(self, serializer):
-        old_instance = self.get_object()
-        old_data = CategoriaSerializer(old_instance).data
-        instance = MenuService.guardar_categoria(serializer)
-        log_auditoria(self.request.user, 'EDICION', 'CATEGORIA', instance.id, 
-                      detalle_anterior=old_data, detalle_nuevo=serializer.data, request=self.request)
+        MenuService.guardar_categoria(serializer)
 
     def perform_destroy(self, instance):
-        old_data = CategoriaSerializer(instance).data
         try:
             MenuService.desactivar_categoria(instance)
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'ELIMINACION', 'CATEGORIA', instance.id,
-                      detalle_anterior=old_data, request=self.request)
 
 class PlatoViewSet(viewsets.ModelViewSet):
     queryset = Plato.objects.prefetch_related('receta__insumo__unidad_medida').order_by('categoria__orden', 'nombre')
@@ -65,25 +75,33 @@ class PlatoViewSet(viewsets.ModelViewSet):
             instance = MenuService.guardar_plato(serializer, _receta_data(self.request))
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'CREACION', 'PLATOS', instance.id, 
-                      detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
 
     def perform_update(self, serializer):
-        # Obtener detalle anterior
-        old_instance = self.get_object()
-        old_data = PlatoSerializer(old_instance).data
+        receta_data = _receta_data(self.request)
         try:
-            instance = MenuService.guardar_plato(serializer, _receta_data(self.request))
+            motivo = str(self.request.data.get('motivo', '')).strip()
+            MenuService.guardar_plato(
+                serializer,
+                receta_data,
+                usuario=self.request.user,
+                motivo=motivo,
+                request=self.request,
+            )
         except AppError as exc:
             raise ValidationError({'detail': str(exc)})
-        log_auditoria(self.request.user, 'EDICION', 'PLATOS', instance.id, 
-                      detalle_anterior=old_data, detalle_nuevo=PlatoSerializer(instance).data, request=self.request)
 
     def perform_destroy(self, instance):
-        old_data = PlatoSerializer(instance).data
-        MenuService.desactivar_plato(instance)
-        log_auditoria(self.request.user, 'ELIMINACION', 'PLATOS', instance.id,
-                      detalle_anterior=old_data, request=self.request)
+        motivo = str(self.request.data.get('motivo', '')).strip()
+        if not motivo:
+            raise ValidationError({
+                'motivo': 'El motivo es obligatorio para desactivar un plato.'
+            })
+        MenuService.desactivar_plato(
+            instance,
+            usuario=self.request.user,
+            motivo=motivo,
+            request=self.request,
+        )
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, EsAdmin])
     def insumos_criticos(self, request):
@@ -109,7 +127,13 @@ class PlatoViewSet(viewsets.ModelViewSet):
         }
         """
         try:
-            receta = MenuService.agregar_insumo(self.get_object(), request.data)
+            receta = MenuService.agregar_insumo(
+                self.get_object(),
+                request.data,
+                usuario=request.user,
+                motivo=request.data.get('motivo'),
+                request=request,
+            )
             return Response({
                 'id': receta.id,
                 'mensaje': 'Insumo agregado/actualizado en la receta'
@@ -131,7 +155,16 @@ class PlatoViewSet(viewsets.ModelViewSet):
             )
         
         try:
-            MenuService.eliminar_insumo(self.get_object(), insumo_id)
+            MenuService.eliminar_insumo(
+                self.get_object(),
+                insumo_id,
+                usuario=request.user,
+                motivo=(
+                    request.data.get('motivo')
+                    or request.query_params.get('motivo')
+                ),
+                request=request,
+            )
             return Response({'mensaje': 'Insumo eliminado de la receta'})
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)

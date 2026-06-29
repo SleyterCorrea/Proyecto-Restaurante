@@ -19,11 +19,16 @@ from apps.usuarios.decorators import rol_requerido
 from apps.usuarios.permissions import EsMozoOAdmin, EsCocineroOAdmin, EsAdmin
 
 from .models import Comanda, LineaComanda
-from apps.core.exceptions import AppError
+from apps.core.exceptions import AppError, StockInsuficiente
+from apps.inventario.services import InventarioService
 from .services import ComandaService, CocinaService
 
 
-def _error_response(exc):
+def _error_response(exc, request=None):
+    if isinstance(exc, StockInsuficiente) and request is not None:
+        InventarioService.registrar_excepcion_stock(
+            exc, request.user, request=request
+        )
     return Response(exc.as_dict(), status=exc.status_code)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +58,7 @@ def api_crear_comanda(request):
     try:
         comanda = ComandaService.abrir(request.data, request.user)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
 
     return JsonResponse({
         'ok': True, 
@@ -79,7 +84,7 @@ def api_linea_detail(request, pk):
             return Response({'ok': True, 'message': 'Plato eliminado del pedido.'})
         linea = ComandaService.editar_linea(pk, request.data)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
     return Response({
         'ok': True,
         'linea_id': linea.pk,
@@ -104,7 +109,7 @@ def api_liberar_mesa(request, mesa_id):
     try:
         ComandaService.enviar_a_caja(mesa_id)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
     return Response({'ok': True, 'message': 'Comanda enviada a caja. Mesa en espera de pago.'})
 
 
@@ -119,7 +124,7 @@ def api_marcar_pedido_entregado(request, pk):
     try:
         cantidad = ComandaService.marcar_entregado(pk)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
 
     return JsonResponse({
         'ok': True,
@@ -142,7 +147,7 @@ def api_agregar_plato_comanda(request, pk):
     try:
         linea = ComandaService.agregar_plato(pk, request.data)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
 
     return JsonResponse({'ok': True, 'linea_id': linea.id})
 
@@ -216,10 +221,10 @@ def api_linea_estado(request, pk):
     """
     try:
         linea, _ = CocinaService.cambiar_estado(
-            pk, request.data.get('estado'), request.user
+            pk, request.data.get('estado'), request.user, request=request
         )
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
     return Response({'ok': True, 'id': linea.id, 'estado': linea.estado})
 
 
@@ -229,10 +234,10 @@ def api_enviar_linea_cocina(request, pk):
     """Explicit endpoint required by the KDS contract: PENDIENTE -> EN_PREP."""
     try:
         linea, _ = CocinaService.cambiar_estado(
-            pk, LineaComanda.Estado.EN_PREP, request.user
+            pk, LineaComanda.Estado.EN_PREP, request.user, request=request
         )
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
     return Response({'ok': True, 'id': linea.id, 'estado': linea.estado})
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -354,12 +359,17 @@ def api_cocina_cambiar_estado(request, pk):
     try:
         cantidad_parcial = int(request.data.get('cantidad_parcial', 0))
         linea, nueva_linea_parcial = CocinaService.cambiar_estado(
-            pk, nuevo_estado, request.user, motivo, cantidad_parcial
+            pk,
+            nuevo_estado,
+            request.user,
+            motivo,
+            cantidad_parcial,
+            request=request,
         )
     except (TypeError, ValueError):
         return Response({'error': 'Cantidad parcial invalida.'}, status=400)
     except AppError as exc:
-        return _error_response(exc)
+        return _error_response(exc, request)
 
     mensaje_map = {
         LineaComanda.Estado.EN_PREP: f'Plato "{linea.plato.nombre}" marcado En Preparación',

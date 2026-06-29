@@ -73,6 +73,7 @@ class Pago(models.Model):
     transaccion_id = models.CharField(max_length=50, blank=True, null=True,
                                       help_text="ID único para agrupar pagos de una misma transacción")
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.PAGADO)
+    activo = models.BooleanField(default=True, db_index=True)
     fecha_pago = models.DateTimeField(auto_now_add=True)
     observacion = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

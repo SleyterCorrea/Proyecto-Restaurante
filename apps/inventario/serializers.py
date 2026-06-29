@@ -18,7 +18,8 @@ class InsumoSerializer(serializers.ModelSerializer):
         model = Insumo
         fields = [
             'id', 'nombre', 'categoria', 'unidad_medida', 'unidad_nombre', 'unidad_abreviatura',
-            'stock_actual', 'stock_real', 'stock_minimo', 'costo_unitario', 'activo', 'nivel_stock',
+            'stock_actual', 'stock_real', 'stock_minimo', 'costo_unitario',
+            'es_critico', 'agotado_desde', 'stock_bajo_desde', 'activo', 'nivel_stock',
         ]
 
     def validate_stock_minimo(self, value):
@@ -97,6 +98,10 @@ class ReponerSerializer(serializers.Serializer):
         error_messages={'min_value': 'La cantidad debe ser mayor a 0.'},
     )
     observacion = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    lote = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    costo_unitario = serializers.DecimalField(
+        max_digits=12, decimal_places=4, min_value=Decimal('0'), required=False
+    )
 
 
 class AjusteStockSerializer(serializers.Serializer):

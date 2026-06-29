@@ -3,7 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
-from apps.usuarios.views import DashboardRedirectView, DocumentacionView
+from apps.usuarios.views import DashboardRedirectView, DocumentacionView, LoginWebView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
@@ -13,7 +13,7 @@ urlpatterns = [
     path('', DashboardRedirectView.as_view(), name='index'),
 
     # ── Autenticación ─────────────────────────────────────────────────────────
-    path('login/',  auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('login/', LoginWebView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='/login/'), name='logout'),
 
     # ── Vistas de los módulos (HTML) ─────────────────────────────────────────
