@@ -410,6 +410,32 @@ class AuditoriaService:
             'responsable_revision',
         ).get(pk=log_id)
 
+    @classmethod
+    def actualizar_estado_revision(cls, log_id, nuevo_estado, responsable):
+        """Cambia el estado de revisión de un evento auditado.
+
+        Solo se aceptan los estados ya definidos en el modelo. Se registra al
+        administrador como responsable salvo que el evento vuelva a PENDIENTE.
+        """
+        estado = str(nuevo_estado or '').strip().upper()
+        if estado not in AuditLog.EstadoRevision.values:
+            raise ValidationError({
+                'estado_revision': f'Estado de revision no permitido: {estado or "vacio"}.'
+            })
+
+        log = AuditLog.objects.get(pk=log_id)
+        log.estado_revision = estado
+        if estado == AuditLog.EstadoRevision.PENDIENTE:
+            log.responsable_revision = None
+        else:
+            log.responsable_revision = responsable
+        log.save(update_fields=[
+            'estado_revision',
+            'responsable_revision',
+            'updated_at',
+        ])
+        return cls.obtener_log(log.id)
+
     @staticmethod
     def obtener_opciones_filtro():
         base = AuditLog.objects.select_related('usuario', 'responsable_revision')

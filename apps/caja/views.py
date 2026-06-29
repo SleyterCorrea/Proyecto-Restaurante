@@ -318,9 +318,14 @@ def api_registrar_perdida(request, pk):
     Marca una comanda como pérdida (cliente no pagó).
     Body: { "observacion": "motivo..." }
     """
-    observacion = request.data.get('observacion', 'Cliente no pagó')
+    observacion = request.data.get('observacion', '')
     try:
-        pago = CajaService.registrar_perdida(comanda_id=pk, usuario=request.user, observacion=observacion)
+        pago = CajaService.registrar_perdida(
+            comanda_id=pk,
+            usuario=request.user,
+            observacion=observacion,
+            request=request,
+        )
         return Response({'ok': True, 'pago_id': pago.id})
     except AppError as e:
         return Response(e.as_dict(), status=e.status_code)

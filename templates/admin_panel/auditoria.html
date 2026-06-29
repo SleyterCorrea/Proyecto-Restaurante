@@ -5,7 +5,8 @@
 
 {% block content %}
 <div class="container-fluid py-4" x-data="auditApp()" x-init="init()">
-    <div class="mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+    {% csrf_token %}
+    <div class="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div>
             <h2 class="mb-0 text-white font-black text-2xl">Auditoria de Riesgos</h2>
             <p class="text-on-surface-variant small font-bold mb-0">
@@ -32,35 +33,79 @@
         </div>
     </div>
 
-    <div class="row g-3 mb-4">
-        <template x-for="card in summaryCards()" :key="card.key">
-            <div class="col-6 col-xl-2">
-                <button
-                    type="button"
-                    class="card card-dark shadow-sm h-100 w-100 text-start border transition-colors p-0"
-                    :class="isCardActive(card) ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-white/5 hover:border-primary/40 hover:bg-white/5'"
-                    @click="applyCard(card)"
-                    :title="'Filtrar por ' + card.label"
-                >
-                    <div class="card-body p-3">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <div>
+    <!-- ===== SECCION: Resumen de riesgos ===== -->
+    <section class="rounded-2xl border border-white/5 bg-surface/30 p-3 p-lg-4 mb-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-primary">monitoring</span>
+            <div>
+                <h6 class="text-white font-black mb-0 text-sm">Resumen de riesgos</h6>
+                <p class="text-[10px] text-on-surface-variant mb-0">Indicadores clave del estado del modulo. Haz clic en cualquiera para filtrar los eventos asociados.</p>
+            </div>
+        </div>
+
+        <!-- Nivel 1: indicadores prioritarios (mayor relevancia) -->
+        <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-black mb-2">Prioritarios</p>
+        <div class="row row-cols-1 row-cols-md-3 g-2 mb-3">
+            <template x-for="card in cardsByTier('principal')" :key="card.key">
+                <div class="col">
+                    <button
+                        type="button"
+                        class="card card-dark shadow-sm h-100 w-100 text-start border transition-colors p-0"
+                        :class="isCardActive(card) ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-white/5 hover:border-primary/40 hover:bg-white/5'"
+                        @click="applyCard(card)"
+                        :title="'Filtrar por ' + card.label"
+                    >
+                        <div class="card-body p-3 d-flex align-items-center justify-content-between gap-3">
+                            <div class="min-w-0">
                                 <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-black mb-1" x-text="card.label"></p>
-                                <div class="text-white text-2xl font-black leading-none" x-text="cardCount(card)"></div>
-                                <p class="text-[10px] mb-0 mt-2" :class="card.textClass" x-text="card.caption"></p>
+                                <div class="text-white text-3xl font-black leading-none" x-text="cardCount(card)"></div>
+                                <p class="text-[10px] mb-0 mt-1" :class="card.textClass" x-text="card.caption"></p>
                             </div>
-                            <div class="w-10 h-10 rounded-xl bg-surface border border-white/10 d-flex align-items-center justify-content-center">
+                            <div class="w-11 h-11 rounded-xl bg-surface border border-white/10 d-flex align-items-center justify-content-center flex-shrink-0">
                                 <span class="material-symbols-outlined" :class="card.textClass" x-text="card.icon"></span>
                             </div>
                         </div>
-                    </div>
-                </button>
-            </div>
-        </template>
-    </div>
+                    </button>
+                </div>
+            </template>
+        </div>
 
-    <div class="card card-dark shadow-sm mb-4">
+        <!-- Nivel 2: indicadores por dominio (compactos y uniformes) -->
+        <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-black mb-2">Por dominio de negocio</p>
+        <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-2">
+            <template x-for="card in cardsByTier('dominio')" :key="card.key">
+                <div class="col">
+                    <button
+                        type="button"
+                        class="card card-dark shadow-sm h-100 w-100 text-start border transition-colors p-0"
+                        :class="isCardActive(card) ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-white/5 hover:border-primary/40 hover:bg-white/5'"
+                        @click="applyCard(card)"
+                        :title="'Filtrar por ' + card.label"
+                    >
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                                <p class="text-[9px] uppercase tracking-widest text-on-surface-variant font-black mb-0 truncate" x-text="card.label"></p>
+                                <span class="material-symbols-outlined text-[18px] flex-shrink-0" :class="card.textClass" x-text="card.icon"></span>
+                            </div>
+                            <div class="text-white text-2xl font-black leading-none" x-text="cardCount(card)"></div>
+                            <p class="text-[9px] mb-0 mt-1 text-on-surface-variant truncate" x-text="card.caption"></p>
+                        </div>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </section>
+
+    <!-- ===== SECCION: Filtros de busqueda ===== -->
+    <div class="card card-dark shadow-sm mb-3">
         <div class="card-body p-4">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-primary">filter_alt</span>
+                <div>
+                    <h6 class="text-white font-black mb-0 text-sm">Filtros de busqueda</h6>
+                    <p class="text-[10px] text-on-surface-variant mb-0">Herramientas para acotar los eventos por fecha, modulo, severidad, estado, usuario o texto libre.</p>
+                </div>
+            </div>
             <!-- Filtros principales -->
             <div class="row g-3">
                 <div class="col-md-3">
@@ -181,18 +226,28 @@
         </div>
     </div>
 
-    <div class="card card-dark shadow-sm mb-4">
-        <div class="card-body p-3 d-flex flex-wrap gap-2">
-            <template x-for="tab in tabs" :key="tab.key">
-                <button
-                    class="btn btn-sm rounded-lg px-3 py-2"
-                    :class="(!focus && activeTab === tab.key) ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold bg-surface/60 border border-white/5'"
-                    @click="selectTab(tab.key)"
-                >
-                    <span x-text="tab.label"></span>
-                    <span class="ml-1 opacity-80" x-text="'(' + sectionCount(tab.key) + ')'"></span>
-                </button>
-            </template>
+    <!-- ===== SECCION: Clasificacion de eventos ===== -->
+    <div class="card card-dark shadow-sm mb-3">
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-primary">category</span>
+                <div>
+                    <h6 class="text-white font-black mb-0 text-sm">Clasificacion de eventos</h6>
+                    <p class="text-[10px] text-on-surface-variant mb-0">Segmenta los eventos auditados por dominio del negocio. El numero indica cuantos hay en cada grupo.</p>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <template x-for="tab in tabs" :key="tab.key">
+                    <button
+                        class="btn btn-sm rounded-lg px-3 py-2"
+                        :class="(!focus && activeTab === tab.key) ? 'bg-primary text-[#160066] font-black shadow-md' : 'text-on-surface-variant hover:text-primary font-bold bg-surface/60 border border-white/5'"
+                        @click="selectTab(tab.key)"
+                    >
+                        <span x-text="tab.label"></span>
+                        <span class="ml-1 opacity-80" x-text="'(' + sectionCount(tab.key) + ')'"></span>
+                    </button>
+                </template>
+            </div>
         </div>
     </div>
 
@@ -201,6 +256,10 @@
             <div class="card card-dark shadow-sm overflow-hidden h-100">
                 <div class="card-header border-0 bg-transparent p-4 pb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
+                        <p class="text-[9px] uppercase tracking-widest text-primary font-black mb-1 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">fact_check</span>
+                            Eventos auditados
+                        </p>
                         <h5 class="text-white font-black mb-1" x-text="currentViewLabel()"></h5>
                         <p class="text-[11px] text-on-surface-variant mb-0">
                             Se muestran eventos auditables del negocio y seguridad. No se priorizan acciones normales del flujo operativo.
@@ -295,8 +354,12 @@
             <div class="card card-dark shadow-sm h-100">
                 <div class="card-header border-0 bg-transparent p-4 pb-3 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="text-white font-black mb-1">Detalle del evento</h5>
-                        <p class="text-[11px] text-on-surface-variant mb-0">Contexto completo para revision funcional.</p>
+                        <p class="text-[9px] uppercase tracking-widest text-primary font-black mb-1 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined text-[14px]">manage_search</span>
+                            Detalle del evento
+                        </p>
+                        <h5 class="text-white font-black mb-1">Contexto del registro</h5>
+                        <p class="text-[11px] text-on-surface-variant mb-0">Informacion completa, trazabilidad y gestion de revision del evento seleccionado.</p>
                     </div>
                     <span class="badge bg-surface border border-white/10 text-white font-bold" x-text="selectedLog ? eventLabel(selectedLog) : 'Sin seleccion'"></span>
                 </div>
@@ -397,6 +460,33 @@
                                 <div class="text-white text-sm" x-text="selectedLog.motivo || 'No se registro motivo.'"></div>
                             </div>
 
+                            <div class="bg-surface p-3 rounded-xl border border-white/5 mb-3">
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                    <label class="text-[9px] uppercase tracking-widest text-on-surface-variant mb-0">Gestion de revision</label>
+                                    <span class="spinner-border spinner-border-sm text-primary" role="status" x-show="reviewSaving"></span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <template x-for="opt in reviewOptions" :key="opt.value">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm rounded-lg px-3 py-1 text-[11px] font-bold border transition-colors"
+                                            :class="selectedLog.estado_revision === opt.value ? 'bg-primary text-[#160066] border-primary' : 'text-on-surface-variant bg-transparent border-white/10 hover:text-primary hover:border-primary/40'"
+                                            :disabled="reviewSaving || selectedLog.estado_revision === opt.value"
+                                            @click="updateReviewState(opt.value)"
+                                        >
+                                            <span x-text="opt.label"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                                <p class="text-[10px] text-on-surface-variant mb-0 mt-2">
+                                    Estado actual:
+                                    <span class="font-bold" x-text="selectedLog.estado_revision"></span>
+                                    <template x-if="selectedLog.responsable_revision">
+                                        <span x-text="' · por ' + selectedLog.responsable_revision"></span>
+                                    </template>
+                                </p>
+                            </div>
+
                             <div class="row g-3">
                                 <div class="col-12">
                                     <h6 class="text-[10px] uppercase font-black text-on-surface-variant mb-2">Estado anterior</h6>
@@ -437,13 +527,21 @@ function auditApp() {
         activeTab: 'criticos',
         focus: null,
         showAdvanced: false,
+        reviewSaving: false,
+        reviewOptions: [
+            { value: 'PENDIENTE', label: 'Reabrir' },
+            { value: 'EN_REVISION', label: 'En revision' },
+            { value: 'REVISADO', label: 'Revisado' },
+            { value: 'DESCARTADO', label: 'Descartar' }
+        ],
         tabs: [
             { key: 'criticos', label: 'Eventos criticos' },
             { key: 'comandas', label: 'Comandas y KDS' },
             { key: 'caja', label: 'Caja y pagos' },
             { key: 'inventario', label: 'Inventario y perdidas' },
             { key: 'menu', label: 'Menu, precios y recetas' },
-            { key: 'usuarios', label: 'Usuarios y seguridad' }
+            { key: 'usuarios', label: 'Usuarios y seguridad' },
+            { key: 'auditoria', label: 'Auditoria interna' }
         ],
         moduleOptions: [
             { value: 'COMANDAS', label: 'Comandas y KDS' },
@@ -545,6 +643,44 @@ function auditApp() {
             }
         },
 
+        getCsrfToken() {
+            const el = document.querySelector('[name=csrfmiddlewaretoken]');
+            return el ? el.value : '';
+        },
+
+        async updateReviewState(estado) {
+            if (!this.selectedLog || this.reviewSaving) return;
+            if (this.selectedLog.estado_revision === estado) return;
+            this.reviewSaving = true;
+            try {
+                const res = await fetch(
+                    `/admin-panel/api/auditoria-logs/${this.selectedLog.id}/revision/`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCsrfToken()
+                        },
+                        body: JSON.stringify({ estado_revision: estado })
+                    }
+                );
+                if (res.ok) {
+                    const actualizado = await res.json();
+                    // Refrescar la lista para que tabla y contadores reflejen el
+                    // cambio, y conservar el detalle del evento actualizado.
+                    await this.fetchLogs();
+                    this.selectedLog = actualizado;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    console.error('No se pudo actualizar el estado de revision', err);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                this.reviewSaving = false;
+            }
+        },
+
         refreshAll() {
             this.fetchFilterOptions();
             this.fetchLogs();
@@ -602,14 +738,17 @@ function auditApp() {
                 return (log) => this.eventLabel(log) === 'CAJA_DESCUADRE_DETECTADO';
             }
             if (key === 'seguridad') {
-                return (log) => [
+                return (log) => !this.isOperationalNoise(log) && [
                     'ACCESO_DENEGADO',
                     'LOGIN_FALLIDO_REITERADO',
                     'USUARIO_ESCALAMIENTO_PRIVILEGIOS'
                 ].includes(this.eventLabel(log));
             }
             if (key === 'pendientes') {
-                return (log) => log.estado_revision === 'PENDIENTE';
+                // El acceso normal del administrador al panel no es un evento
+                // pendiente de revision: se excluye para no inflar el contador.
+                return (log) => log.estado_revision === 'PENDIENTE'
+                    && !this.isOperationalNoise(log);
             }
             return () => true;
         },
@@ -704,14 +843,25 @@ function auditApp() {
             }
 
             if (tab === 'usuarios') {
+                // Seguridad real: accesos denegados, cambios de rol, escalamiento
+                // de privilegios, activacion/desactivacion y login fallido reiterado.
+                // Se excluyen los eventos informativos del propio modulo de
+                // auditoria (acceso al panel, exportaciones) para que esta vista
+                // priorice riesgos de seguridad, no ruido operativo.
                 return (
                     modulo === 'USUARIOS' ||
-                    modulo === 'AUDITORIA' ||
                     evento.startsWith('USUARIO_') ||
                     evento.startsWith('LOGIN_') ||
-                    evento === 'ACCESO_DENEGADO' ||
-                    evento.startsWith('AUDITORIA_')
+                    evento === 'ACCESO_DENEGADO'
                 );
+            }
+
+            if (tab === 'auditoria') {
+                // Auditoria interna: eventos informativos del propio modulo
+                // (AUDITORIA_ACCESO_PANEL historicos, AUDITORIA_EXPORTADA).
+                // Consultables aqui o por el filtro de modulo "Auditoria interna",
+                // sin contaminar el resumen ni la pestaña de seguridad.
+                return evento.startsWith('AUDITORIA_');
             }
 
             return true;
@@ -722,58 +872,27 @@ function auditApp() {
             // hacer clic; focus = predicado client-side que define el subconjunto
             // mostrado y el conteo (cardCount), de modo que el numero del
             // indicador siempre coincide con lo que muestra la tabla.
+            // tier = jerarquia visual: 'principal' (riesgo inmediato) o
+            // 'dominio' (eventos por area de negocio).
             return [
+                // ── Nivel 1: riesgo inmediato ──
                 {
                     key: 'criticos',
                     label: 'Eventos criticos',
                     caption: 'Atencion inmediata',
                     icon: 'warning',
                     textClass: 'text-red-400',
+                    tier: 'principal',
                     tab: 'criticos',
-                    focus: null
-                },
-                {
-                    key: 'anulaciones',
-                    label: 'Anulaciones',
-                    caption: 'Comandas o pagos sensibles',
-                    icon: 'cancel',
-                    textClass: 'text-red-400',
-                    tab: 'criticos',
-                    focus: 'anulaciones'
-                },
-                {
-                    key: 'descuadres',
-                    label: 'Descuadres caja',
-                    caption: 'Riesgo financiero',
-                    icon: 'payments',
-                    textClass: 'text-yellow-400',
-                    tab: 'caja',
-                    focus: 'descuadres'
-                },
-                {
-                    key: 'inventario',
-                    label: 'Alertas inventario',
-                    caption: 'Merma, stock o costo',
-                    icon: 'inventory_2',
-                    textClass: 'text-orange-300',
-                    tab: 'inventario',
-                    focus: null
-                },
-                {
-                    key: 'menu',
-                    label: 'Precio o receta',
-                    caption: 'Cambios comerciales',
-                    icon: 'restaurant_menu',
-                    textClass: 'text-blue-300',
-                    tab: 'menu',
                     focus: null
                 },
                 {
                     key: 'seguridad',
-                    label: 'Seguridad',
-                    caption: 'Acceso o privilegios',
+                    label: 'Accesos denegados',
+                    caption: 'Seguridad y privilegios',
                     icon: 'shield_locked',
                     textClass: 'text-secondary',
+                    tier: 'principal',
                     tab: 'usuarios',
                     focus: 'seguridad'
                 },
@@ -783,10 +902,73 @@ function auditApp() {
                     caption: 'Requieren seguimiento',
                     icon: 'pending_actions',
                     textClass: 'text-primary',
+                    tier: 'principal',
                     tab: null,
                     focus: 'pendientes'
+                },
+                // ── Nivel 2: dominio de negocio ──
+                {
+                    key: 'anulaciones',
+                    label: 'Anulaciones',
+                    caption: 'Comandas o pagos',
+                    icon: 'cancel',
+                    textClass: 'text-red-400',
+                    tier: 'dominio',
+                    tab: 'criticos',
+                    focus: 'anulaciones'
+                },
+                {
+                    key: 'descuadres',
+                    label: 'Descuadres caja',
+                    caption: 'Riesgo financiero',
+                    icon: 'payments',
+                    textClass: 'text-yellow-400',
+                    tier: 'dominio',
+                    tab: 'caja',
+                    focus: 'descuadres'
+                },
+                {
+                    key: 'inventario',
+                    label: 'Alertas inventario',
+                    caption: 'Merma, stock o costo',
+                    icon: 'inventory_2',
+                    textClass: 'text-orange-300',
+                    tier: 'dominio',
+                    tab: 'inventario',
+                    focus: null
+                },
+                {
+                    key: 'menu',
+                    label: 'Precio o receta',
+                    caption: 'Cambios comerciales',
+                    icon: 'restaurant_menu',
+                    textClass: 'text-blue-300',
+                    tier: 'dominio',
+                    tab: 'menu',
+                    focus: null
+                },
+                {
+                    key: 'comandas',
+                    label: 'Comandas y KDS',
+                    caption: 'Anulaciones en cocina',
+                    icon: 'soup_kitchen',
+                    textClass: 'text-blue-300',
+                    tier: 'dominio',
+                    tab: 'comandas',
+                    focus: null
                 }
             ];
+        },
+
+        cardsByTier(tier) {
+            return this.summaryCards().filter((card) => card.tier === tier);
+        },
+
+        isOperationalNoise(log) {
+            // Eventos informativos del propio modulo de auditoria que no
+            // representan riesgo del negocio y no deben influir en los
+            // contadores principales (criticos, seguridad, pendientes).
+            return this.eventLabel(log) === 'AUDITORIA_ACCESO_PANEL';
         },
 
         eventLabel(log) {

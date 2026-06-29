@@ -86,6 +86,31 @@ Abrir en el navegador: `http://127.0.0.1:8000`
 
 ---
 
+## Datos demo de Auditoría de Riesgos
+
+Para validar el panel `/admin-panel/auditoria/` con datos controlados existe un
+management command que crea un evento por cada acción auditable real (sin tocar
+datos reales):
+
+```bash
+# Generar datos demo (idempotente; solo corre con DEBUG=True)
+python manage.py seed_auditoria_demo
+
+# Limpiar SOLO los datos demo (nunca elimina registros reales)
+python manage.py seed_auditoria_demo --reset-demo
+```
+
+- Cada registro demo se marca con `clave_alerta = "DEMO_AUDITORIA"` y la
+  descripción lleva el prefijo `[DEMO_AUDITORIA]`. La limpieza borra únicamente
+  esos registros.
+- No genera la acción operativa `AUDITORIA_ACCESO_PANEL` ni eventos del módulo
+  `MESAS` (no forman parte de la auditoría crítica).
+- Al terminar imprime un reporte: acciones esperadas/generadas/faltantes,
+  totales por módulo, severidad y estado de revisión, y advertencias.
+- En entornos sin `DEBUG=True` puede forzarse con `--force` (solo uso controlado).
+
+---
+
 ## Variables de entorno (.env)
 
 ```

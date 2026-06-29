@@ -229,10 +229,17 @@ def procesar_cobro_simple(comanda_id, metodo_pago_id, monto_recibido, usuario, r
     )
 
 
-def registrar_perdida(comanda_id, usuario, observacion):
+def registrar_perdida(comanda_id, usuario, observacion, request=None):
     """
     Marca una comanda como pérdida (el cliente no pagó o se fue).
+
+    Una pérdida representa un impacto económico real, por lo que el motivo es
+    obligatorio y el evento queda trazado como crítico en Auditoría de Riesgos.
     """
+    motivo = str(observacion or '').strip()
+    if not motivo:
+        raise DatosInvalidos("El motivo es obligatorio para registrar una pérdida.")
+
     with transaction.atomic():
         turno = _obtener_turno_activo()
 
@@ -243,6 +250,8 @@ def registrar_perdida(comanda_id, usuario, observacion):
 
         if comanda.estado == Comanda.Estado.COBRADA:
             raise OperacionNoPermitida("Esta comanda ya fue cobrada.")
+
+        estado_comanda_anterior = comanda.estado
 
         lineas = list(
             comanda.lineas.exclude(estado=LineaComanda.Estado.ANULADO).select_related('plato')
@@ -264,7 +273,7 @@ def registrar_perdida(comanda_id, usuario, observacion):
             monto=comanda.total,
             vuelto=Decimal('0'),
             estado=Pago.Estado.PERDIDA,
-            observacion=observacion or 'Cliente no pagó',
+            observacion=motivo,
         )
 
         # Marcar como COBRADA aunque sea pérdida (para que no quede abierta)
@@ -273,6 +282,31 @@ def registrar_perdida(comanda_id, usuario, observacion):
         comanda.save(update_fields=['estado', 'fecha_cierre'])
 
         _liberar_mesas_comanda(comanda)
+
+        # Auditoría crítica: pérdida económica real sobre una venta.
+        AuditoriaService.registrar(
+            usuario=usuario,
+            accion='CAJA_VENTA_PERDIDA_REGISTRADA',
+            modulo='CAJA',
+            entidad='PAGO',
+            entidad_id=pago.id,
+            severidad=AuditLog.Severidad.CRITICA,
+            estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+            descripcion=(
+                f'Venta registrada como pérdida en la comanda '
+                f'{comanda.codigo_comanda} por S/ {comanda.total}.'
+            ),
+            motivo=motivo,
+            valores_anteriores={'estado_comanda': estado_comanda_anterior},
+            valores_nuevos={
+                'estado_pago': Pago.Estado.PERDIDA,
+                'estado_comanda': comanda.estado,
+                'comanda': comanda.codigo_comanda,
+                'monto': str(comanda.total),
+            },
+            request=request,
+            datos_contextuales={'impacto_economico_estimado': comanda.total},
+        )
 
         return pago
 

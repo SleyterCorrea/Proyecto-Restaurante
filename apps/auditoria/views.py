@@ -21,17 +21,12 @@ from .services import AuditoriaService
 @login_required
 @rol_requerido('ADMIN')
 def admin_auditoria(request):
-    AuditoriaService.registrar(
-        usuario=request.user,
-        accion='AUDITORIA_ACCESO_PANEL',
-        modulo='AUDITORIA',
-        entidad='AUDITORIA_PANEL',
-        entidad_id=request.user.id,
-        severidad=AuditLog.Severidad.INFO,
-        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-        descripcion='Acceso al panel de auditoria.',
-        request=request,
-    )
+    # El acceso normal del administrador al panel es una operacion esperada,
+    # no un evento de riesgo, perdida ni manipulacion. No se registra en
+    # auditoria para no contaminar el modulo con ruido operativo ni inflar el
+    # contador de pendientes. Los accesos NO autorizados si quedan registrados
+    # como ACCESO_DENEGADO: en la vista HTML por el decorador rol_requerido y
+    # en la API por _validar_admin_api.
     return render(request, 'admin_panel/auditoria.html')
 
 
@@ -79,6 +74,28 @@ def api_auditoria_log_detalle(request, log_id):
         log = AuditoriaService.obtener_log(log_id)
     except AuditLog.DoesNotExist as exc:
         raise Http404('Log de auditoria no encontrado.') from exc
+
+    serializer = AuditLogDetailSerializer(log)
+    return Response(serializer.data)
+
+
+@api_view(['POST', 'PATCH'])
+def api_auditoria_log_revision(request, log_id):
+    permiso = _validar_admin_api(request)
+    if permiso:
+        return permiso
+
+    try:
+        log = AuditoriaService.actualizar_estado_revision(
+            log_id=log_id,
+            nuevo_estado=request.data.get('estado_revision'),
+            responsable=request.user,
+        )
+    except AuditLog.DoesNotExist as exc:
+        raise Http404('Log de auditoria no encontrado.') from exc
+    except ValidationError as exc:
+        detalle = getattr(exc, 'message_dict', None) or {'detail': exc.messages}
+        return Response(detalle, status=status.HTTP_400_BAD_REQUEST)
 
     serializer = AuditLogDetailSerializer(log)
     return Response(serializer.data)

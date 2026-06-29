@@ -25,5 +25,6 @@ urlpatterns = [
     path('api/auditoria-logs/filtros/', auditoria_views.api_auditoria_filtros, name='api_auditoria_filtros'),
     path('api/auditoria-logs/export/', auditoria_views.api_auditoria_exportar, name='api_auditoria_exportar'),
     path('api/auditoria-logs/<int:log_id>/', auditoria_views.api_auditoria_log_detalle, name='api_auditoria_log_detalle'),
+    path('api/auditoria-logs/<int:log_id>/revision/', auditoria_views.api_auditoria_log_revision, name='api_auditoria_log_revision'),
     path('api/exportar-csv/', views.api_exportar_csv, name='api_exportar_csv'),
 ]

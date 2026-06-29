@@ -1,9 +1,14 @@
 import pytest
+from io import StringIO
+
 from django.contrib import admin
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
-from django.test import RequestFactory
+from django.utils import timezone
 
+from apps.auditoria.constants import ACCIONES_AUDITABLES
 from apps.auditoria.models import AuditLog
 from apps.auditoria.services import AuditoriaService
 from apps.caja.services import CajaService
@@ -23,6 +28,7 @@ ACCIONES_ESPERADAS = {
     'CAJA_DESCUADRE_DETECTADO',
     'CAJA_CIERRE_FORZADO',
     'CAJA_TURNO_REABIERTO',
+    'CAJA_VENTA_PERDIDA_REGISTRADA',
     'PAGO_METODO_MODIFICADO',
     'PAGO_ANULADO',
     'PAGO_SOFT_DELETE',
@@ -346,7 +352,9 @@ def test_api_auditoria_admin_puede_filtrar_detallar_y_exportar(
 
     response = client.get('/admin-panel/auditoria/')
     assert response.status_code == 200
-    assert AuditLog.objects.filter(accion='AUDITORIA_ACCESO_PANEL').exists()
+    # El acceso normal del administrador al panel es una operacion esperada y
+    # ya no se audita: no debe generar eventos AUDITORIA_ACCESO_PANEL.
+    assert not AuditLog.objects.filter(accion='AUDITORIA_ACCESO_PANEL').exists()
 
     filtros = client.get('/admin-panel/api/auditoria-logs/filtros/')
     assert filtros.status_code == 200
@@ -355,8 +363,8 @@ def test_api_auditoria_admin_puede_filtrar_detallar_y_exportar(
     listado = client.get(
         '/admin-panel/api/auditoria-logs/',
         {
-            'fecha_desde': log_turno.fecha_evento.strftime('%Y-%m-%d'),
-            'fecha_hasta': log_turno.fecha_evento.strftime('%Y-%m-%d'),
+            'fecha_desde': timezone.localtime(log_turno.fecha_evento).strftime('%Y-%m-%d'),
+            'fecha_hasta': timezone.localtime(log_turno.fecha_evento).strftime('%Y-%m-%d'),
             'turno_caja': '77',
             'usuario': str(usuario_admin.id),
             'rol': 'ADMIN',
@@ -403,3 +411,109 @@ def test_api_auditoria_deniega_a_no_admin(client, usuario_cajero):
         usuario=usuario_cajero,
         modulo='AUDITORIA',
     ).exists()
+
+
+@pytest.mark.django_db
+def test_admin_actualiza_estado_revision(client, usuario_admin):
+    log = AuditoriaService.registrar(
+        usuario=usuario_admin,
+        accion='CAJA_DESCUADRE_DETECTADO',
+        modulo='CAJA',
+        entidad='CAJA_TURNO',
+        entidad_id=501,
+        severidad=AuditLog.Severidad.CRITICA,
+        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+        descripcion='Descuadre de prueba.',
+        motivo='Faltante de caja.',
+    )
+    assert log.estado_revision == AuditLog.EstadoRevision.PENDIENTE
+
+    client.force_login(usuario_admin)
+    response = client.post(
+        f'/admin-panel/api/auditoria-logs/{log.id}/revision/',
+        {'estado_revision': 'REVISADO'},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 200
+    assert response.json()['estado_revision'] == 'REVISADO'
+    assert response.json()['responsable_revision'] == usuario_admin.username
+
+    log.refresh_from_db()
+    assert log.estado_revision == AuditLog.EstadoRevision.REVISADO
+    assert log.responsable_revision_id == usuario_admin.id
+
+
+@pytest.mark.django_db
+def test_revision_rechaza_estado_invalido(client, usuario_admin):
+    log = AuditoriaService.registrar(
+        usuario=usuario_admin,
+        accion='PAGO_ANULADO',
+        modulo='CAJA',
+        entidad='PAGO',
+        entidad_id=502,
+        severidad=AuditLog.Severidad.CRITICA,
+        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+        descripcion='Pago anulado de prueba.',
+        motivo='Cobro duplicado.',
+    )
+
+    client.force_login(usuario_admin)
+    response = client.post(
+        f'/admin-panel/api/auditoria-logs/{log.id}/revision/',
+        {'estado_revision': 'ESTADO_FALSO'},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 400
+    log.refresh_from_db()
+    assert log.estado_revision == AuditLog.EstadoRevision.PENDIENTE
+
+
+@pytest.mark.django_db
+def test_no_admin_no_puede_actualizar_estado_revision(client, usuario_admin, usuario_cajero):
+    log = AuditoriaService.registrar(
+        usuario=usuario_admin,
+        accion='CAJA_DESCUADRE_DETECTADO',
+        modulo='CAJA',
+        entidad='CAJA_TURNO',
+        entidad_id=503,
+        severidad=AuditLog.Severidad.CRITICA,
+        estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+        descripcion='Descuadre de prueba.',
+        motivo='Faltante de caja.',
+    )
+
+    client.force_login(usuario_cajero)
+    response = client.post(
+        f'/admin-panel/api/auditoria-logs/{log.id}/revision/',
+        {'estado_revision': 'REVISADO'},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 403
+    log.refresh_from_db()
+    assert log.estado_revision == AuditLog.EstadoRevision.PENDIENTE
+
+
+@override_settings(DEBUG=True)
+@pytest.mark.django_db
+def test_seed_auditoria_demo_cubre_acciones_sin_mesas(usuario_admin):
+    call_command('seed_auditoria_demo', stdout=StringIO())
+
+    demo = AuditLog.objects.filter(clave_alerta='DEMO_AUDITORIA')
+    generadas = set(demo.values_list('codigo_evento', flat=True))
+    esperadas = ACCIONES_AUDITABLES - {'AUDITORIA_ACCESO_PANEL'}
+
+    # 1. cubre todas las acciones esperadas, sin faltantes
+    assert generadas == esperadas
+    # 2. no genera la accion operativa excluida
+    assert 'AUDITORIA_ACCESO_PANEL' not in generadas
+    # 3. no genera registros del modulo MESAS
+    assert not demo.filter(modulo='MESAS').exists()
+    # marca de limpieza presente en cada registro demo
+    assert demo.count() == len(esperadas)
+
+    # --reset-demo elimina solo los registros demo
+    call_command('seed_auditoria_demo', '--reset-demo', stdout=StringIO())
+    assert not AuditLog.objects.filter(clave_alerta='DEMO_AUDITORIA').exists()
