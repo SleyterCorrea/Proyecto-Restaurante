@@ -8,6 +8,7 @@ from uuid import uuid4
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.auditoria.models import AuditLog
@@ -22,7 +23,7 @@ from apps.core.exceptions import (
 )
 from apps.inventario.models import RecetaInsumo
 from apps.menu.models import Plato
-from apps.mesas.models import Mesa
+from apps.mesas.models import Mesa, UnionMesas
 
 from .models import Comanda, ComandaHistorialEstado, LineaComanda
 
@@ -61,6 +62,37 @@ class ComandaService:
             raise DatosInvalidos("Falta el campo mesa_ids.")
         if len(mesa_ids) > 3:
             raise DatosInvalidos("Máximo 3 mesas permitidas.")
+        union = None
+        union_id = data.get("union_id")
+        if union_id:
+            try:
+                union = UnionMesas.objects.prefetch_related("mesas_secundarias").get(
+                    pk=int(union_id), activa=True
+                )
+            except (TypeError, ValueError, UnionMesas.DoesNotExist):
+                raise RecursoNoEncontrado("Union de mesas no encontrada.")
+        else:
+            union = (
+                UnionMesas.objects.filter(
+                    Q(mesa_principal_id__in=mesa_ids) | Q(mesas_secundarias__id__in=mesa_ids),
+                    activa=True,
+                )
+                .prefetch_related("mesas_secundarias")
+                .first()
+            )
+
+        if union:
+            ids_union = [union.mesa_principal_id] + [
+                mesa.id for mesa in union.mesas_secundarias.all()
+            ]
+            if len(mesa_ids) > 1 and set(mesa_ids) != set(ids_union):
+                raise DatosInvalidos("La seleccion debe corresponder a una sola union registrada.")
+            return ids_union
+
+        if len(mesa_ids) > 1:
+            raise DatosInvalidos(
+                "Cada comanda debe pertenecer a una sola mesa o a una union previamente registrada."
+            )
         return mesa_ids
 
     @staticmethod
@@ -181,7 +213,7 @@ class ComandaService:
         comanda.calcular_totales()
         transaction.on_commit(
             lambda: _emitir_kds(
-                "nueva_comanda", {"comanda_id": comanda.id, "mesa": mesas[0].numero}
+                "nueva_comanda", {"comanda_id": comanda.id, "mesa": comanda.mesa_label}
             )
         )
         return comanda

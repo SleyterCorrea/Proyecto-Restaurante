@@ -1305,6 +1305,10 @@ function planoApp() {
                     return;
                 }
                 // Si es otra mesa libre, abrir modal de unión
+                if (String(this.mesaOrigenUnion.piso) !== String(mesa.piso)) {
+                    alert('Solo se pueden unir mesas pertenecientes a una misma zona.');
+                    return;
+                }
                 this.unionPendiente = {
                     origen: this.mesaOrigenUnion,
                     destino: mesa,
@@ -1519,6 +1523,7 @@ function planoApp() {
         onDragOver(mesa, event) {
             if (!this._dragMesa || this._dragMesa.id === mesa.id) return;
             if (mesa.estado !== 'LIBRE') return;
+            if (String(this._dragMesa.piso) !== String(mesa.piso)) return;
             event.currentTarget.classList.add('drag-over');
         },
 
@@ -1535,6 +1540,11 @@ function planoApp() {
                 return;
             }
             // Abrir modal de confirmación
+            if (String(this._dragMesa.piso) !== String(mesa.piso)) {
+                alert('Solo se pueden unir mesas pertenecientes a una misma zona.');
+                this._dragMesa = null;
+                return;
+            }
             this.unionPendiente = {
                 origen: this._dragMesa,
                 destino: mesa,
@@ -1591,7 +1601,8 @@ function planoApp() {
             return this.mesas.filter(m =>
                 m.estado === 'LIBRE' &&
                 !m.union &&
-                !excluidos.has(m.id)
+                !excluidos.has(m.id) &&
+                String(m.piso) === String(this.unionPendiente.origen.piso)
             );
         },
 
@@ -1599,6 +1610,10 @@ function planoApp() {
             if (!mesaId || !this.unionPendiente) return;
             const mesa = this.mesas.find(m => m.id === parseInt(mesaId));
             if (mesa) {
+                if (String(mesa.piso) !== String(this.unionPendiente.origen.piso)) {
+                    alert('Solo se pueden unir mesas pertenecientes a una misma zona.');
+                    return;
+                }
                 this.unionPendiente = { ...this.unionPendiente, mesa_extra: mesa };
                 this.unionPendiente.capacidad_personalizada += mesa.capacidad;
             }

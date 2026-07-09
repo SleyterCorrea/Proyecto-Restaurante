@@ -28,6 +28,13 @@ from .services import MesaService
 from apps.comandas.models import Comanda, LineaComanda
 
 
+ZONAS_INVALIDAS = ('ZVAL',)
+
+
+def _zonas_activas_validas():
+    return Zona.objects.filter(activo=True).exclude(nombre__iexact='ZVAL').order_by('id')
+
+
 def _estado_visual_mesa(mesa, comanda_data):
     """
     Estado visual para el plano:
@@ -68,7 +75,7 @@ def _serializar_union(union):
 @rol_requerido('MOZO', 'ADMIN')
 def plano_mesas_view(request):
     """Pantalla 2: Plano visual de mesas con polling Alpine.js."""
-    zonas = [(z.id, z.nombre) for z in Zona.objects.filter(activo=True)]
+    zonas = [(z.id, z.nombre) for z in _zonas_activas_validas()]
     return render(request, 'mesero/plano_mesas.html', {'pisos': zonas})
 
 
@@ -76,7 +83,7 @@ def plano_mesas_view(request):
 @rol_requerido('MOZO', 'ADMIN')
 def toma_pedidos_view(request):
     """Pantalla 1: Toma de pedidos / nueva comanda."""
-    zonas = [(z.id, z.nombre) for z in Zona.objects.filter(activo=True)]
+    zonas = [(z.id, z.nombre) for z in _zonas_activas_validas()]
     return render(request, 'mesero/toma_pedidos.html', {'pisos': zonas})
 
 
@@ -93,7 +100,11 @@ def api_mesas_libres(request):
     Incluye grupos de mesas unidas como unidades seleccionables.
     Query params: ?piso=ID
     """
-    qs = Mesa.objects.filter(estado=Mesa.Estado.LIBRE, activo=True).select_related('zona')
+    qs = Mesa.objects.filter(
+        estado=Mesa.Estado.LIBRE,
+        activo=True,
+        zona__activo=True,
+    ).exclude(zona__nombre__iexact='ZVAL').select_related('zona')
     piso = request.GET.get('piso')
     if piso:
         qs = qs.filter(zona_id=piso)
@@ -171,7 +182,13 @@ def api_estado_actual(request):
 
     # 1. Obtener todas las comandas abiertas con sus mesas adicionales y líneas
     comandas_activas = (
-        Comanda.objects.filter(estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.LISTA])
+        Comanda.objects.filter(
+            estado__in=[
+                Comanda.Estado.ABIERTA,
+                Comanda.Estado.EN_PREPARACION,
+                Comanda.Estado.LISTA,
+            ]
+        )
         .select_related('mesa', 'mozo')
         .prefetch_related('mesas_adicionales', 'lineas__plato')
     )
@@ -197,6 +214,9 @@ def api_estado_actual(request):
             'id':              c.pk,
             'fecha_apertura':  c.fecha_apertura.strftime('%H:%M'),
             'mesero':          str(c.mesero) if c.mesero else 'N/A',
+            'mesa_label':      c.mesa_label,
+            'mesa_ids':        [mesa.id for mesa in c.todas_las_mesas],
+            'mesa_numeros':    c.mesa_numeros,
             'nombre_cliente':  c.nombre_cliente or '',
             'notas':           c.notas,
             'total':           str(c.total),
@@ -216,7 +236,12 @@ def api_estado_actual(request):
             mesa_a_union[sec.id] = u
 
     # 4. Construir la respuesta para todas las mesas
-    for mesa in Mesa.objects.filter(activo=True).select_related('zona').all():
+    for mesa in (
+        Mesa.objects.filter(activo=True, zona__activo=True)
+        .exclude(zona__nombre__iexact='ZVAL')
+        .select_related('zona')
+        .all()
+    ):
         comanda_data = mesa_id_to_comanda.get(mesa.id)
         estado_visual, estado_label = _estado_visual_mesa(mesa, comanda_data)
 
@@ -266,7 +291,9 @@ def api_mesas_list(request):
     GET /api/mesas/lista/
     Retorna una lista simple de todas las mesas activas.
     """
-    mesas = Mesa.objects.filter(activo=True).order_by('numero')
+    mesas = Mesa.objects.filter(
+        activo=True, zona__activo=True
+    ).exclude(zona__nombre__iexact='ZVAL').order_by('numero')
     data = [{
         'id': m.id,
         'numero': m.numero,

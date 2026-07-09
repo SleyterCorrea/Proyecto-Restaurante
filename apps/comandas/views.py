@@ -177,7 +177,9 @@ def api_cocina_pendientes(request):
     comandas = Comanda.objects.filter(
         estado=Comanda.Estado.ABIERTA,
         lineas__estado__in=[LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP]
-    ).select_related('mesa', 'mesa__zona', 'mozo').prefetch_related(lineas_cocina).distinct()
+    ).select_related('mesa', 'mesa__zona', 'mozo').prefetch_related(
+        'mesas_adicionales', lineas_cocina
+    ).distinct()
 
     data = []
     for c in comandas:
@@ -185,6 +187,8 @@ def api_cocina_pendientes(request):
         comanda_data = {
             'id': c.id,
             'mesa_numero': c.mesa.numero,
+            'mesa_label': c.mesa_label,
+            'mesa_numeros': c.mesa_numeros,
             'nombre_cliente': c.nombre_cliente or '',
             'zona_nombre': c.mesa.zona.nombre if c.mesa.zona else '',
             'mesero_nombre': c.mozo.username if c.mozo else 'Desconocido',
@@ -251,7 +255,7 @@ from apps.mesas.models import Zona
 @rol_requerido('COCINERO', 'ADMIN')
 def kds_view(request):
     """Renderiza el template del Kitchen Display System."""
-    zonas = Zona.objects.filter(activo=True).order_by('nombre')
+    zonas = Zona.objects.filter(activo=True).exclude(nombre__iexact='ZVAL').order_by('nombre')
     return render(request, 'cocina/kds.html', {'zonas': zonas})
 
 
@@ -278,7 +282,9 @@ def api_cocina_activas(request):
     qs = Comanda.objects.filter(
         estado__in=[Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION],
         lineas__estado__in=[LineaComanda.Estado.PENDIENTE, LineaComanda.Estado.EN_PREP]
-    ).select_related('mesa', 'mesa__zona', 'mozo').prefetch_related(lineas_cocina).distinct()
+    ).select_related('mesa', 'mesa__zona', 'mozo').prefetch_related(
+        'mesas_adicionales', lineas_cocina
+    ).distinct()
 
     if zona_id:
         qs = qs.filter(mesa__zona_id=zona_id)
@@ -332,6 +338,8 @@ def api_cocina_activas(request):
             'numero_pedido': idx,
             'codigo_comanda': c.codigo_comanda,
             'mesa_numero': c.mesa.numero,
+            'mesa_label': c.mesa_label,
+            'mesa_numeros': c.mesa_numeros,
             'zona_nombre': c.mesa.zona.nombre if c.mesa.zona else '',
             'zona_id': c.mesa.zona_id if c.mesa.zona else None,
             'mozo_nombre': c.mozo.username if c.mozo else 'Desconocido',

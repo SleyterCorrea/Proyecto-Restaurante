@@ -53,6 +53,8 @@ zonas_data = [
 for zd in zonas_data:
     Zona.objects.get_or_create(nombre=zd['nombre'], defaults=zd)
 
+Zona.objects.filter(nombre__iexact='ZVAL').update(activo=False)
+
 zonas = {z.nombre: z for z in Zona.objects.all()}
 
 # ── 4. Mesas ─────────────────────────────────────────────────────────────

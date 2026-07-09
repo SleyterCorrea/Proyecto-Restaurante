@@ -39,7 +39,7 @@ class Comanda(models.Model):
         verbose_name_plural = 'Comandas'
 
     def __str__(self):
-        return f'Comanda {self.codigo_comanda} — Mesa {self.mesa.numero}'
+        return f'Comanda {self.codigo_comanda} - {self.mesa_label}'
 
     def calcular_totales(self):
         """Calcula el total de la comanda basándose en sus líneas."""
@@ -64,6 +64,16 @@ class Comanda(models.Model):
     def todas_las_mesas(self):
         """Devuelve la mesa principal más las adicionales."""
         return [self.mesa] + list(self.mesas_adicionales.all())
+
+    @property
+    def mesa_numeros(self):
+        """Numeros de mesa que forman la unidad logica de la comanda."""
+        return [mesa.numero for mesa in self.todas_las_mesas]
+
+    @property
+    def mesa_label(self):
+        """Etiqueta consistente para mesas individuales o unidas."""
+        return "Mesa " + " + ".join(str(numero) for numero in self.mesa_numeros)
 
     @property
     def mesero(self):

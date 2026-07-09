@@ -507,51 +507,11 @@
       },
 
       seleccionarMesa(mesa) {
-        // Si es un grupo unido, seleccionarlo o deseleccionarlo como unidad
-        if (mesa.es_grupo) {
-          const yaSeleccionado = this.mesasSeleccionadas.some(m => m.id === mesa.id);
-          if (yaSeleccionado) {
-            // Deseleccionar todo el grupo
-            this.mesasSeleccionadas = this.mesasSeleccionadas.filter(
-              m => !mesa.mesa_ids.includes(m.id)
-            );
-          } else {
-            // Limpiar selección previa y seleccionar el grupo completo
-            this.mesasSeleccionadas = [];
-            // Construir objetos mesa para cada ID del grupo
-            mesa.mesa_ids.forEach((id, i) => {
-              this.mesasSeleccionadas.push({
-                id: id,
-                numero: mesa.mesa_numeros[i],
-                capacidad: mesa.capacidad,  // La capacidad total del grupo
-                piso_label: mesa.piso_label,
-                es_grupo: true,
-                union_id: mesa.union_id,
-                label: mesa.label,
-              });
-            });
-          }
-          this.errorModal = '';
-          return;
-        }
-
-        // Mesa individual
-        const index = this.mesasSeleccionadas.findIndex(m => m.id === mesa.id);
-        if (index > -1) {
-          this.mesasSeleccionadas.splice(index, 1);
-          this.errorModal = '';
-        } else {
-          if (this.mesasSeleccionadas.length >= 3) {
-            this.errorModal = 'Máximo 3 mesas permitidas.';
-            setTimeout(() => {
-                if (this.errorModal === 'Máximo 3 mesas permitidas.') {
-                    this.errorModal = '';
-                }
-            }, 10000);
-            return;
-          }
-          this.mesasSeleccionadas.push(mesa);
-        }
+        const yaSeleccionada = this.mesasSeleccionadas.some(m =>
+          m.id === mesa.id && (m.union_id || null) === (mesa.union_id || null)
+        );
+        this.mesasSeleccionadas = yaSeleccionada ? [] : [mesa];
+        this.errorModal = '';
       },
 
       confirmarSeleccionMesa() {
@@ -561,13 +521,9 @@
 
       get labelMesas() {
         if (this.mesasSeleccionadas.length === 0) return 'Seleccionar';
-        // Si es un grupo unido, usar el label del grupo
-        if (this.mesasSeleccionadas[0]?.es_grupo && this.mesasSeleccionadas[0]?.label) {
-          return this.mesasSeleccionadas[0].label;
-        }
-        if (this.mesasSeleccionadas.length === 1) return 'Mesa ' + this.mesasSeleccionadas[0].numero;
-        const nums = this.mesasSeleccionadas.map(m => m.numero).sort((a, b) => a - b);
-        return 'Mesas ' + nums.join(', ');
+        const mesa = this.mesasSeleccionadas[0];
+        if (mesa.es_grupo && mesa.label) return mesa.label;
+        return 'Mesa ' + mesa.numero;
       },
 
       get capacidadTotal() {
@@ -624,7 +580,7 @@
 
       async enviarPedido() {
         if (this.mesasSeleccionadas.length === 0) {
-          this.errorEnvio = 'Debes seleccionar al menos una mesa.';
+          this.errorEnvio = 'Debes seleccionar una mesa.';
           return;
         }
         if (this.carrito.length === 0) {
@@ -635,8 +591,11 @@
         this.enviando = true;
         this.errorEnvio = '';
 
+        const mesaSeleccionada = this.mesasSeleccionadas[0];
         const payload = {
-          mesa_ids: this.mesasSeleccionadas.map(m => m.id),
+          mesa_id: mesaSeleccionada.id,
+          mesa_ids: mesaSeleccionada.mesa_ids || [mesaSeleccionada.id],
+          union_id: mesaSeleccionada.union_id || null,
           nombre_cliente: this.nombreCliente.trim(),
           notas: this.notasMesa,
           items: this.carrito.map(item => ({
