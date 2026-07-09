@@ -68,6 +68,11 @@ class MesaService:
         }
         if len(mesas) != len(ids):
             raise RecursoNoEncontrado("Una o mas mesas no existen.")
+        zonas = {mesa.zona_id for mesa in mesas.values()}
+        if len(zonas) > 1:
+            raise OperacionNoPermitida(
+                "Solo se pueden unir mesas pertenecientes a una misma zona."
+            )
         for mesa in mesas.values():
             if mesa.estado != Mesa.Estado.LIBRE:
                 raise OperacionNoPermitida(f"La mesa {mesa.numero} no esta libre.")

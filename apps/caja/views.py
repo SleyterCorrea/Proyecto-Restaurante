@@ -46,11 +46,17 @@ from .utils import generar_pdf_boleta
 
 def _anotar_union_labels(comandas_list):
     """Anota cada comanda con union_label y capacidad_union si corresponde."""
+    for c in comandas_list:
+        c.union_label = c.mesa_label if c.mesas_adicionales.exists() else None
+        c.capacidad_union = sum(m.capacidad for m in c.todas_las_mesas) if c.union_label else None
+
     uniones = {
         u.mesa_principal_id: u
         for u in UnionMesas.objects.filter(activa=True).prefetch_related('mesas_secundarias')
     }
     for c in comandas_list:
+        if c.union_label:
+            continue
         union = uniones.get(c.mesa_id)
         if union is None:
             for u in uniones.values():

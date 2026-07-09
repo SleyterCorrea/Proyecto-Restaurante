@@ -281,7 +281,7 @@
         <span class="kds-card__fecha">${fechaStr}</span>
       </div>
     </div>
-    <div class="kds-card__subheader"><span class="kds-card__codigo">${comanda.codigo_comanda}</span><span class="kds-card__info">Mesa: <strong>${comanda.mesa_numero}</strong> — Piso: <strong>${comanda.zona_nombre}</strong></span><span class="kds-card__mesero">Mesero: ${comanda.mozo_nombre}</span></div>
+    <div class="kds-card__subheader"><span class="kds-card__codigo">${comanda.codigo_comanda}</span><span class="kds-card__info"><strong>${comanda.mesa_label || ('Mesa ' + comanda.mesa_numero)}</strong> — Piso: <strong>${comanda.zona_nombre}</strong></span><span class="kds-card__mesero">Mesero: ${comanda.mozo_nombre}</span></div>
     <div class="kds-card__body"><hr class="kds-card__divider">${lineasHTML}</div>${notas}`;
 
     comanda.lineas.forEach(l => { if (pendingActions.has(l.id)) { const p = pendingActions.get(l.id); const el = card.querySelector(`[data-linea-id="${l.id}"]`); if (el) applyPendingVisual(el, p); } });
