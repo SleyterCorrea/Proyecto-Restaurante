@@ -5,6 +5,45 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def ejecutar_sql_si_es_postgres(apps, schema_editor):
+    if schema_editor.connection.vendor == 'postgresql':
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute('''
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS rol varchar(50) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS modulo varchar(50) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS codigo_evento varchar(100) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS severidad varchar(20) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS descripcion text NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS motivo text NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS impacto_economico_estimado numeric(12, 2) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ruta varchar(255) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS metodo_http varchar(10) NULL;
+                ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS estado_revision varchar(20) NULL;
+            ''')
+            cursor.execute('''
+                UPDATE audit_log AS audit
+                SET rol = roles.nombre
+                FROM usuario AS users
+                JOIN rol AS roles ON roles.id = users.rol_id
+                WHERE audit.usuario_id = users.id AND audit.rol IS NULL;
+            ''')
+            cursor.execute('''
+                UPDATE audit_log
+                SET modulo = COALESCE(NULLIF(entidad, ''), 'GENERAL'),
+                    codigo_evento = COALESCE(NULLIF(accion, ''), 'EVENTO_LEGADO'),
+                    severidad = COALESCE(severidad, 'INFO'),
+                    descripcion = COALESCE(descripcion, ''),
+                    estado_revision = COALESCE(estado_revision, 'PENDIENTE');
+            ''')
+            cursor.execute('''
+                ALTER TABLE audit_log ALTER COLUMN modulo SET NOT NULL;
+                ALTER TABLE audit_log ALTER COLUMN codigo_evento SET NOT NULL;
+                ALTER TABLE audit_log ALTER COLUMN severidad SET NOT NULL;
+                ALTER TABLE audit_log ALTER COLUMN descripcion SET NOT NULL;
+                ALTER TABLE audit_log ALTER COLUMN estado_revision SET NOT NULL;
+            ''')
+
+
 class Migration(migrations.Migration):
 
     initial = True
@@ -52,52 +91,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
-                migrations.RunSQL(
-                    sql='''
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS rol varchar(50) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS modulo varchar(50) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS codigo_evento varchar(100) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS severidad varchar(20) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS descripcion text NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS motivo text NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS impacto_economico_estimado numeric(12, 2) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ruta varchar(255) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS metodo_http varchar(10) NULL;
-                        ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS estado_revision varchar(20) NULL;
-                    ''',
-                    reverse_sql=migrations.RunSQL.noop,
-                ),
-                migrations.RunSQL(
-                    sql='''
-                        UPDATE audit_log AS audit
-                        SET rol = roles.nombre
-                        FROM usuario AS users
-                        JOIN rol AS roles ON roles.id = users.rol_id
-                        WHERE audit.usuario_id = users.id AND audit.rol IS NULL;
-                    ''',
-                    reverse_sql=migrations.RunSQL.noop,
-                ),
-                migrations.RunSQL(
-                    sql='''
-                        UPDATE audit_log
-                        SET modulo = COALESCE(NULLIF(entidad, ''), 'GENERAL'),
-                            codigo_evento = COALESCE(NULLIF(accion, ''), 'EVENTO_LEGADO'),
-                            severidad = COALESCE(severidad, 'INFO'),
-                            descripcion = COALESCE(descripcion, ''),
-                            estado_revision = COALESCE(estado_revision, 'PENDIENTE');
-                    ''',
-                    reverse_sql=migrations.RunSQL.noop,
-                ),
-                migrations.RunSQL(
-                    sql='''
-                        ALTER TABLE audit_log ALTER COLUMN modulo SET NOT NULL;
-                        ALTER TABLE audit_log ALTER COLUMN codigo_evento SET NOT NULL;
-                        ALTER TABLE audit_log ALTER COLUMN severidad SET NOT NULL;
-                        ALTER TABLE audit_log ALTER COLUMN descripcion SET NOT NULL;
-                        ALTER TABLE audit_log ALTER COLUMN estado_revision SET NOT NULL;
-                    ''',
-                    reverse_sql=migrations.RunSQL.noop,
-                ),
+                migrations.RunPython(ejecutar_sql_si_es_postgres, reverse_code=migrations.RunPython.noop),
             ],
         ),
     ]

@@ -1,4 +1,17 @@
 import pytest
+import django.template.context
+from copy import copy
+
+def patched_copy(self):
+    duplicate = self.__class__.__new__(self.__class__)
+    for k, v in self.__dict__.items():
+        if k != 'dicts':
+            duplicate.__dict__[k] = copy(v)
+    duplicate.dicts = self.dicts[:]
+    return duplicate
+
+django.template.context.BaseContext.__copy__ = patched_copy
+
 from django.contrib.auth import get_user_model
 from apps.usuarios.models import Rol
 from apps.mesas.models import Mesa, Zona

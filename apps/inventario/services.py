@@ -12,7 +12,6 @@ from django.utils import timezone
 from apps.auditoria.constants import obtener_umbral
 from apps.auditoria.models import AuditLog
 from apps.auditoria.services import AuditoriaService
-from apps.comandas.models import LineaComanda
 from apps.core.exceptions import DatosInvalidos, OperacionNoPermitida, RecursoNoEncontrado, StockInsuficiente
 from apps.inventario.models import (
     Insumo,
@@ -32,6 +31,17 @@ class InventarioService:
     def _contextualizar_cambio(insumo, usuario=None, request=None):
         insumo._auditoria_usuario = usuario
         insumo._auditoria_request = request
+
+    @staticmethod
+    def _validar_cantidad_por_unidad(insumo, cantidad):
+        if (
+            insumo.unidad_medida.es_discreta
+            and cantidad != cantidad.to_integral_value()
+        ):
+            raise DatosInvalidos(
+                f'{insumo.nombre} se controla en {insumo.unidad_medida.abreviatura}; '
+                'la cantidad debe ser un numero entero.'
+            )
 
     @staticmethod
     def _registrar_alerta(
@@ -305,9 +315,12 @@ class InventarioService:
         if cantidad <= 0:
             raise DatosInvalidos("La cantidad debe ser mayor a cero.")
         try:
-            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+            insumo = Insumo.objects.select_for_update().select_related(
+                'unidad_medida'
+            ).get(pk=insumo_id, activo=True)
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
+        InventarioService._validar_cantidad_por_unidad(insumo, cantidad)
         lote = str(lote or '').strip() or None
         lote_repetido = bool(lote and MovimientoInventario.objects.filter(
             insumo=insumo,
@@ -388,9 +401,12 @@ class InventarioService:
         ):
             raise DatosInvalidos("Tipo de ajuste invalido.")
         try:
-            insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
+            insumo = Insumo.objects.select_for_update().select_related(
+                'unidad_medida'
+            ).get(pk=insumo_id, activo=True)
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
+        InventarioService._validar_cantidad_por_unidad(insumo, cantidad)
         anterior = insumo.stock_real
         if tipo == MovimientoInventario.TipoMovimiento.AJUSTE_POS:
             insumo.stock_real += cantidad
@@ -735,16 +751,14 @@ class InventarioService:
         return orden
 
 
-def descontar_inventario_al_marcar_listo(linea: LineaComanda, usuario):
+def descontar_inventario_al_marcar_listo(linea, usuario):
+    """Compatibilidad legacy: cocina ya no descuenta inventario.
+
+    El stock se valida al crear o editar la comanda y el consumo definitivo se
+    registra exclusivamente desde ``CajaService.cobrar``. Mantener este punto
+    de entrada evita romper importaciones antiguas sin duplicar movimientos.
     """
-    Descuenta insumos según receta cuando una línea pasa a LISTO (cocina terminó).
-    Lanza ValueError si no hay stock suficiente para algún insumo.
-    Usa bulk_create / bulk_update para evitar N+1, y recalcula disponibilidad
-    de platos afectados porque bulk_update no dispara señales Django.
-    """
-    if linea.estado != LineaComanda.Estado.LISTO:
-        return 0
-    return InventarioService.descontar_lineas([linea], usuario)
+    return 0
 
 
 def obtener_insumos_criticos():

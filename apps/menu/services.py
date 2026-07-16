@@ -36,6 +36,7 @@ class MenuService:
     @staticmethod
     def _normalizar_receta(receta_data):
         normalizada = []
+        insumos_vistos = set()
         for item in receta_data:
             if isinstance(item, str):
                 try:
@@ -52,6 +53,9 @@ class MenuService:
                 raise DatosInvalidos("Cantidad o merma invalida en la receta.")
             if cantidad <= 0 or merma < 0 or merma > 100:
                 raise DatosInvalidos("La cantidad debe ser positiva y la merma estar entre 0 y 100.")
+            if insumo_id in insumos_vistos:
+                raise DatosInvalidos("Un insumo no puede repetirse en la receta.")
+            insumos_vistos.add(insumo_id)
             normalizada.append((insumo_id, cantidad, merma, item.get("activo", True)))
         return normalizada
 
@@ -69,6 +73,31 @@ class MenuService:
         ]
 
     @staticmethod
+    def _snapshot_plato(plato):
+        """Estado serializable usado para detectar cualquier cambio auditable."""
+        return {
+            'nombre': plato.nombre,
+            'descripcion': plato.descripcion or '',
+            'categoria_id': plato.categoria_id,
+            'precio_actual': str(plato.precio_actual),
+            'tiempo_preparacion_min': plato.tiempo_preparacion_min,
+            'disponible': plato.disponible,
+            'activo': plato.activo,
+            'imagen': plato.imagen.name if plato.imagen else None,
+        }
+
+    @staticmethod
+    def _validar_cantidad_por_unidad(insumo, cantidad):
+        if (
+            insumo.unidad_medida.es_discreta
+            and cantidad != cantidad.to_integral_value()
+        ):
+            raise DatosInvalidos(
+                f'{insumo.nombre} se controla en {insumo.unidad_medida.abreviatura}; '
+                'la cantidad por porcion debe ser un numero entero.'
+            )
+
+    @staticmethod
     @transaction.atomic
     def guardar_plato(
         serializer, receta_data=None, usuario=None, motivo=None, request=None
@@ -78,31 +107,111 @@ class MenuService:
         anterior = None
         receta_anterior = []
         if es_actualizacion:
-            anterior = {
-                'precio_actual': instancia.precio_actual,
-                'disponible': instancia.disponible,
-                'activo': instancia.activo,
-            }
+            anterior = MenuService._snapshot_plato(instancia)
             receta_anterior = MenuService._snapshot_receta(instancia)
         motivo = str(motivo or '').strip()
         plato = serializer.save()
         if receta_data is not None:
             MenuService.asignar_receta(plato, receta_data)
 
+        # El objeto llega con prefetch desde el ViewSet. Invalidar esa cache es
+        # imprescindible para que auditoria y la respuesta vean la receta nueva.
+        if hasattr(plato, '_prefetched_objects_cache'):
+            plato._prefetched_objects_cache.pop('receta', None)
+
+        if plato.disponible and not plato.receta.filter(activo=True).exists():
+            raise DatosInvalidos(
+                'Agrega al menos un insumo antes de habilitar el plato para la venta.'
+            )
+
         if not es_actualizacion or usuario is None:
             return plato
 
         receta_nueva = MenuService._snapshot_receta(plato)
-        cambio_precio = anterior['precio_actual'] != plato.precio_actual
+        actual_solicitado = MenuService._snapshot_plato(plato)
+        campos_solicitados = [
+            campo for campo, valor in anterior.items()
+            if valor != actual_solicitado[campo]
+        ]
         cambio_receta = receta_anterior != receta_nueva
-        if (cambio_precio or cambio_receta) and not motivo:
-            raise DatosInvalidos('El motivo es obligatorio al cambiar precio o receta.')
+        campos_importantes = {'precio_actual', 'disponible', 'activo'}
+        hay_cambios_importantes = (
+            cambio_receta
+            or bool(campos_importantes.intersection(campos_solicitados))
+        )
+        if hay_cambios_importantes and not motivo:
+            raise DatosInvalidos(
+                'El motivo es obligatorio al cambiar precio, receta o disponibilidad.'
+            )
+
+        # La disponibilidad solicitada solo se confirma si la receta tiene
+        # cobertura. El intento fallido queda auditado, pero no se registra
+        # como una modificacion exitosa de disponibilidad.
+        if not anterior['disponible'] and plato.disponible:
+            from apps.inventario.services import verificar_disponibilidad_plato
+            disponible, detalle = verificar_disponibilidad_plato(plato)
+            if not disponible:
+                AuditoriaService.registrar(
+                    usuario=usuario,
+                    accion='PLATO_REACTIVADO_SIN_STOCK',
+                    modulo='MENU',
+                    entidad='PLATO',
+                    entidad_id=plato.id,
+                    severidad=AuditLog.Severidad.CRITICA,
+                    estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                    descripcion=f'Se intento reactivar {plato.nombre} sin stock suficiente.',
+                    motivo=motivo,
+                    valores_anteriores={'disponible': False},
+                    valores_nuevos={
+                        'disponible_solicitado': True,
+                        'detalle_stock': detalle,
+                    },
+                    request=request,
+                    deduplicar_alerta=True,
+                )
+                plato.disponible = False
+                plato.save(update_fields=['disponible'])
+            else:
+                AuditoriaService.resolver_alerta(
+                    accion='PLATO_REACTIVADO_SIN_STOCK',
+                    entidad='PLATO', entidad_id=plato.id,
+                )
+
+        actual = MenuService._snapshot_plato(plato)
+        campos_modificados = [
+            campo for campo, valor in anterior.items()
+            if valor != actual[campo]
+        ]
+        cambio_precio = 'precio_actual' in campos_modificados
+
+        campos_generales = [
+            campo for campo in campos_modificados if campo != 'precio_actual'
+        ]
+        if campos_generales:
+            AuditoriaService.registrar(
+                usuario=usuario,
+                accion='PLATO_MODIFICADO',
+                modulo='MENU',
+                entidad='PLATO',
+                entidad_id=plato.id,
+                severidad=AuditLog.Severidad.ADVERTENCIA,
+                estado_resultado=AuditLog.EstadoResultado.EXITOSO,
+                descripcion=f'Se modificaron datos del plato {plato.nombre}.',
+                motivo=motivo,
+                valores_anteriores={
+                    campo: anterior[campo] for campo in campos_generales
+                },
+                valores_nuevos={
+                    campo: actual[campo] for campo in campos_generales
+                },
+                request=request,
+            )
 
         if cambio_precio:
             variacion = (
-                abs(plato.precio_actual - anterior['precio_actual'])
-                / anterior['precio_actual'] * Decimal('100')
-                if anterior['precio_actual'] > 0 else Decimal('100')
+                abs(plato.precio_actual - Decimal(anterior['precio_actual']))
+                / Decimal(anterior['precio_actual']) * Decimal('100')
+                if Decimal(anterior['precio_actual']) > 0 else Decimal('100')
             )
             accion = (
                 'PLATO_CAMBIO_MASIVO_PRECIOS'
@@ -124,7 +233,7 @@ class MenuService:
                 descripcion=f'Se modifico el precio de {plato.nombre}.',
                 motivo=motivo,
                 valores_anteriores={
-                    'precio_actual': str(anterior['precio_actual'])
+                    'precio_actual': anterior['precio_actual']
                 },
                 valores_nuevos={
                     'precio_actual': str(plato.precio_actual),
@@ -178,44 +287,27 @@ class MenuService:
                     request=request,
                 )
 
-        if not anterior['disponible'] and plato.disponible:
-            from apps.inventario.services import verificar_disponibilidad_plato
-            disponible, detalle = verificar_disponibilidad_plato(plato)
-            if not disponible:
-                AuditoriaService.registrar(
-                    usuario=usuario,
-                    accion='PLATO_REACTIVADO_SIN_STOCK',
-                    modulo='MENU',
-                    entidad='PLATO',
-                    entidad_id=plato.id,
-                    severidad=AuditLog.Severidad.CRITICA,
-                    estado_resultado=AuditLog.EstadoResultado.EXITOSO,
-                    descripcion=f'Se intento reactivar {plato.nombre} sin stock suficiente.',
-                    valores_anteriores={'disponible': False},
-                    valores_nuevos={'disponible_solicitado': True, 'motivo': detalle},
-                    request=request,
-                    deduplicar_alerta=True,
-                )
-                plato.disponible = False
-                plato.save(update_fields=['disponible'])
-            else:
-                AuditoriaService.resolver_alerta(
-                    accion='PLATO_REACTIVADO_SIN_STOCK',
-                    entidad='PLATO', entidad_id=plato.id,
-                )
         return plato
 
     @staticmethod
     @transaction.atomic
     def asignar_receta(plato, receta_data):
         receta = MenuService._normalizar_receta(receta_data)
+        receta = [item for item in receta if item[3]]
         insumo_ids = {item[0] for item in receta}
-        existentes = set(
-            Insumo.objects.filter(pk__in=insumo_ids, activo=True).values_list("id", flat=True)
-        )
-        if existentes != insumo_ids:
+        insumos = {
+            insumo.id: insumo
+            for insumo in Insumo.objects.select_related('unidad_medida').filter(
+                pk__in=insumo_ids,
+                activo=True,
+            )
+        }
+        if set(insumos) != insumo_ids:
             raise RecursoNoEncontrado("Uno o mas insumos no existen o estan inactivos.")
         for insumo_id, cantidad, merma, activo in receta:
+            MenuService._validar_cantidad_por_unidad(
+                insumos[insumo_id], cantidad
+            )
             RecetaInsumo.objects.update_or_create(
                 plato=plato,
                 insumo_id=insumo_id,
@@ -267,8 +359,14 @@ class MenuService:
             raise DatosInvalidos("Insumo, cantidad o merma invalidos.")
         if cantidad <= 0:
             raise DatosInvalidos("La cantidad debe ser mayor a cero.")
-        if not Insumo.objects.filter(pk=insumo_id, activo=True).exists():
+        try:
+            insumo = Insumo.objects.select_related('unidad_medida').get(
+                pk=insumo_id,
+                activo=True,
+            )
+        except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
+        MenuService._validar_cantidad_por_unidad(insumo, cantidad)
         existente = RecetaInsumo.objects.filter(
             plato=plato, insumo_id=insumo_id
         ).first()

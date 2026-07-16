@@ -232,7 +232,11 @@ def test_menu_rechaza_motivo_faltante_y_detecta_reactivacion_sin_stock(
         partial=True,
     )
     serializer.is_valid(raise_exception=True)
-    MenuService.guardar_plato(serializer, usuario=usuario_admin)
+    MenuService.guardar_plato(
+        serializer,
+        usuario=usuario_admin,
+        motivo='Se intenta reactivar el plato para validar su cobertura.',
+    )
     plato_con_receta.refresh_from_db()
 
     assert plato_con_receta.disponible is False

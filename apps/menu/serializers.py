@@ -8,11 +8,13 @@ class RecetaInsumoSerializer(serializers.ModelSerializer):
     insumo_nombre = serializers.CharField(source='insumo.nombre', read_only=True)
     insumo_unidad = serializers.CharField(source='insumo.unidad_medida.abreviatura', read_only=True)
     insumo_stock  = serializers.DecimalField(source='insumo.stock_real', max_digits=12, decimal_places=3, read_only=True)
+    insumo_es_discreto = serializers.ReadOnlyField(source='insumo.unidad_medida.es_discreta')
 
     class Meta:
         model = RecetaInsumo
         fields = ['id', 'insumo_id', 'insumo_nombre', 'insumo_unidad', 'insumo_stock',
-                  'cantidad_por_porcion', 'merma_porcentaje', 'activo']
+                  'insumo_es_discreto', 'cantidad_por_porcion',
+                  'merma_porcentaje', 'activo']
 
     def create(self, validated_data):
         return RecetaInsumo.objects.create(**validated_data)
@@ -32,7 +34,7 @@ class PlatoSerializer(serializers.ModelSerializer):
     """Serializer para platos con información de disponibilidad e insumos."""
     categoria_nombre = serializers.ReadOnlyField(source='categoria.nombre')
     imagen_url = serializers.ReadOnlyField()
-    receta = RecetaInsumoSerializer(many=True, read_only=True)
+    receta = serializers.SerializerMethodField()
     receta_ids = serializers.PrimaryKeyRelatedField(
         write_only=True,
         many=True,
@@ -50,3 +52,14 @@ class PlatoSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'imagen_url']
+
+    def get_receta(self, obj):
+        recetas_activas = obj.receta.filter(activo=True).select_related(
+            'insumo__unidad_medida'
+        )
+        return RecetaInsumoSerializer(recetas_activas, many=True).data
+
+    def validate_precio_actual(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('El precio debe ser mayor a cero.')
+        return value

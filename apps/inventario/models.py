@@ -4,6 +4,12 @@ from django.conf import settings
 from .managers import InsumoManager
 
 class UnidadMedida(models.Model):
+    TIPO_DISCRETA = 'DISCRETA'
+    TIPO_CONTINUA = 'CONTINUA'
+    ABREVIATURAS_DISCRETAS = frozenset({
+        'UND', 'UN', 'UNI', 'U', 'PZA', 'PZ', 'BOT', 'BOTELLA',
+    })
+
     nombre = models.CharField(max_length=60, unique=True)
     abreviatura = models.CharField(max_length=15, unique=True)
     tipo = models.CharField(max_length=20, blank=True, null=True)
@@ -17,6 +23,14 @@ class UnidadMedida(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.abreviatura})'
+
+    @property
+    def es_discreta(self):
+        """Las unidades contables no admiten fracciones en recetas o stock."""
+        return (
+            (self.tipo or '').upper() == self.TIPO_DISCRETA
+            or (self.abreviatura or '').upper() in self.ABREVIATURAS_DISCRETAS
+        )
 
 class Insumo(models.Model):
     class Categoria(models.TextChoices):
@@ -33,7 +47,7 @@ class Insumo(models.Model):
     categoria = models.CharField(max_length=20, choices=Categoria.choices, default=Categoria.OTRO, db_index=True)
     # Stock contable / último inventario (referencia administrativa)
     stock_actual = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    # Stock operativo: se descuenta al marcar platos LISTO en cocina
+    # Stock operativo: se valida al pedir y se descuenta al confirmar el cobro.
     stock_real = models.DecimalField(max_digits=12, decimal_places=3, default=0, db_index=True)
     stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     costo_unitario = models.DecimalField(max_digits=12, decimal_places=4, default=0)

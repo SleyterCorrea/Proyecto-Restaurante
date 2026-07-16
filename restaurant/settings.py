@@ -83,14 +83,21 @@ ASGI_APPLICATION = 'restaurant.asgi.application'
 # ─── Configuración de Channels (Redis) ────────────────────────────────────────
 # En Docker, REDIS_HOST=redis (nombre del contenedor).
 # En local, agregar REDIS_HOST=127.0.0.1 al .env
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [(env('REDIS_HOST', default='redis'), int(env('REDIS_PORT', default='6379')))],
+if env('USE_IN_MEMORY_CHANNELS', default='False') == 'True':
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [(env('REDIS_HOST', default='redis'), int(env('REDIS_PORT', default='6379')))],
+            },
+        },
+    }
 
 # ─── Base de Datos (PostgreSQL) ───────────────────────────────────────────────
 DATABASES = {

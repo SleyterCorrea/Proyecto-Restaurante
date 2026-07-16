@@ -5,6 +5,7 @@ from apps.comandas.models import Comanda, LineaComanda
 from apps.caja.models import CajaTurno, Pago, MetodoPago
 from apps.mesas.models import Mesa
 from apps.inventario.models import MovimientoInventario
+from apps.inventario.services import InventarioService
 
 @pytest.mark.django_db
 def test_cobrar_descuenta_insumos_atomicamente(client, usuario_cajero, turno_caja_abierto, mesa_libre, plato_con_receta, insumo_con_stock, metodos_pago):
@@ -33,6 +34,12 @@ def test_cobrar_descuenta_insumos_atomicamente(client, usuario_cajero, turno_caj
     assert response.status_code == status.HTTP_200_OK
     
     # Verificar cambios
+    insumo_con_stock.refresh_from_db()
+    assert float(insumo_con_stock.stock_real) == stock_inicial - 1.0
+
+    # El movimiento por línea hace el descuento idempotente.
+    linea = comanda.lineas.get()
+    assert InventarioService.descontar_lineas([linea], usuario_cajero) == 0
     insumo_con_stock.refresh_from_db()
     assert float(insumo_con_stock.stock_real) == stock_inicial - 1.0
     

@@ -1,10 +1,12 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, OrdenCompra, OrdenCompraItem
 from .validators import validar_receta_sin_duplicados
 from apps.menu.models import Plato
 
 class UnidadMedidaSerializer(serializers.ModelSerializer):
+    es_discreta = serializers.ReadOnlyField()
+
     class Meta:
         model = UnidadMedida
         fields = '__all__'
@@ -13,11 +15,13 @@ class InsumoSerializer(serializers.ModelSerializer):
     unidad_nombre = serializers.ReadOnlyField(source='unidad_medida.nombre')
     unidad_abreviatura = serializers.ReadOnlyField(source='unidad_medida.abreviatura')
     nivel_stock = serializers.ReadOnlyField()
+    unidad_es_discreta = serializers.ReadOnlyField(source='unidad_medida.es_discreta')
 
     class Meta:
         model = Insumo
         fields = [
             'id', 'nombre', 'categoria', 'unidad_medida', 'unidad_nombre', 'unidad_abreviatura',
+            'unidad_es_discreta',
             'stock_actual', 'stock_real', 'stock_minimo', 'costo_unitario',
             'es_critico', 'agotado_desde', 'stock_bajo_desde', 'activo', 'nivel_stock',
         ]
@@ -42,6 +46,33 @@ class InsumoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('El stock real no puede ser negativo.')
         return value
 
+    def validate(self, attrs):
+        unidad = attrs.get('unidad_medida') or (
+            self.instance.unidad_medida if self.instance else None
+        )
+        campos_stock = ('stock_actual', 'stock_real', 'stock_minimo')
+        if unidad:
+            if unidad.es_discreta:
+                errores = {}
+                for campo in campos_stock:
+                    valor = attrs.get(campo)
+                    if valor is not None and valor != valor.to_integral_value():
+                        errores[campo] = (
+                            'Las unidades y botellas deben registrarse con numeros enteros.'
+                        )
+                if errores:
+                    raise serializers.ValidationError(errores)
+            else:
+                centesima = Decimal('0.01')
+                for campo in campos_stock:
+                    valor = attrs.get(campo)
+                    if valor is not None:
+                        attrs[campo] = valor.quantize(
+                            centesima,
+                            rounding=ROUND_HALF_UP,
+                        )
+        return attrs
+
 
 class RecetaInsumoSerializer(serializers.ModelSerializer):
     insumo_nombre = serializers.ReadOnlyField(source='insumo.nombre')
@@ -62,7 +93,9 @@ class RecetaInsumoSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        insumo = attrs.get('insumo')
+        insumo = attrs.get('insumo') or (
+            self.instance.insumo if self.instance else None
+        )
         if insumo and not insumo.activo:
             raise serializers.ValidationError({'insumo': 'El insumo seleccionado está inactivo.'})
             
@@ -71,6 +104,15 @@ class RecetaInsumoSerializer(serializers.ModelSerializer):
             # Excluir la instancia actual si es una actualización
             exclude_pk = self.instance.pk if self.instance else None
             validar_receta_sin_duplicados(plato, insumo.id, exclude_pk)
+
+        cantidad = attrs.get('cantidad_por_porcion')
+        if cantidad is not None and insumo and insumo.unidad_medida.es_discreta:
+            if cantidad != cantidad.to_integral_value():
+                raise serializers.ValidationError({
+                    'cantidad_por_porcion': (
+                        'Las unidades discretas deben indicarse con un numero entero.'
+                    )
+                })
             
         return attrs
 

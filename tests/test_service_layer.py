@@ -6,7 +6,7 @@ from apps.caja.models import CajaTurno
 from apps.caja.services import CajaService
 from apps.comandas.models import Comanda, LineaComanda
 from apps.comandas.services import CocinaService, ComandaService
-from apps.core.exceptions import CajaNoAbierta
+from apps.core.exceptions import CajaNoAbierta, DatosInvalidos
 from apps.inventario.models import MovimientoInventario, OrdenCompra
 from apps.inventario.services import InventarioService
 from apps.menu.serializers import CategoriaSerializer, PlatoSerializer
@@ -148,6 +148,24 @@ def test_menu_service_receta_y_soft_delete(insumo_con_stock):
 
 
 @pytest.mark.django_db
+def test_menu_no_publica_plato_sin_receta():
+    categoria_serializer = CategoriaSerializer(data={'nombre': 'Sin receta'})
+    categoria_serializer.is_valid(raise_exception=True)
+    categoria = MenuService.guardar_categoria(categoria_serializer)
+    plato_serializer = PlatoSerializer(data={
+        'nombre': 'Plato sin receta',
+        'categoria': categoria.id,
+        'precio_actual': '18.00',
+        'tiempo_preparacion_min': 10,
+        'disponible': True,
+    })
+    plato_serializer.is_valid(raise_exception=True)
+
+    with pytest.raises(DatosInvalidos, match='al menos un insumo'):
+        MenuService.guardar_plato(plato_serializer, [])
+
+
+@pytest.mark.django_db
 def test_caja_service_apertura_y_cierre(usuario_cajero):
     turno = CajaService.abrir_turno({'saldo_inicial': 100}, usuario_cajero)
     assert turno.estado == CajaTurno.Estado.ABIERTA
@@ -158,3 +176,67 @@ def test_caja_service_apertura_y_cierre(usuario_cajero):
 
     with pytest.raises(CajaNoAbierta):
         CajaService.cerrar_turno({'saldo_final': 100})
+
+
+@pytest.mark.django_db
+def test_comanda_valida_stock_sin_descontar_antes_del_cobro(
+    usuario_mozo, mesa_libre, plato_con_receta, insumo_con_stock
+):
+    stock_inicial = insumo_con_stock.stock_real
+    assert stock_inicial == Decimal('10')
+
+    # La comanda valida disponibilidad, pero el consumo pertenece al cobro.
+    comanda = ComandaService.abrir({
+        'mesa_id': mesa_libre.id,
+        'items': [{'plato_id': plato_con_receta.id, 'cantidad': 2}], # 2 * 0.5 = 1.0 kg
+    }, usuario_mozo)
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+    linea_nueva = ComandaService.agregar_plato(comanda.id, {
+        'plato_id': plato_con_receta.id, 'cantidad': 1, # 1 * 0.5 = 0.5 kg
+    })
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+    ComandaService.editar_linea(linea_nueva.id, {'cantidad': 3})
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+    ComandaService.eliminar_linea(linea_nueva.id)
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+    ComandaService.anular(comanda.id, usuario_mozo, motivo="Cliente cancelo todo")
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+
+@pytest.mark.django_db
+def test_cocina_no_descuenta_ni_reintegra_stock(
+    usuario_cocinero, usuario_mozo, mesa_libre, plato_con_receta, insumo_con_stock
+):
+    stock_inicial = insumo_con_stock.stock_real
+    assert stock_inicial == Decimal('10')
+
+    comanda = ComandaService.abrir({
+        'mesa_id': mesa_libre.id,
+        'items': [{'plato_id': plato_con_receta.id, 'cantidad': 2}], # 2 * 0.5 = 1.0 kg
+    }, usuario_mozo)
+    linea = comanda.lineas.first()
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial
+
+    # 2. Iniciar preparación en cocina
+    CocinaService.cambiar_estado(linea.id, LineaComanda.Estado.EN_PREP, usuario_cocinero)
+
+    CocinaService.cambiar_estado(linea.id, LineaComanda.Estado.ANULADO, usuario_cocinero, motivo="Se quemó")
+
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_inicial

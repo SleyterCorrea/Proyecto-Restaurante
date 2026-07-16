@@ -9,6 +9,14 @@ function menuApp() {
         insumosCriticos: [],
         filtroCategoriaPlatos: "",
         busquedaPlato: "",
+        busquedaCategoria: "",
+        busquedaInsumo: "",
+        guardandoPlato: false,
+        cargandoPlatoId: null,
+        erroresPlato: {},
+        imagenPreview: "",
+        mensajeExito: "",
+        mensajeAviso: "",
 
         modalCategoriaInst: null,
         modalPlatoInst: null,
@@ -38,11 +46,14 @@ function menuApp() {
             disponible: true,
             activo: true,
             recetas: [],
+            motivo: "",
         },
         platoOriginal: null,
         platoEliminarId: null,
         platoEliminarNombre: "",
-        platoEliminarMensaje: "Esta acción no se puede deshacer.",
+        platoEliminarMotivo: "",
+        platoEliminarError: "",
+        eliminandoPlato: false,
 
         newInsumoId: "",
 
@@ -50,6 +61,50 @@ function menuApp() {
             paginaActual: 1,
             porPagina: 5,
             totalPaginas: 1,
+        },
+        categoriasPaginacion: {
+            paginaActual: 1,
+            porPagina: 5,
+        },
+
+        get categoriasFiltradas() {
+            const termino = (this.busquedaCategoria || "")
+                .trim()
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+            if (!termino) return this.categorias;
+            return this.categorias.filter((categoria) =>
+                (categoria.nombre || "")
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .includes(termino)
+            );
+        },
+
+        get categoriasPaginadas() {
+            const totalPaginas = Math.max(
+                1,
+                Math.ceil(this.categoriasFiltradas.length / this.categoriasPaginacion.porPagina)
+            );
+            if (this.categoriasPaginacion.paginaActual > totalPaginas) {
+                this.categoriasPaginacion.paginaActual = totalPaginas;
+            }
+            const inicio = (
+                this.categoriasPaginacion.paginaActual - 1
+            ) * this.categoriasPaginacion.porPagina;
+            return this.categoriasFiltradas.slice(
+                inicio,
+                inicio + this.categoriasPaginacion.porPagina
+            );
+        },
+
+        get totalPaginasCategorias() {
+            return Math.max(
+                1,
+                Math.ceil(this.categoriasFiltradas.length / this.categoriasPaginacion.porPagina)
+            );
         },
 
         get platosFiltrados() {
@@ -69,6 +124,28 @@ function menuApp() {
             const fin = inicio + this.platosPaginacion.porPagina;
 
             return lista.slice(inicio, fin);
+        },
+
+        get insumosFiltrados() {
+            const termino = (this.busquedaInsumo || "").trim().toLowerCase();
+            const usados = new Set((this.platoForm.recetas || []).map((r) => Number(r.insumo_id)));
+            return (this.insumosDisponibles || [])
+                .filter((insumo) => insumo && insumo.id && !usados.has(Number(insumo.id)))
+                .filter((insumo) => !termino || (insumo.nombre || "").toLowerCase().includes(termino));
+        },
+
+        get requiereMotivoPlato() {
+            if (!this.platoForm.id || !this.platoOriginal) return false;
+            return this.estadoCriticoPlato(this.platoOriginal)
+                !== this.estadoCriticoPlato(this.platoForm);
+        },
+
+        get porcionesDisponiblesPlato() {
+            const recetas = (this.platoForm.recetas || []).filter((r) => Number(r.cantidad_por_porcion) > 0);
+            if (!recetas.length) return 0;
+            return Math.max(0, Math.min(...recetas.map((receta) =>
+                Math.floor(Number(receta.insumo_stock || 0) / Number(receta.cantidad_por_porcion))
+            )));
         },
 
         init() {
@@ -94,6 +171,112 @@ function menuApp() {
                 const el = document.getElementById("modalError");
                 if (el) el.style.zIndex = "1075";
             }, 10);
+        },
+
+        mostrarExito(mensaje) {
+            this.mensajeExito = mensaje;
+            window.clearTimeout(this._mensajeExitoTimer);
+            this._mensajeExitoTimer = window.setTimeout(() => {
+                this.mensajeExito = "";
+            }, 3500);
+        },
+
+        mostrarAvisoMotivo() {
+            this.mensajeAviso = "Antes de guardar, indica el motivo del cambio importante.";
+            window.setTimeout(() => {
+                const campo = document.getElementById("motivoCambioPlato");
+                if (!campo) return;
+                campo.scrollIntoView({ behavior: "smooth", block: "center" });
+                campo.focus({ preventScroll: true });
+            }, 80);
+        },
+
+        recetaNormalizada(recetas) {
+            return JSON.stringify((recetas || [])
+                .filter((item) => item.activo !== false)
+                .map((item) => ({
+                    insumo_id: Number(item.insumo_id),
+                    cantidad: Number(item.cantidad_por_porcion),
+                    merma: Number(item.merma_porcentaje || 0),
+                }))
+                .sort((a, b) => a.insumo_id - b.insumo_id));
+        },
+
+        estadoPlatoNormalizado(plato) {
+            const recetas = plato.recetas || plato.receta || [];
+            return JSON.stringify({
+                nombre: (plato.nombre || "").trim(),
+                descripcion: (plato.descripcion || "").trim(),
+                categoria: Number(plato.categoria || 0),
+                precio_actual: Number(plato.precio_actual || 0),
+                tiempo_preparacion_min: Number(plato.tiempo_preparacion_min || 0),
+                disponible: Boolean(plato.disponible),
+                activo: Boolean(plato.activo),
+                imagen: plato.nueva_imagen ? "__nueva_imagen__" : (plato.imagen_url || ""),
+                receta: this.recetaNormalizada(recetas),
+            });
+        },
+
+        estadoCriticoPlato(plato) {
+            const recetas = plato.recetas || plato.receta || [];
+            return JSON.stringify({
+                precio_actual: Number(plato.precio_actual || 0),
+                disponible: Boolean(plato.disponible),
+                activo: Boolean(plato.activo),
+                receta: this.recetaNormalizada(recetas),
+            });
+        },
+
+        esUnidadDiscreta(receta) {
+            if (typeof receta.insumo_es_discreto === "boolean") {
+                return receta.insumo_es_discreto;
+            }
+            const unidad = (receta.insumo_unidad || "").trim().toUpperCase();
+            return ["UND", "UN", "UNI", "U", "PZA", "PZ", "BOT", "BOTELLA"].includes(unidad);
+        },
+
+        formatearCantidad(valor, receta) {
+            const numero = Number(valor || 0);
+            return new Intl.NumberFormat("es-PE", {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: this.esUnidadDiscreta(receta) ? 0 : 3,
+            }).format(Number.isFinite(numero) ? numero : 0);
+        },
+
+        normalizarCantidadReceta(receta) {
+            let numero = Number(receta.cantidad_por_porcion);
+            if (!Number.isFinite(numero)) numero = 1;
+            if (this.esUnidadDiscreta(receta)) {
+                receta.cantidad_por_porcion = String(Math.max(1, Math.round(numero)));
+            } else {
+                receta.cantidad_por_porcion = Math.max(0.0001, numero)
+                    .toFixed(4)
+                    .replace(/\.?0+$/, "");
+            }
+            delete this.erroresPlato.receta;
+        },
+
+        decimal2(valor, minimo = 0, maximo = null) {
+            let numero = Number(valor);
+            if (!Number.isFinite(numero)) numero = minimo;
+            numero = Math.max(minimo, numero);
+            if (maximo !== null) numero = Math.min(maximo, numero);
+            return numero.toFixed(2);
+        },
+
+        normalizarDecimalReceta(receta, campo) {
+            receta[campo] = campo === "merma_porcentaje"
+                ? this.decimal2(receta[campo], 0, 100)
+                : this.decimal2(receta[campo], 0.01);
+            delete this.erroresPlato.receta;
+        },
+
+        extraerError(data, fallback) {
+            if (!data || typeof data !== "object") return fallback;
+            const valor = data.detail || data.error || Object.values(data)[0];
+            if (Array.isArray(valor)) return valor.join(" ");
+            if (valor && typeof valor === "object") return this.extraerError(valor, fallback);
+            return valor || fallback;
         },
 
         getCsrfToken() {
@@ -232,42 +415,30 @@ function menuApp() {
         },
 
         async toggleDisponible(plato) {
-            try {
-                const res = await fetch(`/api/menu/platos/${plato.id}/`, {
-                    method: "PATCH",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": this.getCsrfToken(),
-                    },
-                    body: JSON.stringify({ disponible: !plato.disponible }),
-                });
-                if (res.ok) {
-                    const updated = await res.json();
-                    plato.disponible = updated.disponible;
-                } else {
-                    console.error("Error al cambiar disponibilidad");
-                }
-            } catch (e) {
-                console.error(e);
-            }
+            // Todo cambio de plato debe quedar motivado y auditado. El acceso
+            // rapido abre el mismo editor con la disponibilidad ya invertida.
+            await this.editarPlato(plato, { disponible: !plato.disponible });
         },
 
         abrirConfirmarEliminarPlato(plato) {
             this.platoEliminarId = plato.id;
             this.platoEliminarNombre = plato.nombre;
-            this.platoEliminarMensaje = "Esta acción no se puede deshacer.";
+            this.platoEliminarMotivo = "";
+            this.platoEliminarError = "";
             this.modalEliminarPlatoInst.show();
         },
 
         async confirmarEliminarPlato() {
             if (!this.platoEliminarId) return;
 
-            const motivo = window.prompt("Indica el motivo para desactivar este plato:");
-            if (!motivo || !motivo.trim()) {
-                this.platoEliminarMensaje = "El motivo es obligatorio.";
+            if (this.eliminandoPlato) return;
+            const motivo = (this.platoEliminarMotivo || "").trim();
+            if (!motivo) {
+                this.platoEliminarError = "Escribe el motivo para retirar el plato del menú.";
                 return;
             }
 
+            this.eliminandoPlato = true;
             try {
                 const res = await fetch(`/api/menu/platos/${this.platoEliminarId}/`, {
                     method: "DELETE",
@@ -280,19 +451,23 @@ function menuApp() {
 
                 if (res.ok) {
                     this.modalEliminarPlatoInst.hide();
-                    this.fetchPlatos();
+                    await this.fetchPlatos();
+                    this.mostrarExito(`El plato ${this.platoEliminarNombre} fue retirado del menú.`);
                 } else {
                     const data = await res.json().catch(() => ({}));
-                    this.platoEliminarMensaje = data.detail || data.error || "No se puede eliminar este plato.";
+                    this.platoEliminarError = this.extraerError(data, "No se pudo retirar este plato.");
                 }
             } catch (e) {
                 console.error(e);
-                this.platoEliminarMensaje = "Error de conexión. Revisa la consola del servidor.";
+                this.platoEliminarError = "No se pudo conectar con el servidor. Inténtalo nuevamente.";
+            } finally {
+                this.eliminandoPlato = false;
             }
         },
 
         abrirModalPlato() {
             this.platoOriginal = null;
+            this.mensajeAviso = "";
             this.platoForm = {
                 id: null,
                 categoria: this.filtroCategoriaPlatos || "",
@@ -304,34 +479,67 @@ function menuApp() {
                 activo: true,
                 nueva_imagen: null,
                 recetas: [],
+                motivo: "",
             };
             this.newInsumoId = "";
+            this.busquedaInsumo = "";
+            this.erroresPlato = {};
+            this.imagenPreview = "";
             const fileInput = document.getElementById("imagen_plato_input");
             if (fileInput) fileInput.value = "";
             this.modalPlatoInst.show();
         },
 
-        editarPlato(plato) {
-            this.platoOriginal = JSON.parse(JSON.stringify(plato));
-            const recetasMapeadas = (plato.receta || []).map((r) => ({
-                id: r.id,
-                insumo_id: r.insumo_id,
-                insumo_nombre: r.insumo_nombre,
-                insumo_unidad: r.unidad_abreviatura || r.insumo_unidad || "",
-                insumo_stock: r.insumo_stock,
-                cantidad_por_porcion: r.cantidad_por_porcion,
-                merma_porcentaje: r.merma_porcentaje,
-                activo: r.activo,
-            }));
-            this.platoForm = {
-                ...plato,
-                nueva_imagen: null,
-                recetas: recetasMapeadas,
-            };
-            this.newInsumoId = "";
-            const fileInput = document.getElementById("imagen_plato_input");
-            if (fileInput) fileInput.value = "";
-            this.modalPlatoInst.show();
+        async editarPlato(plato, cambiosIniciales = {}) {
+            if (this.cargandoPlatoId) return false;
+            this.cargandoPlatoId = plato.id;
+            try {
+                const res = await fetch(`/api/menu/platos/${plato.id}/`, {
+                    credentials: "same-origin",
+                    headers: { Accept: "application/json" },
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(this.extraerError(data, "No se pudo cargar el plato."));
+                }
+                const detalle = await res.json();
+                const recetasMapeadas = (detalle.receta || []).map((r) => ({
+                    id: r.id,
+                    insumo_id: r.insumo_id,
+                    insumo_nombre: r.insumo_nombre,
+                    insumo_unidad: r.unidad_abreviatura || r.insumo_unidad || "",
+                    insumo_stock: r.insumo_stock,
+                    insumo_es_discreto: Boolean(r.insumo_es_discreto),
+                    cantidad_por_porcion: Boolean(r.insumo_es_discreto)
+                        ? String(Math.round(Number(r.cantidad_por_porcion)))
+                        : String(Number(r.cantidad_por_porcion)),
+                    merma_porcentaje: this.decimal2(r.merma_porcentaje, 0, 100),
+                    activo: r.activo,
+                }));
+                const formularioBase = {
+                    ...detalle,
+                    nueva_imagen: null,
+                    recetas: recetasMapeadas,
+                    motivo: "",
+                };
+                this.platoOriginal = JSON.parse(JSON.stringify(formularioBase));
+                this.platoForm = { ...formularioBase, ...cambiosIniciales };
+                this.mensajeAviso = "";
+                this.newInsumoId = "";
+                this.busquedaInsumo = "";
+                this.erroresPlato = {};
+                this.imagenPreview = detalle.imagen_url || "";
+                const fileInput = document.getElementById("imagen_plato_input");
+                if (fileInput) fileInput.value = "";
+                this.modalPlatoInst.show();
+                return true;
+            } catch (e) {
+                console.error(e);
+                this.mostrarError(e.message || "No se pudo cargar el plato para editarlo.");
+                return false;
+            } finally {
+                this.cargandoPlatoId = null;
+            }
         },
 
         agregarInsumo() {
@@ -357,26 +565,66 @@ function menuApp() {
                     insumo_nombre: insumo.nombre,
                     insumo_unidad: insumo.unidad_abreviatura || insumo.unidad_nombre || "",
                     insumo_stock: insumo.stock_real,
-                    cantidad_por_porcion: 1,
-                    merma_porcentaje: 0,
+                    insumo_es_discreto: Boolean(insumo.unidad_es_discreta),
+                    cantidad_por_porcion: "1",
+                    merma_porcentaje: "0.00",
                     activo: true,
                 },
             ];
 
             this.newInsumoId = "";
+            delete this.erroresPlato.receta;
+        },
+
+        seleccionarImagen(event) {
+            const archivo = event.target.files && event.target.files[0];
+            this.platoForm.nueva_imagen = archivo || null;
+            if (this.imagenPreview && this.imagenPreview.startsWith("blob:")) {
+                URL.revokeObjectURL(this.imagenPreview);
+            }
+            this.imagenPreview = archivo ? URL.createObjectURL(archivo) : (this.platoForm.imagen_url || "");
         },
 
         eliminarReceta(receta) {
             if (!Array.isArray(this.platoForm.recetas)) return;
             this.platoForm.recetas = this.platoForm.recetas.filter((r) => r.insumo_id !== receta.insumo_id);
+            if (this.platoForm.disponible && this.platoForm.recetas.length === 0) {
+                this.erroresPlato.receta = "Agrega al menos un insumo para publicar el plato.";
+            }
+        },
+
+        validarPlato() {
+            const errores = {};
+            if (!(this.platoForm.nombre || "").trim()) errores.nombre = "Escribe el nombre del plato.";
+            if (!this.platoForm.categoria) errores.categoria = "Selecciona una categoría.";
+            if (!(Number(this.platoForm.precio_actual) > 0)) errores.precio_actual = "Ingresa un precio mayor a cero.";
+            if (Number(this.platoForm.tiempo_preparacion_min) < 0) errores.tiempo_preparacion_min = "El tiempo no puede ser negativo.";
+
+            const recetas = this.platoForm.recetas || [];
+            if (this.platoForm.disponible && recetas.length === 0) {
+                errores.receta = "Agrega al menos un insumo para publicar el plato.";
+            } else if (recetas.some((r) => !(Number(r.cantidad_por_porcion) > 0))) {
+                errores.receta = "Todas las cantidades por porción deben ser mayores a cero.";
+            } else if (recetas.some((r) => Number(r.merma_porcentaje) < 0 || Number(r.merma_porcentaje) > 100)) {
+                errores.receta = "La merma debe estar entre 0% y 100%.";
+            }
+            if (!errores.receta && recetas.some((r) =>
+                this.esUnidadDiscreta(r) && !Number.isInteger(Number(r.cantidad_por_porcion))
+            )) {
+                errores.receta = "Los insumos medidos en unidades o botellas deben usar cantidades enteras.";
+            }
+            if (this.requiereMotivoPlato && !(this.platoForm.motivo || "").trim()) {
+                errores.motivo = "Explica por qué cambiaste el precio, la receta o la disponibilidad.";
+            }
+            if (errores.motivo) this.mostrarAvisoMotivo();
+            this.erroresPlato = errores;
+            return Object.keys(errores).length === 0;
         },
 
         async guardarPlato() {
-            if (!this.platoForm.nombre || !this.platoForm.categoria || !this.platoForm.precio_actual) {
-                return this.mostrarError("Nombre, categoría y precio son obligatorios");
-            }
+            if (this.guardandoPlato || !this.validarPlato()) return;
 
-            const method = this.platoForm.id ? "PUT" : "POST";
+            const method = this.platoForm.id ? "PATCH" : "POST";
             const url = this.platoForm.id ? `/api/menu/platos/${this.platoForm.id}/` : "/api/menu/platos/";
 
             const formData = new FormData();
@@ -384,7 +632,7 @@ function menuApp() {
             formData.append("categoria", this.platoForm.categoria);
             formData.append("precio_actual", this.platoForm.precio_actual);
             formData.append("tiempo_preparacion_min", this.platoForm.tiempo_preparacion_min);
-            if (this.platoForm.descripcion) formData.append("descripcion", this.platoForm.descripcion);
+            formData.append("descripcion", this.platoForm.descripcion || "");
             formData.append("disponible", this.platoForm.disponible);
             formData.append("activo", this.platoForm.activo);
 
@@ -392,35 +640,15 @@ function menuApp() {
                 formData.append("imagen", this.platoForm.nueva_imagen);
             }
 
-            this.platoForm.recetas.forEach((receta) => {
-                formData.append(`receta`, JSON.stringify(receta));
-            });
+            // Un unico JSON conserva tambien la receta vacia y evita estados
+            // parciales cuando se agregan o quitan varios insumos.
+            formData.append("receta_json", JSON.stringify(this.platoForm.recetas || []));
 
-            if (this.platoForm.id && this.platoOriginal) {
-                const normalizarReceta = (recetas) => (recetas || [])
-                    .filter((item) => item.activo !== false)
-                    .map((item) => ({
-                        insumo_id: Number(item.insumo_id),
-                        cantidad: Number(item.cantidad_por_porcion),
-                        merma: Number(item.merma_porcentaje || 0),
-                    }))
-                    .sort((a, b) => a.insumo_id - b.insumo_id);
-                const cambioPrecio = Number(this.platoOriginal.precio_actual)
-                    !== Number(this.platoForm.precio_actual);
-                const cambioReceta = JSON.stringify(normalizarReceta(this.platoOriginal.receta))
-                    !== JSON.stringify(normalizarReceta(this.platoForm.recetas));
-
-                if (cambioPrecio || cambioReceta) {
-                    const motivo = window.prompt(
-                        "Indica el motivo del cambio de precio o receta:"
-                    );
-                    if (!motivo || !motivo.trim()) {
-                        return this.mostrarError("El motivo es obligatorio para este cambio");
-                    }
-                    formData.append("motivo", motivo.trim());
-                }
+            if (this.requiereMotivoPlato) {
+                formData.append("motivo", this.platoForm.motivo.trim());
             }
 
+            this.guardandoPlato = true;
             try {
                 const res = await fetch(url, {
                     method: method,
@@ -431,16 +659,19 @@ function menuApp() {
                 });
 
                 if (res.ok) {
+                    this.mensajeAviso = "";
                     this.modalPlatoInst.hide();
-                    this.fetchPlatos();
-                    this.fetchInsumoCriticos();
+                    await Promise.all([this.fetchPlatos(), this.fetchInsumoCriticos()]);
+                    this.mostrarExito(this.platoForm.id ? "Plato actualizado correctamente." : "Plato creado correctamente.");
                 } else {
-                    const error = await res.json();
-                    console.error(error);
-                    this.mostrarError("Error al guardar plato. Verifique los datos.");
+                    const error = await res.json().catch(() => ({}));
+                    this.erroresPlato.general = this.extraerError(error, "No se pudo guardar el plato. Revisa los datos.");
                 }
             } catch (e) {
                 console.error(e);
+                this.erroresPlato.general = "No se pudo conectar con el servidor. Inténtalo nuevamente.";
+            } finally {
+                this.guardandoPlato = false;
             }
         },
     };

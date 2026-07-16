@@ -3,6 +3,8 @@ API endpoint: GET /api/menu/catalogo/
 Devuelve el catálogo completo de platos agrupados por categoría.
 Solo incluye platos con disponible=True.
 """
+import json
+
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from rest_framework import viewsets, status
@@ -21,6 +23,14 @@ from .services import MenuService
 
 
 def _receta_data(request):
+    if 'receta_json' in request.data:
+        try:
+            receta = json.loads(request.data.get('receta_json') or '[]')
+        except (TypeError, json.JSONDecodeError):
+            raise ValidationError({'receta': 'La receta enviada no es valida.'})
+        if not isinstance(receta, list):
+            raise ValidationError({'receta': 'La receta debe ser una lista.'})
+        return receta
     if 'receta' not in request.data:
         return None
     if hasattr(request.data, 'getlist'):
@@ -70,6 +80,14 @@ class PlatoViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, EsAdmin]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # La eliminacion es logica: el listado administrativo no debe volver a
+        # mostrar registros inactivos como si el borrado hubiera fallado.
+        if self.action == 'list':
+            return queryset.filter(activo=True)
+        return queryset
+
     def perform_create(self, serializer):
         try:
             instance = MenuService.guardar_plato(serializer, _receta_data(self.request))
@@ -96,12 +114,15 @@ class PlatoViewSet(viewsets.ModelViewSet):
             raise ValidationError({
                 'motivo': 'El motivo es obligatorio para desactivar un plato.'
             })
-        MenuService.desactivar_plato(
-            instance,
-            usuario=self.request.user,
-            motivo=motivo,
-            request=self.request,
-        )
+        try:
+            MenuService.desactivar_plato(
+                instance,
+                usuario=self.request.user,
+                motivo=motivo,
+                request=self.request,
+            )
+        except AppError as exc:
+            raise ValidationError({'detail': str(exc)})
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, EsAdmin])
     def insumos_criticos(self, request):

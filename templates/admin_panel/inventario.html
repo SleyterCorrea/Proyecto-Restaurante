@@ -85,7 +85,12 @@ html.light {
 .inv-metric-ok .inv-metric-number { color: var(--inv-green); }
 .inv-metric-warn .inv-metric-number { color: var(--inv-orange); }
 .inv-metric-danger .inv-metric-number { color: var(--inv-red); }
-.inv-metric-value .inv-metric-number { color: var(--inv-pink); }
+.inv-metric-value .inv-metric-number {
+    color: var(--inv-pink);
+    white-space: nowrap;
+    font-size: clamp(1rem, 1.35vw, 1.75rem);
+    letter-spacing: -0.04em;
+}
 
 .inv-metric-sub {
     font-size: 0.7rem;
@@ -125,6 +130,8 @@ html.light {
 .inv-search-input:focus { outline: none !important; border-color: var(--inv-green) !important; box-shadow: 0 0 0 1px var(--inv-green) !important; }
 
 .inv-filters { display: flex; gap: 0.5rem; background: var(--inv-surface); padding: 0.25rem; border-radius: 0.5rem; }
+.inv-toolbar-controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.inv-category-select { min-width: 230px; width: 230px; cursor: pointer; height: 38px; }
 
 .inv-filter-btn {
     background: transparent;
@@ -150,6 +157,8 @@ html.light {
 }
 .inv-modal-footer {
     border-top: 1px solid var(--inv-border);
+    flex-shrink: 0;
+    background: var(--inv-surface);
 }
 .inv-input-mockup {
     background: var(--inv-bg) !important;
@@ -193,8 +202,8 @@ html.light {
 .inv-btn-outline:hover { background: var(--inv-surface-alt); color: var(--inv-text); }
 
 .inv-btn-primary {
-    background: var(--inv-green);
-    color: #000;
+    background: var(--inv-green) !important;
+    color: #06281d !important;
     border: none;
     padding: 0.5rem 1.25rem;
     border-radius: 0.5rem;
@@ -207,9 +216,14 @@ html.light {
     background: #059669;
 }
 .inv-btn-primary:disabled {
-    opacity: 0.65;
+    opacity: 0.62;
     cursor: not-allowed;
     background: var(--inv-green);
+}
+@media (max-width: 767.98px) {
+    .inv-toolbar-controls, .inv-filters { width: 100%; }
+    .inv-filters { overflow-x: auto; }
+    .inv-category-select { width: 100%; min-width: 0; }
 }
 
 /* Tabla */
@@ -428,14 +442,15 @@ html.light {
             <input type="text" class="inv-search-input" placeholder="Buscar insumo..." x-model="busqueda">
         </div>
         
-        <div class="d-flex align-items-center gap-3">
+        <div class="inv-toolbar-controls">
             <div class="inv-filters">
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'todos' }" @click="filtroEstado='todos'">Todos</button>
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'ok' }" @click="filtroEstado='ok'">Stock OK</button>
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'bajo' }" @click="filtroEstado='bajo'">Bajo Stock</button>
                 <button class="inv-filter-btn" :class="{ 'active': filtroEstado === 'agotado' }" @click="filtroEstado='agotado'">Agotado</button>
             </div>
-            <select class="inv-search-input py-1 px-3" style="max-width: 160px; cursor: pointer; height: 36px; border-radius: 8px;" x-model="filtroCategoria">
+            <select class="inv-search-input inv-category-select py-1 px-3" x-model="filtroCategoria"
+                title="Filtrar por categoría" aria-label="Filtrar por categoría">
                 <option value="todas">Todas las categorías</option>
                 <option value="PROTEINA">Proteínas</option>
                 <option value="VEGETAL">Vegetales</option>
@@ -512,13 +527,13 @@ html.light {
                                 <span class="inv-text-muted" x-text="insumo.unidad_abreviatura"></span>
                             </td>
                             <td>
-                                <span class="inv-num fw-bold text-white" x-text="pf(insumo.stock_real).toFixed(2)"></span>
+                                <span class="inv-num fw-bold text-white" x-text="formatearCantidad(insumo.stock_real, insumo)"></span>
                             </td>
                             <td>
                                 <div class="inv-progress-wrapper">
                                     <div class="inv-progress-meta">
                                         <span x-text="Math.min(100, nivelStock(insumo)).toFixed(0) + '%'"></span>
-                                        <span x-text="'META: ' + pf(insumo.stock_minimo).toFixed(0) + insumo.unidad_abreviatura"></span>
+                                        <span x-text="'META: ' + formatearCantidad(insumo.stock_minimo, insumo) + ' ' + insumo.unidad_abreviatura"></span>
                                     </div>
                                     <div class="inv-progress-bar-bg">
                                         <div class="inv-progress-fill"
@@ -529,7 +544,7 @@ html.light {
                                 </div>
                             </td>
                             <td>
-                                <span class="inv-num inv-text-main" x-text="pf(insumo.stock_minimo).toFixed(2)"></span>
+                                <span class="inv-num inv-text-main" x-text="formatearCantidad(insumo.stock_minimo, insumo)"></span>
                             </td>
                             <td>
                                 <span class="inv-num inv-text-main" x-text="'S/. ' + pf(insumo.costo_unitario).toFixed(2)"></span>
@@ -766,11 +781,11 @@ html.light {
                 <div class="d-flex gap-3 mb-4 p-3 rounded-3 inv-bg-subtle">
                     <div class="text-center" style="flex:1">
                         <div class="small mb-1 inv-text-muted">Stock actual</div>
-                        <div class="fw-bold text-info" style="font-size:1.2rem" x-text="pf(selectedInsumo?.stock_real??0).toFixed(2)">—</div>
+                        <div class="fw-bold text-info" style="font-size:1.2rem" x-text="formatearCantidad(selectedInsumo?.stock_real??0, selectedInsumo)">—</div>
                     </div>
                     <div class="text-center" style="flex:1">
                         <div class="small mb-1 inv-text-muted">Mínimo</div>
-                        <div class="fw-bold text-warning" style="font-size:1.2rem" x-text="pf(selectedInsumo?.stock_minimo??0).toFixed(2)">—</div>
+                        <div class="fw-bold text-warning" style="font-size:1.2rem" x-text="formatearCantidad(selectedInsumo?.stock_minimo??0, selectedInsumo)">—</div>
                     </div>
                     <div class="text-center" style="flex:1">
                         <div class="small mb-1 inv-text-muted">Unidad</div>
@@ -798,11 +813,13 @@ html.light {
                     <label class="form-label small fw-semibold inv-text-muted">
                         Cantidad (<span x-text="selectedInsumo?.unidad_abreviatura"></span>)
                     </label>
-                    <input type="number" step="0.001" min="0.001" class="form-control inv-input" x-model="ajuste.cantidad">
+                    <input type="number" :step="esUnidadDiscreta(selectedInsumo) ? '1' : '0.001'"
+                        :min="esUnidadDiscreta(selectedInsumo) ? '1' : '0.001'"
+                        class="form-control inv-input" x-model="ajuste.cantidad">
                     <div class="small mt-2 px-2 py-1 rounded inv-bg-subtle" x-show="pf(ajuste.cantidad)>0"
                         :class="ajuste.tipo==='AJUSTE_POSITIVO'?'text-success':'text-danger'">
                         Nuevo stock estimado:
-                        <strong x-text="(pf(selectedInsumo?.stock_real??0)+(ajuste.tipo==='AJUSTE_POSITIVO'?1:-1)*pf(ajuste.cantidad||0)).toFixed(2)+' '+(selectedInsumo?.unidad_abreviatura??'')"></strong>
+                        <strong x-text="formatearCantidad(pf(selectedInsumo?.stock_real??0)+(ajuste.tipo==='AJUSTE_POSITIVO'?1:-1)*pf(ajuste.cantidad||0), selectedInsumo)+' '+(selectedInsumo?.unidad_abreviatura??'')"></strong>
                     </div>
                 </div>
                 <!-- Motivo -->
@@ -815,7 +832,7 @@ html.light {
             </div>
             <div class="modal-footer border-0 pt-2">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-accent flex-fill d-flex align-items-center justify-content-center gap-2"
+                <button class="btn inv-btn-primary flex-fill d-flex align-items-center justify-content-center gap-2"
                     @click="confirmarAjuste()" :disabled="guardando">
                     <span class="spinner-border spinner-border-sm" x-show="guardando"></span>
                     <span class="material-symbols-outlined" x-show="!guardando" style="font-size:17px">save</span>
@@ -828,7 +845,7 @@ html.light {
 
 <!-- MODAL CREAR / EDITAR INSUMO -->
 <div class="modal fade" id="modalInsumo" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered border-0">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable border-0">
         <div class="modal-content inv-modal-content">
             <div class="modal-header inv-modal-header d-flex align-items-center gap-3 py-3 px-4">
                 <div class="d-flex align-items-center gap-2">
@@ -840,12 +857,13 @@ html.light {
             <div class="modal-body p-4">
 
                 <!-- Error general del servidor (permisos, validación global, etc.) -->
-                <div x-show="formInsumoErrorGeneral"
-                     class="alert d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
-                     style="background:rgba(248,113,113,0.12); border:1px solid #F87171; color:#F87171; font-size:0.875rem;">
-                    <span class="material-symbols-outlined" style="font-size:18px; flex-shrink:0; margin-top:1px">error</span>
-                    <span x-text="formInsumoErrorGeneral"></span>
-                </div>
+                <template x-if="formInsumoErrorGeneral">
+                    <div class="alert d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+                        style="background:rgba(248,113,113,0.12); border:1px solid #F87171; color:#F87171; font-size:0.875rem;">
+                        <span class="material-symbols-outlined" style="font-size:18px; flex-shrink:0; margin-top:1px">error</span>
+                        <span x-text="formInsumoErrorGeneral"></span>
+                    </div>
+                </template>
 
                 <div class="mb-4">
                     <label class="inv-label-mockup">Nombre del insumo <span class="inv-label-asterisk">*</span></label>
@@ -891,9 +909,10 @@ html.light {
                 <div class="row gx-3 mb-4">
                     <div class="col-sm-6 mb-3 mb-sm-0">
                         <label class="inv-label-mockup">Stock Mínimo <span class="inv-label-asterisk">*</span></label>
-                        <input type="number" step="0.001" min="0" class="form-control inv-input-mockup"
+                        <input type="number" :step="unidadFormEsDiscreta ? '1' : '0.01'" min="0" class="form-control inv-input-mockup"
                                x-model.number="formInsumo.stock_minimo"
                                @input="validarFormInsumo()"
+                               @blur="normalizarCantidadFormulario('stock_minimo')"
                                placeholder="0">
                         <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Umbral para alertar reposición.</div>
                         <div class="invalid-feedback d-block" x-show="formInsumoErrors.stock_minimo" x-text="formInsumoErrors.stock_minimo"></div>
@@ -914,9 +933,10 @@ html.light {
 
                 <div class="mb-4" x-show="!formInsumo.id">
                     <label class="inv-label-mockup">Stock Inicial</label>
-                    <input type="number" step="0.001" min="0" class="form-control inv-input-mockup"
+                    <input type="number" :step="unidadFormEsDiscreta ? '1' : '0.01'" min="0" class="form-control inv-input-mockup"
                            x-model.number="formInsumo.stock_inicial"
                            @input="validarFormInsumo()"
+                           @blur="normalizarCantidadFormulario('stock_inicial')"
                            placeholder="0">
                     <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Cantidad disponible al momento de crearlo (opcional).</div>
                     <div class="invalid-feedback d-block" x-show="formInsumoErrors.stock_inicial" x-text="formInsumoErrors.stock_inicial"></div>
@@ -1016,6 +1036,60 @@ function inventarioApp() {
 
         // helper: parsea cualquier valor numérico de forma segura
         pf: v => parseFloat(v) || 0,
+
+        esUnidadDiscreta(objeto) {
+            if (!objeto) return false;
+            if (typeof objeto.unidad_es_discreta === 'boolean') {
+                return objeto.unidad_es_discreta;
+            }
+            if (typeof objeto.es_discreta === 'boolean') {
+                return objeto.es_discreta;
+            }
+            if ((objeto.tipo || '').toUpperCase() === 'DISCRETA') return true;
+            const abreviatura = (
+                objeto.unidad_abreviatura || objeto.abreviatura || ''
+            ).trim().toUpperCase();
+            return ['UND', 'UN', 'UNI', 'U', 'PZA', 'PZ', 'BOT', 'BOTELLA'].includes(abreviatura);
+        },
+
+        formatearCantidad(valor, objeto) {
+            const numero = Number(valor || 0);
+            return new Intl.NumberFormat('es-PE', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: this.esUnidadDiscreta(objeto) ? 0 : 2,
+            }).format(Number.isFinite(numero) ? numero : 0);
+        },
+
+        redondearCantidadManual(valor, objeto) {
+            if (valor === '' || valor === null || valor === undefined) {
+                return valor;
+            }
+            const numero = Number(valor);
+            if (!Number.isFinite(numero) || this.esUnidadDiscreta(objeto)) {
+                return numero;
+            }
+            return Math.round((numero + Number.EPSILON) * 100) / 100;
+        },
+
+        numeroEditable(valor, objeto) {
+            const numero = this.redondearCantidadManual(valor, objeto);
+            return Number.isFinite(numero) ? String(numero) : '0';
+        },
+
+        normalizarCantidadFormulario(campo) {
+            const valor = this.formInsumo[campo];
+            if (valor === '' || valor === null || valor === undefined) {
+                this.validarFormInsumo();
+                return;
+            }
+            if (!this.unidadFormEsDiscreta) {
+                this.formInsumo[campo] = this.redondearCantidadManual(
+                    valor,
+                    { es_discreta: false },
+                );
+            }
+            this.validarFormInsumo();
+        },
         
         // helper: elimina tildes y acentos para búsquedas
         removeAccents: str => str.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
@@ -1464,6 +1538,10 @@ function inventarioApp() {
 
         async confirmarAjuste() {
             if (!this.ajuste.cantidad || parseFloat(this.ajuste.cantidad) <= 0) { this.toast('Ingresa una cantidad mayor a 0', 'error'); return; }
+            if (this.esUnidadDiscreta(this.selectedInsumo) && !Number.isInteger(parseFloat(this.ajuste.cantidad))) {
+                this.toast('Las unidades y botellas se ajustan con cantidades enteras', 'error');
+                return;
+            }
             if (!this.ajuste.motivo.trim()) { this.toast('El motivo es obligatorio', 'error'); return; }
             this.guardando = true;
             try {
@@ -1502,7 +1580,15 @@ function inventarioApp() {
         },
 
         editarInsumo(i) {
-            this.formInsumo = { id: i.id, nombre: i.nombre, unidad_medida: i.unidad_medida, categoria: i.categoria || 'OTRO', stock_minimo: i.stock_minimo, costo_unitario: i.costo_unitario, stock_inicial: 0 };
+            this.formInsumo = {
+                id: i.id,
+                nombre: i.nombre,
+                unidad_medida: i.unidad_medida,
+                categoria: i.categoria || 'OTRO',
+                stock_minimo: this.numeroEditable(i.stock_minimo, i),
+                costo_unitario: this.numeroEditable(i.costo_unitario),
+                stock_inicial: 0,
+            };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
             this.formInsumoErrorGeneral = '';
@@ -1535,6 +1621,15 @@ function inventarioApp() {
                 }
                 if (!isNaN(si) && si > 0 && si <= sm) {
                     warnings.stock_inicial = 'El stock inicial está por debajo o igual al mínimo. El insumo quedará en estado BAJO.';
+                }
+            }
+
+            if (this.unidadFormEsDiscreta) {
+                if (!isNaN(sm) && !Number.isInteger(sm)) {
+                    errors.stock_minimo = 'Para unidades y botellas usa un número entero.';
+                }
+                if (!f.id && !isNaN(si) && !Number.isInteger(si)) {
+                    errors.stock_inicial = 'Para unidades y botellas usa un número entero.';
                 }
             }
 
@@ -1584,11 +1679,29 @@ function inventarioApp() {
             } catch(e) { return '—'; }
         },
 
+        get unidadFormEsDiscreta() {
+            const id = parseInt(this.formInsumo.unidad_medida);
+            const unidad = (this.unidades || []).find((item) => item.id === id);
+            return this.esUnidadDiscreta(unidad);
+        },
+
         async guardarInsumo() {
             console.log('[INV] guardarInsumo() llamado — guardando actual:', this.guardando, '| valido:', this.formInsumoValido);
             // Todo dentro de try-catch-finally para garantizar que guardando vuelva a false
             try {
                 this.formInsumoErrorGeneral = '';
+                if (!this.unidadFormEsDiscreta) {
+                    this.formInsumo.stock_minimo = this.redondearCantidadManual(
+                        this.formInsumo.stock_minimo,
+                        { es_discreta: false },
+                    );
+                    if (!this.formInsumo.id) {
+                        this.formInsumo.stock_inicial = this.redondearCantidadManual(
+                            this.formInsumo.stock_inicial,
+                            { es_discreta: false },
+                        );
+                    }
+                }
                 if (!this.validarFormInsumo()) {
                     // Construir mensaje con los campos faltantes
                     const faltantes = [];
