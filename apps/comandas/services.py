@@ -128,7 +128,7 @@ class ComandaService:
         requerimientos = defaultdict(Decimal)
         recetas = RecetaInsumo.objects.filter(
             plato_id__in=plato_ids, activo=True
-        ).select_related("insumo")
+        ).select_related("insumo__unidad_medida", "unidad_medida")
         recetas_por_plato = defaultdict(list)
         for receta in recetas:
             recetas_por_plato[receta.plato_id].append(receta)
@@ -137,7 +137,7 @@ class ComandaService:
             plato = platos[item["plato_id"]]
             for receta in recetas_por_plato[plato.id]:
                 requerimientos[receta.insumo_id] += (
-                    receta.cantidad_por_porcion * item["cantidad"]
+                    receta.cantidad_en_unidad_control * item["cantidad"]
                 )
 
         insumos = {receta.insumo_id: receta.insumo for receta in recetas}

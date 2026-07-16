@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    InsumoViewSet, RecetaViewSet, RecetaPorPlatoListView,
+    InsumoViewSet, MagnitudMedidaViewSet, RecetaViewSet, RecetaPorPlatoListView,
     UnidadMedidaViewSet, MovimientoInventarioViewSet, OrdenCompraViewSet,
 )
 
 router = DefaultRouter()
+router.register(r'magnitudes', MagnitudMedidaViewSet, basename='magnitudmedida')
 router.register(r'unidades-medida', UnidadMedidaViewSet, basename='unidadmedida')
 router.register(r'insumos', InsumoViewSet)
 router.register(r'recetas', RecetaViewSet)

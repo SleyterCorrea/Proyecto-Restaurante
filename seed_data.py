@@ -3,6 +3,7 @@ Script de datos de prueba para RestaurantOS - Versión PostgreSQL.
 """
 import django
 import os
+from decimal import Decimal
 from django.utils import timezone
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'restaurant.settings')
@@ -11,7 +12,7 @@ django.setup()
 from apps.usuarios.models import Rol, Usuario
 from apps.mesas.models import Zona, Mesa
 from apps.menu.models import Categoria, Plato
-from apps.inventario.models import UnidadMedida
+from apps.inventario.models import MagnitudMedida, UnidadMedida
 from apps.caja.models import MetodoPago
 
 print("🌱 Sembrando datos de prueba para PostgreSQL...")
@@ -101,14 +102,27 @@ for pd in platos_data:
     )
 
 # ── 6. Misceláneos (UM y Métodos Pago) ───────────────────────────────────
+magnitudes = {}
+for codigo, nombre in (
+    ('MASA', 'Masa'), ('VOLUMEN', 'Volumen'), ('UNIDAD', 'Unidad')
+):
+    magnitudes[codigo], _ = MagnitudMedida.objects.update_or_create(
+        codigo=codigo, defaults={'nombre': nombre, 'activo': True}
+    )
+
 UM_data = [
-    {'nombre': 'Kilogramos', 'abreviatura': 'KG'},
-    {'nombre': 'Litros',     'abreviatura': 'LT'},
-    {'nombre': 'Unidades',   'abreviatura': 'UND'},
-    {'nombre': 'Botella 750ml', 'abreviatura': 'BOT'},
+    {'nombre': 'Gramo', 'simbolo': 'g', 'magnitud': magnitudes['MASA'], 'factor_conversion': Decimal('1'), 'es_base': True, 'tipo': 'CONTINUA'},
+    {'nombre': 'Kilogramo', 'simbolo': 'kg', 'magnitud': magnitudes['MASA'], 'factor_conversion': Decimal('1000'), 'es_base': False, 'tipo': 'CONTINUA'},
+    {'nombre': 'Mililitro', 'simbolo': 'ml', 'magnitud': magnitudes['VOLUMEN'], 'factor_conversion': Decimal('1'), 'es_base': True, 'tipo': 'CONTINUA'},
+    {'nombre': 'Litro', 'simbolo': 'l', 'magnitud': magnitudes['VOLUMEN'], 'factor_conversion': Decimal('1000'), 'es_base': False, 'tipo': 'CONTINUA'},
+    {'nombre': 'Unidad', 'simbolo': 'und', 'magnitud': magnitudes['UNIDAD'], 'factor_conversion': Decimal('1'), 'es_base': True, 'tipo': 'DISCRETA'},
+    {'nombre': 'Docena', 'simbolo': 'doc', 'magnitud': magnitudes['UNIDAD'], 'factor_conversion': Decimal('12'), 'es_base': False, 'tipo': 'DISCRETA'},
 ]
 for ud in UM_data:
-    UnidadMedida.objects.get_or_create(abreviatura=ud['abreviatura'], defaults=ud)
+    simbolo = ud['simbolo']
+    defaults = {**ud, 'activo': True}
+    defaults.pop('simbolo')
+    UnidadMedida.objects.update_or_create(simbolo=simbolo, defaults=defaults)
 
 pagos_data = [
     {'codigo': 'EFECTIVO', 'nombre': 'Efectivo',         'permite_vuelto': True},
@@ -121,7 +135,7 @@ for pd in pagos_data:
 # ── 7. Insumos e Inventario ──────────────────────────────────────────────
 from apps.inventario.models import Insumo, RecetaInsumo
 
-um = {u.abreviatura: u for u in UnidadMedida.objects.all()}
+um = {u.simbolo.upper(): u for u in UnidadMedida.objects.all()}
 
 insumos_data = [
     {'nombre': 'Pescado (Reineta)', 'unidad_medida': um['KG'],  'stock_actual': 15.00, 'stock_minimo': 10.00, 'costo_unitario': 25.00},
@@ -131,12 +145,13 @@ insumos_data = [
     {'nombre': 'Lomo Fino',         'unidad_medida': um['KG'],  'stock_actual':  8.00, 'stock_minimo': 12.00, 'costo_unitario': 45.00},
     {'nombre': 'Pollo (Pechuga)',   'unidad_medida': um['KG'],  'stock_actual': 20.00, 'stock_minimo': 10.00, 'costo_unitario': 18.50},
     {'nombre': 'Papa Amarilla',     'unidad_medida': um['KG'],  'stock_actual': 18.00, 'stock_minimo': 15.00, 'costo_unitario': 4.00},
-    {'nombre': 'Pisco Quebranta',   'unidad_medida': um['BOT'], 'stock_actual':  8.00, 'stock_minimo': 6.00,  'costo_unitario': 35.00},
+    {'nombre': 'Pisco Quebranta',   'unidad_medida': um['L'],   'stock_actual':  8.00, 'stock_minimo': 6.00,  'costo_unitario': 35.00},
     {'nombre': 'Inka Kola (600ml)', 'unidad_medida': um['UND'], 'stock_actual': 36.00, 'stock_minimo': 24.00, 'costo_unitario': 3.50},
     {'nombre': 'Masa Wantán',       'unidad_medida': um['KG'],  'stock_actual':  5.00, 'stock_minimo': 3.00,  'costo_unitario': 12.00},
 ]
 for idat in insumos_data:
     sr = idat['stock_actual']
+    idat['magnitud'] = idat['unidad_medida'].magnitud
     # get_or_create: solo crea si no existe, NO sobreescribe stock en reinicios
     Insumo.objects.get_or_create(
         nombre=idat['nombre'],
@@ -147,8 +162,6 @@ ins = {i.nombre: i for i in Insumo.objects.all()}
 
 # ── 8. Recetas (alineadas a la carta e insumos actuales) ────────────────
 platos = {p.nombre: p for p in Plato.objects.all()}
-
-RecetaInsumo.objects.all().delete()
 
 recetas_data = [
     {'plato': platos['Ceviche'],       'insumo': ins['Pescado (Reineta)'], 'cantidad_por_porcion': 0.250},
@@ -168,7 +181,16 @@ recetas_data = [
     {'plato': platos['Pisco Sour'],    'insumo': ins['Limón Sutil'],       'cantidad_por_porcion': 0.040},
 ]
 for rdat in recetas_data:
-    RecetaInsumo.objects.create(**rdat)
+    rdat['unidad_medida'] = rdat['insumo'].unidad_medida
+    RecetaInsumo.objects.get_or_create(
+        plato=rdat['plato'],
+        insumo=rdat['insumo'],
+        defaults={
+            'cantidad_por_porcion': rdat['cantidad_por_porcion'],
+            'unidad_medida': rdat['unidad_medida'],
+            'activo': True,
+        },
+    )
 
 print(f"✅ {Insumo.objects.count()} insumos y {RecetaInsumo.objects.count()} vínculos de receta")
 print(f"✅ {Zona.objects.count()} zonas y {Mesa.objects.count()} mesas")

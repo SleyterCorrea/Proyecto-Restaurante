@@ -1,9 +1,17 @@
 """Managers personalizados para el módulo de inventario."""
 from django.db import models
 from django.db.models import F
+from django.core.exceptions import ValidationError
 
 
-class InsumoManager(models.Manager):
+class InsumoQuerySet(models.QuerySet):
+    def delete(self):
+        raise ValidationError(
+            'Los insumos no se eliminan fisicamente; deben inactivarse con motivo.'
+        )
+
+
+class InsumoManager(models.Manager.from_queryset(InsumoQuerySet)):
     def activos(self):
         return self.filter(activo=True)
 

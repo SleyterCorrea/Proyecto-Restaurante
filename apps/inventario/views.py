@@ -1,14 +1,21 @@
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
-from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, OrdenCompra
+from .models import (
+    Insumo,
+    MagnitudMedida,
+    MovimientoInventario,
+    OrdenCompra,
+    RecetaInsumo,
+    UnidadMedida,
+)
 from .serializers import (
-    UnidadMedidaSerializer, InsumoSerializer, RecetaInsumoSerializer,
+    MagnitudMedidaSerializer, UnidadMedidaSerializer, InsumoSerializer, RecetaInsumoSerializer,
     MovimientoInventarioSerializer, AjusteStockSerializer, RecetaPorPlatoSerializer,
+    CorregirMedidaInsumoSerializer, InactivarInsumoSerializer,
     MermaSerializer, ReponerSerializer, OrdenCompraSerializer,
 )
 from apps.usuarios.permissions import EsAdmin
@@ -23,10 +30,25 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 500
 
+class MagnitudMedidaViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MagnitudMedida.objects.filter(activo=True).order_by('nombre')
+    serializer_class = MagnitudMedidaSerializer
+    permission_classes = [EsAdmin]
+
+
 class UnidadMedidaViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = UnidadMedida.objects.filter(activo=True).order_by('nombre')
+    queryset = UnidadMedida.objects.filter(activo=True).select_related(
+        'magnitud'
+    ).order_by('magnitud__nombre', 'factor_conversion')
     serializer_class = UnidadMedidaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        magnitud = self.request.query_params.get('magnitud')
+        if magnitud:
+            queryset = queryset.filter(magnitud_id=magnitud)
+        return queryset
 
 class InsumoViewSet(viewsets.ModelViewSet):
     """
@@ -35,7 +57,8 @@ class InsumoViewSet(viewsets.ModelViewSet):
     - GET / - Lista todos los insumos (paginado)
     - POST / - Crea nuevo insumo (Admin)
     - GET /{id}/ - Ver detalle de insumo
-    - PUT/DELETE /{id}/ - Actualizar/Eliminar (Admin)
+    - PUT /{id}/ - Actualizar (Admin)
+    - POST /{id}/inactivar/ - Inactivar con motivo
     - GET /disponibles/ - Listar insumos para recetas
     - GET /criticos/ - Insumos con stock crítico
     - GET /stock-bajo/ - Insumos con stock bajo
@@ -44,17 +67,35 @@ class InsumoViewSet(viewsets.ModelViewSet):
     - POST /{id}/merma/ - Registrar merma
     - GET /{id}/historial/ - Ver movimientos del insumo
     """
-    queryset = Insumo.objects.all().order_by('nombre')
+    queryset = Insumo.objects.select_related('magnitud', 'unidad_medida__magnitud').order_by('nombre')
     serializer_class = InsumoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
     pagination_class = StandardResultsSetPagination
     filterset_fields = ['activo', 'unidad_medida', 'categoria']
 
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'disponibles', 'criticos', 'stock_bajo', 'historial']:
-            return [IsAuthenticated()]
-        return [EsAdmin()]
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            insumo = InventarioService.guardar_insumo(serializer)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
+        return Response(
+            self.get_serializer(insumo).data,
+            status=status.HTTP_201_CREATED,
+        )
 
+    def update(self, request, *args, **kwargs):
+        parcial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(
+            self.get_object(), data=request.data, partial=parcial
+        )
+        serializer.is_valid(raise_exception=True)
+        try:
+            insumo = InventarioService.guardar_insumo(serializer)
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
+        return Response(self.get_serializer(insumo).data)
 
     @action(detail=False, methods=['get'], url_path='disponibles')
     def disponibles(self, request):
@@ -70,8 +111,14 @@ class InsumoViewSet(viewsets.ModelViewSet):
                 'unidad_medida': {
                     'id': insumo.unidad_medida.id,
                     'nombre': insumo.unidad_medida.nombre,
-                    'abreviatura': insumo.unidad_medida.abreviatura
-                }
+                    'simbolo': insumo.unidad_medida.simbolo,
+                    'abreviatura': insumo.unidad_medida.simbolo,
+                },
+                'magnitud': {
+                    'id': insumo.magnitud.id,
+                    'codigo': insumo.magnitud.codigo,
+                    'nombre': insumo.magnitud.nombre,
+                },
             })
         return Response(resultado)
 
@@ -150,12 +197,29 @@ class InsumoViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(insumo).data)
 
     def destroy(self, request, *args, **kwargs):
-        """
-        Soft-delete: marca el insumo como inactivo en vez de borrarlo,
-        para preservar el historial de movimientos (FK PROTECT).
-        """
+        return Response(
+            {
+                'error': (
+                    'Los insumos no se eliminan. Usa la accion de inactivar '
+                    'e indica el motivo.'
+                ),
+                'code': 'eliminacion_no_permitida',
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @action(detail=True, methods=['post'], url_path='inactivar')
+    def inactivar(self, request, pk=None):
+        serializer = InactivarInsumoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            insumo = InventarioService.cambiar_activo(kwargs.get('pk'), False)
+            insumo = InventarioService.cambiar_activo(
+                pk,
+                False,
+                motivo=serializer.validated_data['motivo'],
+                usuario=request.user,
+                request=request,
+            )
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
         return Response({'ok': True, 'message': f'Insumo "{insumo.nombre}" desactivado.'})
@@ -164,10 +228,29 @@ class InsumoViewSet(viewsets.ModelViewSet):
     def reactivar(self, request, pk=None):
         """Reactiva un insumo previamente desactivado."""
         try:
-            insumo = InventarioService.cambiar_activo(pk, True)
+            insumo = InventarioService.cambiar_activo(
+                pk, True, usuario=request.user, request=request
+            )
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
         return Response({'ok': True, 'message': f'Insumo "{insumo.nombre}" reactivado.'})
+
+    @action(detail=True, methods=['post'], url_path='corregir-medida')
+    def corregir_medida(self, request, pk=None):
+        serializer = CorregirMedidaInsumoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            insumo = InventarioService.corregir_medida(
+                pk,
+                magnitud=serializer.validated_data['magnitud'],
+                unidad=serializer.validated_data['unidad_medida'],
+                factor_conversion=serializer.validated_data['factor_conversion'],
+                motivo=serializer.validated_data['motivo'],
+                usuario=request.user,
+            )
+        except AppError as exc:
+            return Response(exc.as_dict(), status=exc.status_code)
+        return Response(self.get_serializer(insumo).data)
 
     @action(detail=True, methods=['post'], url_path='merma')
     def merma(self, request, pk=None):
@@ -200,7 +283,9 @@ class InsumoViewSet(viewsets.ModelViewSet):
         return response
 
 class RecetaViewSet(viewsets.ModelViewSet):
-    queryset = RecetaInsumo.objects.all()
+    queryset = RecetaInsumo.objects.select_related(
+        'insumo__magnitud', 'insumo__unidad_medida', 'unidad_medida'
+    )
     serializer_class = RecetaInsumoSerializer
     permission_classes = [EsAdmin]
 
@@ -221,7 +306,8 @@ class MovimientoInventarioViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = MovimientoInventario.objects.select_related('insumo', 'usuario').order_by('-created_at')
     serializer_class = MovimientoInventarioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
+    filterset_fields = ['plato', 'insumo', 'activo']
     pagination_class = StandardResultsSetPagination
     filterset_fields = ['tipo_movimiento']
 
@@ -310,7 +396,7 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
                 pk, OrdenCompra.Estado.RECIBIDA, request.user, recepciones,
                 request=request,
             )
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, InvalidOperation, TypeError):
             return Response({'error': 'Datos de recepcion invalidos.'}, status=400)
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)
