@@ -321,7 +321,7 @@
                      (mesaOrigenUnion && mesaOrigenUnion.id === mesa.id) ? 'ring-4 ring-orange-500 animate-pulse border-orange-500 scale-105 shadow-orange-500/35 z-20' : ''
                  ]"
                  @click="abrirDetalle(mesa)"
-                 :draggable="(modoGestion || modoUnion) && mesa.estado === 'LIBRE' ? 'true' : 'false'"
+                 :draggable="(modoGestion || modoUnion) && ['LIBRE', 'OCUPADA', 'ENTREGADO'].includes(mesa.estado) ? 'true' : 'false'"
                  @dragstart="onDragStart(mesa, $event)"
                  @dragover.prevent="onDragOver(mesa, $event)"
                  @dragleave="onDragLeave(mesa, $event)"
@@ -1291,8 +1291,8 @@ function planoApp() {
         },
 
         seleccionarMesaUnionClick(mesa) {
-            if (mesa.estado !== 'LIBRE') {
-                alert('Solo se pueden unir mesas que estén LIBRES.');
+            if (!['LIBRE', 'OCUPADA', 'ENTREGADO'].includes(mesa.estado)) {
+                alert('Solo se pueden unir mesas que estén libres, ocupadas o con pedidos entregados.');
                 return;
             }
             if (!this.mesaOrigenUnion) {
@@ -1514,7 +1514,7 @@ function planoApp() {
 
         // ── DRAG & DROP — UNIONES DE MESAS ──
         onDragStart(mesa, event) {
-            if ((!this.modoGestion && !this.modoUnion) || mesa.estado !== 'LIBRE') return;
+            if ((!this.modoGestion && !this.modoUnion) || !['LIBRE', 'OCUPADA', 'ENTREGADO'].includes(mesa.estado)) return;
             this._dragMesa = mesa;
             event.dataTransfer.effectAllowed = 'link';
             event.dataTransfer.setData('text/plain', mesa.id);
@@ -1522,7 +1522,7 @@ function planoApp() {
 
         onDragOver(mesa, event) {
             if (!this._dragMesa || this._dragMesa.id === mesa.id) return;
-            if (mesa.estado !== 'LIBRE') return;
+            if (!['LIBRE', 'OCUPADA', 'ENTREGADO'].includes(mesa.estado)) return;
             if (String(this._dragMesa.piso) !== String(mesa.piso)) return;
             event.currentTarget.classList.add('drag-over');
         },
@@ -1534,8 +1534,9 @@ function planoApp() {
         onDrop(mesa, event) {
             event.currentTarget.classList.remove('drag-over');
             if (!this._dragMesa || this._dragMesa.id === mesa.id) return;
-            if (mesa.estado !== 'LIBRE' || this._dragMesa.estado !== 'LIBRE') {
-                alert('Solo se pueden unir mesas que estén LIBRES.');
+            const validStates = ['LIBRE', 'OCUPADA', 'ENTREGADO'];
+            if (!validStates.includes(mesa.estado) || !validStates.includes(this._dragMesa.estado)) {
+                alert('Solo se pueden unir mesas que estén libres, ocupadas o con pedidos entregados.');
                 this._dragMesa = null;
                 return;
             }

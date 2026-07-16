@@ -73,13 +73,64 @@ class MesaService:
             raise OperacionNoPermitida(
                 "Solo se pueden unir mesas pertenecientes a una misma zona."
             )
-        for mesa in mesas.values():
-            if mesa.estado != Mesa.Estado.LIBRE:
-                raise OperacionNoPermitida(f"La mesa {mesa.numero} no esta libre.")
-            if UnionMesas.objects.filter(
-                Q(mesa_principal=mesa) | Q(mesas_secundarias=mesa), activa=True
-            ).exists():
-                raise OperacionNoPermitida(f"La mesa {mesa.numero} ya pertenece a una union.")
+
+        # Buscar si alguna de estas mesas ya pertenece a una unión activa
+        uniones_activas = list(UnionMesas.objects.filter(
+            Q(mesa_principal__in=ids) | Q(mesas_secundarias__in=ids), activa=True
+        ).distinct().prefetch_related('mesas_secundarias', 'mesa_principal'))
+
+        if len(uniones_activas) > 1:
+            raise OperacionNoPermitida("No se pueden unir mesas que pertenecen a diferentes uniones.")
+
+        from apps.comandas.models import Comanda
+        from apps.comandas.services import ComandaService
+
+        if len(uniones_activas) == 1:
+            union_existente = uniones_activas[0]
+            # Mesas que queremos agregar a la unión existente
+            todas_existentes = union_existente.todas_las_mesas
+            mesas_a_agregar = [m for m in mesas.values() if m not in todas_existentes]
+            
+            if len(todas_existentes) + len(mesas_a_agregar) > 3:
+                raise OperacionNoPermitida("La union no puede exceder el maximo de 3 mesas.")
+            
+            # Agregar las nuevas mesas a la unión existente
+            if mesas_a_agregar:
+                union_existente.mesas_secundarias.add(*mesas_a_agregar)
+                # Sincronizar el estado de las nuevas mesas con el de la mesa principal
+                estado_principal = union_existente.mesa_principal.estado
+                for m in mesas_a_agregar:
+                    if m.estado != estado_principal:
+                        m.estado = estado_principal
+                        m.save(update_fields=['estado'])
+                
+                # Si hay una comanda activa para la mesa principal, asociarle las nuevas mesas
+                comanda_activa = Comanda.objects.filter(
+                    mesa=union_existente.mesa_principal,
+                    estado__in=ComandaService.ESTADOS_ACTIVOS
+                ).first()
+                if comanda_activa:
+                    comanda_activa.mesas_adicionales.add(*mesas_a_agregar)
+            
+            return union_existente
+
+        # Si no hay ninguna unión activa previa
+        comandas_activas = list(Comanda.objects.filter(
+            Q(mesa__in=ids) | Q(mesas_adicionales__id__in=ids),
+            estado__in=ComandaService.ESTADOS_ACTIVOS
+        ).distinct())
+
+        if len(comandas_activas) > 1:
+            raise OperacionNoPermitida("No se pueden unir mesas que tienen diferentes comandas activas.")
+
+        if len(comandas_activas) == 1:
+            comanda = comandas_activas[0]
+            principal_mesa = comanda.mesa
+            secundarias = [m for m in mesas.values() if m.id != principal_mesa.id]
+        else:
+            principal_mesa = mesas[principal_id]
+            secundarias = [mesas[pk] for pk in secundarias_ids]
+
         capacidad = data.get("capacidad_personalizada")
         if capacidad not in (None, ""):
             try:
@@ -90,12 +141,27 @@ class MesaService:
                 raise DatosInvalidos("La capacidad debe ser mayor a cero.")
         else:
             capacidad = None
-        union = UnionMesas.objects.create(
-            mesa_principal=mesas[principal_id],
-            activa=True,
-            capacidad_personalizada=capacidad,
+
+        union, created = UnionMesas.objects.get_or_create(
+            mesa_principal=principal_mesa,
+            defaults={'activa': True, 'capacidad_personalizada': capacidad}
         )
-        union.mesas_secundarias.set([mesas[pk] for pk in secundarias_ids])
+        if not created:
+            union.activa = True
+            union.capacidad_personalizada = capacidad
+            union.save(update_fields=['activa', 'capacidad_personalizada'])
+        union.mesas_secundarias.set(secundarias)
+
+        # Sincronizar estados de las secundarias y agregar a la comanda activa si existe
+        estado_principal = principal_mesa.estado
+        for m in secundarias:
+            if m.estado != estado_principal:
+                m.estado = estado_principal
+                m.save(update_fields=['estado'])
+
+        if len(comandas_activas) == 1:
+            comandas_activas[0].mesas_adicionales.add(*secundarias)
+
         return union
 
     @staticmethod

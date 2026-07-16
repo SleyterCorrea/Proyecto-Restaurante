@@ -14,7 +14,26 @@
 }
 .menu-modal .modal-content { overflow: hidden; }
 .menu-modal .modal-body { background: linear-gradient(180deg, rgba(255,255,255,.025), transparent 32%); }
-.menu-section { background: rgba(8, 12, 24, .44); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; }
+.menu-section {
+    background: rgba(15, 23, 42, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05), 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+.recipe-selector-row {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+html.light .menu-section {
+    background: rgba(248, 250, 252, 0.8) !important;
+    border: 1px solid rgba(148, 163, 184, 0.15) !important;
+    box-shadow: 0 10px 30px -10px rgba(148, 163, 184, 0.12) !important;
+}
+html.light .recipe-selector-row {
+    background: rgba(241, 245, 249, 0.5) !important;
+    border: 1px solid rgba(148, 163, 184, 0.1) !important;
+}
 .menu-section-title { letter-spacing: .08em; text-transform: uppercase; font-size: .68rem; }
 .menu-preview { position: sticky; top: 0; }
 .recipe-row { background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.075); border-radius: 14px; }
@@ -687,7 +706,7 @@
                                 </div>
                             </div>
 
-                            <div class="row g-2 align-items-end mb-3 p-3 rounded-xl bg-black/15 border border-white/5">
+                            <div class="row g-2 align-items-end mb-3 p-3 rounded-xl bg-black/15 border border-white/5 recipe-selector-row">
                                 <div class="col-md-10">
                                     <label class="form-label text-[10px] uppercase text-on-surface-variant font-bold">Insumo disponible</label>
                                     <select class="form-select form-select-sm text-xs" x-model="newInsumoId">

@@ -225,8 +225,11 @@ class ComandaService:
             comanda = Comanda.objects.select_for_update().get(pk=comanda_id)
         except Comanda.DoesNotExist:
             raise RecursoNoEncontrado("Comanda no encontrada.")
-        if comanda.estado not in (Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION):
+        if comanda.estado not in (Comanda.Estado.ABIERTA, Comanda.Estado.EN_PREPARACION, Comanda.Estado.LISTA):
             raise OperacionNoPermitida("No se pueden agregar platos en el estado actual.")
+        if comanda.estado == Comanda.Estado.LISTA:
+            comanda.estado = Comanda.Estado.ABIERTA
+            comanda.save(update_fields=["estado"])
         items = cls._normalizar_items([data])
         platos = cls._cargar_platos_y_validar_stock(items)
         item = items[0]
