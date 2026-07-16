@@ -45,6 +45,7 @@ def _receta_snapshot(plato):
             receta.cantidad_por_porcion,
             receta.merma_porcentaje,
             receta.activo,
+            receta.unidad_medida_id,
         )
         for receta in plato.receta.filter(activo=True)
     )
@@ -75,7 +76,11 @@ class CategoriaViewSet(viewsets.ModelViewSet):
             raise ValidationError({'detail': str(exc)})
 
 class PlatoViewSet(viewsets.ModelViewSet):
-    queryset = Plato.objects.prefetch_related('receta__insumo__unidad_medida').order_by('categoria__orden', 'nombre')
+    queryset = Plato.objects.prefetch_related(
+        'receta__insumo__unidad_medida',
+        'receta__insumo__magnitud__unidades',
+        'receta__unidad_medida',
+    ).order_by('categoria__orden', 'nombre')
     serializer_class = PlatoSerializer
     permission_classes = [IsAuthenticated, EsAdmin]
     parser_classes = [MultiPartParser, FormParser, JSONParser]

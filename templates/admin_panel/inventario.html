@@ -345,6 +345,7 @@ html.light {
 {# Datos SSR embebidos como JSON puro — no se ejecutan como JS #}
 <script type="application/json" id="inv-insumos-ssr">{{ insumos_json|default:"[]"|safe }}</script>
 <script type="application/json" id="inv-unidades-ssr">{{ unidades_json|default:"[]"|safe }}</script>
+<script type="application/json" id="inv-magnitudes-ssr">{{ magnitudes_json|default:"[]"|safe }}</script>
 <div class="container-fluid py-4 inv-page" x-data="inventarioApp">
 
     <!-- Header -->
@@ -494,6 +495,7 @@ html.light {
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="fw-semibold inv-text-main" x-text="insumo.nombre"></span>
                                     <span x-show="insumo.es_critico" class="badge bg-danger-subtle text-danger" title="Insumo crítico para la operación">CRÍTICO</span>
+                                    <span x-show="insumo.medida_requiere_revision" class="badge bg-warning text-dark" title="La clasificación de medida requiere revisión manual">REVISAR MEDIDA</span>
                                 </div>
                                 <small class="inv-text-muted" x-text="categoriaLabel(insumo.categoria)"></small>
                             </td>
@@ -546,10 +548,16 @@ html.light {
                                     <button class="inv-action-btn" title="Editar insumo" @click="editarInsumo(insumo)">
                                         <span class="material-symbols-outlined" style="font-size:18px">edit</span>
                                     </button>
-                                    <button class="inv-action-btn" title="Desactivar insumo"
+                                    <button x-show="insumo.medida_requiere_revision" class="inv-action-btn"
+                                            title="Corregir medida con conversion controlada"
+                                            style="color:var(--inv-orange)!important;"
+                                            @click="abrirCorreccionMedida(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">straighten</span>
+                                    </button>
+                                    <button class="inv-action-btn" title="Inactivar insumo"
                                             style="color:var(--inv-red)!important; opacity:0.75;"
-                                            @click="desactivarInsumo(insumo)">
-                                        <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+                                            @click="abrirInactivacion(insumo)">
+                                        <span class="material-symbols-outlined" style="font-size:18px">block</span>
                                     </button>
                                 </div>
                             </td>
@@ -751,8 +759,10 @@ html.light {
                     <label class="form-label small fw-semibold inv-text-muted">
                         Cantidad (<span x-text="selectedInsumo?.unidad_abreviatura"></span>)
                     </label>
-                    <input type="number" :step="esUnidadDiscreta(selectedInsumo) ? '1' : '0.001'"
-                        :min="esUnidadDiscreta(selectedInsumo) ? '1' : '0.001'"
+                    <input type="number"
+                        :step="esUnidadDiscreta(selectedInsumo) && !selectedInsumo?.medida_requiere_revision ? '1' : '0.001'"
+                        :min="esUnidadDiscreta(selectedInsumo) && !selectedInsumo?.medida_requiere_revision ? '1' : '0.001'"
+                        :max="signoMovimiento < 0 ? pf(selectedInsumo?.stock_real) : null"
                         class="form-control inv-input" x-model="ajuste.cantidad">
                     <div class="small mt-2 px-2 py-1 rounded inv-bg-subtle" x-show="pf(ajuste.cantidad)>0"
                         :class="signoMovimiento > 0 ? 'text-success':'text-danger'">
@@ -872,6 +882,99 @@ html.light {
     </div>
 </div>
 
+<!-- MODAL INACTIVAR INSUMO -->
+<div class="modal fade" id="modalInactivarInsumo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content inv-modal-content">
+            <div class="modal-header inv-modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold inv-text-main mb-0">Inactivar insumo</h5>
+                    <p class="small inv-text-muted mb-0 mt-1" x-text="inactivacion.insumo?.nombre"></p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning small">
+                    El insumo se ocultara de la operacion y sus recetas activas quedaran inactivas. El stock y todo el historial se conservaran.
+                </div>
+                <label class="inv-label-mockup">Motivo de inactivacion <span class="inv-label-asterisk">*</span></label>
+                <textarea class="form-control inv-input-mockup" rows="3" maxlength="500"
+                    x-model="inactivacion.motivo"
+                    placeholder="Explica por que el insumo deja de utilizarse"></textarea>
+                <div class="form-text inv-text-muted">Minimo 5 caracteres. Quedara registrado con el usuario y la fecha.</div>
+            </div>
+            <div class="modal-footer inv-modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-danger" :disabled="guardando || inactivacion.motivo.trim().length < 5"
+                    @click="confirmarInactivacion()">Inactivar insumo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CORREGIR MEDIDA -->
+<div class="modal fade" id="modalCorregirMedida" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content inv-modal-content">
+            <div class="modal-header inv-modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold inv-text-main mb-0">Corregir medida</h5>
+                    <p class="small inv-text-muted mb-0 mt-1" x-text="correccionMedida.insumo?.nombre"></p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-warning small">
+                    Esta operacion convierte stock, recetas, movimientos, ordenes y costo unitario. Utilizala solo despues de confirmar la equivalencia fisica.
+                </div>
+                <div class="inv-bg-subtle rounded-3 p-3 mb-3 small">
+                    Medida actual: <strong x-text="correccionMedida.insumo?.magnitud_nombre + ' / ' + correccionMedida.insumo?.unidad_abreviatura"></strong>
+                    <span class="d-block mt-1">Stock actual: <strong x-text="formatearCantidad(correccionMedida.insumo?.stock_real || 0, correccionMedida.insumo)"></strong></span>
+                </div>
+                <div class="mb-3">
+                    <label class="inv-label-mockup">Nueva magnitud <span class="inv-label-asterisk">*</span></label>
+                    <select class="form-select inv-input-mockup" x-model="correccionMedida.magnitud" @change="correccionMedida.unidad_medida=''">
+                        <option value="">Selecciona...</option>
+                        <template x-for="magnitud in magnitudes" :key="magnitud.id">
+                            <option :value="magnitud.id" x-text="magnitud.nombre"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="inv-label-mockup">Nueva unidad <span class="inv-label-asterisk">*</span></label>
+                    <select class="form-select inv-input-mockup" x-model="correccionMedida.unidad_medida" :disabled="!correccionMedida.magnitud">
+                        <option value="">Selecciona...</option>
+                        <template x-for="unidad in unidadesCorreccion" :key="unidad.id">
+                            <option :value="unidad.id" x-text="unidad.nombre + ' (' + unidad.simbolo + ')' "></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="inv-label-mockup">
+                        Factor de conversion <span class="inv-label-asterisk">*</span>
+                    </label>
+                    <input type="number" min="0.00000001" step="0.00000001" class="form-control inv-input-mockup"
+                        x-model="correccionMedida.factor_conversion" placeholder="Ej: 0.75">
+                    <div class="form-text inv-text-muted">
+                        Cantidad en la nueva unidad equivalente a 1 <span x-text="correccionMedida.insumo?.unidad_abreviatura"></span>.
+                        Ejemplo: 1 botella de 750 ml = 0.75 litros.
+                    </div>
+                </div>
+                <div class="mb-1">
+                    <label class="inv-label-mockup">Motivo de la correccion <span class="inv-label-asterisk">*</span></label>
+                    <textarea class="form-control inv-input-mockup" rows="3" maxlength="500"
+                        x-model="correccionMedida.motivo" placeholder="Indica la verificacion realizada"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer inv-modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn inv-btn-primary" :disabled="guardando || !correccionMedidaValida"
+                    @click="confirmarCorreccionMedida()">Convertir y corregir</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL CREAR / EDITAR INSUMO -->
 <div class="modal fade" id="modalInsumo" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable border-0">
@@ -908,15 +1011,32 @@ html.light {
                 </div>
 
                 <div class="mb-4">
+                    <label class="inv-label-mockup">Magnitud de control <span class="inv-label-asterisk">*</span></label>
+                    <select class="form-select inv-input-mockup" x-model="formInsumo.magnitud"
+                            @change="cambiarMagnitud()"
+                            :disabled="medidaBloqueada"
+                            :style="formInsumoErrors.magnitud ? 'border-color:#F87171!important;' : ''">
+                        <option value="">Seleccione una magnitud...</option>
+                        <template x-for="magnitud in magnitudes" :key="magnitud.id">
+                            <option :value="magnitud.id" x-text="magnitud.nombre"></option>
+                        </template>
+                    </select>
+                    <div class="invalid-feedback d-block" x-show="formInsumoErrors.magnitud" x-text="formInsumoErrors.magnitud"></div>
+                    <div class="form-text inv-text-muted mt-1" style="font-size:0.8rem;">Define la naturaleza física con la que se controla el insumo.</div>
+                </div>
+
+                <div class="mb-4">
                     <label class="inv-label-mockup">Unidad de Medida <span class="inv-label-asterisk">*</span></label>
                     <select class="form-select inv-input-mockup" x-model="formInsumo.unidad_medida" @change="validarFormInsumo()"
+                            :disabled="!formInsumo.magnitud || medidaBloqueada"
                             :style="formInsumoErrors.unidad_medida ? 'border-color:#F87171!important;' : ''">
-                        <option value="" disabled selected hidden>Seleccione una unidad...</option>
-                        {% for u in unidades %}
-                        <option value="{{ u.id }}">{{ u.nombre }} ({{ u.abreviatura }})</option>
-                        {% endfor %}
+                        <option value="">Seleccione una unidad compatible...</option>
+                        <template x-for="unidad in unidadesCompatibles" :key="unidad.id">
+                            <option :value="unidad.id" x-text="unidad.nombre + ' (' + unidad.simbolo + ')' "></option>
+                        </template>
                     </select>
                     <div class="invalid-feedback d-block" x-show="formInsumoErrors.unidad_medida" x-text="formInsumoErrors.unidad_medida"></div>
+                    <div class="form-text text-warning mt-1" x-show="medidaBloqueada" style="font-size:0.8rem;">La medida no puede cambiar porque el insumo ya tiene stock, recetas o movimientos.</div>
                 </div>
 
                 <div class="mb-4">
@@ -1040,6 +1160,7 @@ function inventarioApp() {
     return {
         insumos: [],
         unidades: [],
+        magnitudes: [],
         historial: [],
         cargandoHistorial: false,
         selectedInsumo: null,
@@ -1052,7 +1173,7 @@ function inventarioApp() {
         toasts: [],
         operacionMovimiento: 'AJUSTE',
         ajuste: { tipo: 'AJUSTE_POSITIVO', cantidad: 0, motivo: '', lote: '', costo_unitario: 0, causa: '' },
-        formInsumo: { id: null, nombre: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0, es_critico: false },
+        formInsumo: { id: null, nombre: '', magnitud: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0, es_critico: false, medida_bloqueada: false },
         formInsumoErrors: {},
         formInsumoWarnings: {},
         formInsumoErrorGeneral: '',
@@ -1061,6 +1182,10 @@ function inventarioApp() {
         modalHistorial: null,
         modalMovimientosGlobales: null,
         modalOrdenes: null,
+        modalInactivar: null,
+        modalCorregirMedida: null,
+        inactivacion: { insumo: null, motivo: '' },
+        correccionMedida: { insumo: null, magnitud: '', unidad_medida: '', factor_conversion: '', motivo: '' },
         movimientosGlobales: [],
         ordenes: [],
         cargandoOrdenes: false,
@@ -1093,18 +1218,18 @@ function inventarioApp() {
             if (typeof objeto.es_discreta === 'boolean') {
                 return objeto.es_discreta;
             }
-            if ((objeto.tipo || '').toUpperCase() === 'DISCRETA') return true;
-            const abreviatura = (
-                objeto.unidad_abreviatura || objeto.abreviatura || ''
-            ).trim().toUpperCase();
-            return ['UND', 'UN', 'UNI', 'U', 'PZA', 'PZ', 'BOT', 'BOTELLA'].includes(abreviatura);
+            return (objeto.tipo || '').toUpperCase() === 'DISCRETA';
         },
 
         formatearCantidad(valor, objeto) {
             const numero = Number(valor || 0);
+            const factor = Number(
+                objeto?.unidad_factor_conversion || objeto?.factor_conversion || 1
+            );
+            const esEnteraBase = Number.isInteger(numero * factor);
             return new Intl.NumberFormat('es-PE', {
                 minimumFractionDigits: 0,
-                maximumFractionDigits: this.esUnidadDiscreta(objeto) ? 0 : 2,
+                maximumFractionDigits: this.esUnidadDiscreta(objeto) && esEnteraBase ? 0 : 6,
             }).format(Number.isFinite(numero) ? numero : 0);
         },
 
@@ -1414,18 +1539,23 @@ function inventarioApp() {
             try {
                 const elI = document.getElementById('inv-insumos-ssr');
                 const elU = document.getElementById('inv-unidades-ssr');
+                const elM = document.getElementById('inv-magnitudes-ssr');
                 if (elI && elI.textContent.trim()) this.insumos  = JSON.parse(elI.textContent);
                 if (elU && elU.textContent.trim()) this.unidades = JSON.parse(elU.textContent);
+                if (elM && elM.textContent.trim()) this.magnitudes = JSON.parse(elM.textContent);
             } catch(e) { console.error('[INV] Error SSR:', e); }
 
             // Modales Bootstrap
             try { this.modalAjuste     = new bootstrap.Modal(document.getElementById('modalAjuste')); } catch(e) {}
             try { this.modalInsumoForm = new bootstrap.Modal(document.getElementById('modalInsumo')); } catch(e) {}
             try { this.modalHistorial  = new bootstrap.Modal(document.getElementById('modalHistorial')); } catch(e) {}
+            try { this.modalInactivar = new bootstrap.Modal(document.getElementById('modalInactivarInsumo')); } catch(e) {}
+            try { this.modalCorregirMedida = new bootstrap.Modal(document.getElementById('modalCorregirMedida')); } catch(e) {}
 
             // Fallback API si SSR no entregó datos
             if (this.insumos.length === 0)  await this.fetchInsumos();
             if (this.unidades.length === 0) await this.fetchUnidades();
+            if (this.magnitudes.length === 0) await this.fetchMagnitudes();
         },
 
         async fetchInsumos() {
@@ -1437,6 +1567,7 @@ function inventarioApp() {
                 }
                 // Traer todos los insumos activos (sin filtros de server, el filtrado es client-side)
                 url.searchParams.append('page_size', 200);
+                url.searchParams.append('activo', 'true');
 
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1492,6 +1623,18 @@ function inventarioApp() {
             this.modalAjuste.show();
         },
 
+        async fetchMagnitudes() {
+            try {
+                const resp = await fetch('/api/inventario/magnitudes/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.magnitudes = Array.isArray(data) ? data : (data.results || []);
+                } else {
+                    this.toast(`Error al cargar magnitudes (HTTP ${resp.status})`, 'error');
+                }
+            } catch (e) { this.toast('Error de conexiÃ³n al cargar magnitudes', 'error'); }
+        },
+
         registrarEntrada(insumo) {
             this.selectedInsumo = insumo;
             this.operacionMovimiento = 'ENTRADA';
@@ -1521,8 +1664,12 @@ function inventarioApp() {
 
         async confirmarAjuste() {
             if (!this.ajuste.cantidad || parseFloat(this.ajuste.cantidad) <= 0) { this.toast('Ingresa una cantidad mayor a 0', 'error'); return; }
-            if (this.esUnidadDiscreta(this.selectedInsumo) && !Number.isInteger(parseFloat(this.ajuste.cantidad))) {
+            if (this.esUnidadDiscreta(this.selectedInsumo) && !this.selectedInsumo?.medida_requiere_revision && !Number.isInteger(parseFloat(this.ajuste.cantidad))) {
                 this.toast('Las unidades y botellas se ajustan con cantidades enteras', 'error');
+                return;
+            }
+            if (this.signoMovimiento < 0 && this.pf(this.ajuste.cantidad) > this.pf(this.selectedInsumo?.stock_real)) {
+                this.toast(`La cantidad supera el stock disponible (${this.formatearCantidad(this.selectedInsumo?.stock_real, this.selectedInsumo)} ${this.selectedInsumo?.unidad_abreviatura}).`, 'error');
                 return;
             }
             if (this.operacionMovimiento === 'AJUSTE' && !this.ajuste.motivo.trim()) { this.toast('El motivo del ajuste es obligatorio', 'error'); return; }
@@ -1561,7 +1708,7 @@ function inventarioApp() {
         },
 
         nuevoInsumo() {
-            this.formInsumo = { id: null, nombre: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0, es_critico: false };
+            this.formInsumo = { id: null, nombre: '', magnitud: '', unidad_medida: '', categoria: '', stock_minimo: 0, costo_unitario: 0, stock_inicial: 0, es_critico: false, medida_bloqueada: false };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
             this.formInsumoErrorGeneral = '';
@@ -1581,12 +1728,14 @@ function inventarioApp() {
             this.formInsumo = {
                 id: i.id,
                 nombre: i.nombre,
+                magnitud: i.magnitud,
                 unidad_medida: i.unidad_medida,
                 categoria: i.categoria || 'OTRO',
                 stock_minimo: this.numeroEditable(i.stock_minimo, i),
                 costo_unitario: this.numeroEditable(i.costo_unitario),
                 stock_inicial: 0,
                 es_critico: !!i.es_critico,
+                medida_bloqueada: !!i.medida_bloqueada,
             };
             this.formInsumoErrors = {};
             this.formInsumoWarnings = {};
@@ -1603,7 +1752,11 @@ function inventarioApp() {
             // Errores DURO (bloquean guardar)
             if (!f.nombre) errors.nombre = 'El nombre es obligatorio.';
             else if (f.nombre.length > 120) errors.nombre = 'Máximo 120 caracteres.';
+            if (!f.magnitud) errors.magnitud = 'Selecciona la magnitud de control.';
             if (!f.unidad_medida) errors.unidad_medida = 'Selecciona una unidad de medida.';
+            else if (!this.unidadesCompatibles.some(u => Number(u.id) === Number(f.unidad_medida))) {
+                errors.unidad_medida = 'La unidad seleccionada no corresponde a la magnitud.';
+            }
             if (!f.categoria) errors.categoria = 'Selecciona una categoría.';
             
             const sm = parseFloat(f.stock_minimo);
@@ -1660,10 +1813,11 @@ function inventarioApp() {
         get formInsumoValido() {
             try {
                 // Solo los campos del formulario bloquean el botón (no errores generales del servidor)
-                const camposFormulario = ['nombre','unidad_medida','categoria','stock_minimo','costo_unitario','stock_actual','stock_real','stock_inicial'];
+                const camposFormulario = ['nombre','magnitud','unidad_medida','categoria','stock_minimo','costo_unitario','stock_actual','stock_real','stock_inicial'];
                 const tieneErroresCampo = camposFormulario.some(c => !!(this.formInsumoErrors || {})[c]);
                 return !tieneErroresCampo
                     && (this.formInsumo.nombre || '').trim() !== ''
+                    && !!this.formInsumo.magnitud
                     && !!this.formInsumo.unidad_medida
                     && !!this.formInsumo.categoria;
             } catch(e) { return false; }
@@ -1682,6 +1836,25 @@ function inventarioApp() {
             const id = parseInt(this.formInsumo.unidad_medida);
             const unidad = (this.unidades || []).find((item) => item.id === id);
             return this.esUnidadDiscreta(unidad);
+        },
+
+        get unidadesCompatibles() {
+            const magnitudId = Number(this.formInsumo.magnitud || 0);
+            return (this.unidades || []).filter(
+                unidad => Number(unidad.magnitud) === magnitudId
+            );
+        },
+
+        get medidaBloqueada() {
+            return Boolean(this.formInsumo.id && this.formInsumo.medida_bloqueada);
+        },
+
+        cambiarMagnitud() {
+            const unidadValida = this.unidadesCompatibles.some(
+                unidad => Number(unidad.id) === Number(this.formInsumo.unidad_medida)
+            );
+            if (!unidadValida) this.formInsumo.unidad_medida = '';
+            this.validarFormInsumo();
         },
 
         async guardarInsumo() {
@@ -1705,6 +1878,7 @@ function inventarioApp() {
                     // Construir mensaje con los campos faltantes
                     const faltantes = [];
                     if (this.formInsumoErrors.nombre) faltantes.push('Nombre');
+                    if (this.formInsumoErrors.magnitud) faltantes.push('Magnitud');
                     if (this.formInsumoErrors.unidad_medida) faltantes.push('Unidad de medida');
                     if (this.formInsumoErrors.categoria) faltantes.push('Categoría');
                     if (this.formInsumoErrors.stock_minimo) faltantes.push('Stock mínimo');
@@ -1723,6 +1897,7 @@ function inventarioApp() {
                 const url = isEdit ? `/api/inventario/insumos/${this.formInsumo.id}/` : '/api/inventario/insumos/';
                 const body = {
                     nombre: (this.formInsumo.nombre || '').trim(),
+                    magnitud: parseInt(this.formInsumo.magnitud) || null,
                     unidad_medida: parseInt(this.formInsumo.unidad_medida) || null,
                     categoria: this.formInsumo.categoria || 'OTRO',
                     stock_minimo: parseFloat(this.formInsumo.stock_minimo) || 0,
@@ -1828,22 +2003,80 @@ function inventarioApp() {
             }
         },
 
-        async desactivarInsumo(insumo) {
-            if (!confirm(`¿Desactivar "${insumo.nombre}"?\n\nEl insumo se ocultará del catálogo y todas sus recetas quedarán inactivas. El historial de movimientos se conserva.`)) return;
+        abrirInactivacion(insumo) {
+            this.inactivacion = { insumo, motivo: '' };
+            this.modalInactivar.show();
+        },
+
+        async confirmarInactivacion() {
+            const insumo = this.inactivacion.insumo;
+            const motivo = (this.inactivacion.motivo || '').trim();
+            if (!insumo || motivo.length < 5 || this.guardando) return;
+            this.guardando = true;
             try {
-                const resp = await fetch(`/api/inventario/insumos/${insumo.id}/`, {
-                    method: 'DELETE',
-                    credentials: 'same-origin',
-                    headers: { 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                const resp = await fetch(`/api/inventario/insumos/${insumo.id}/inactivar/`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                    body: JSON.stringify({ motivo }),
                 });
-                if (resp.ok || resp.status === 204) {
+                if (resp.ok) {
+                    this.modalInactivar.hide();
                     await this.fetchInsumos();
-                    this.toast(`"${insumo.nombre}" desactivado`);
+                    this.toast(`"${insumo.nombre}" inactivado`);
                 } else {
                     const err = await resp.json().catch(() => ({}));
-                    this.toast(err.error || err.detail || 'No se pudo desactivar', 'error');
+                    this.toast(this.mensajeError(err, 'No se pudo inactivar'), 'error');
                 }
             } catch { this.toast('Error de conexión', 'error'); }
+            finally { this.guardando = false; }
+        },
+
+        abrirCorreccionMedida(insumo) {
+            this.correccionMedida = {
+                insumo, magnitud: '', unidad_medida: '',
+                factor_conversion: '', motivo: '',
+            };
+            this.modalCorregirMedida.show();
+        },
+
+        get unidadesCorreccion() {
+            return (this.unidades || []).filter(
+                unidad => Number(unidad.magnitud) === Number(this.correccionMedida.magnitud)
+            );
+        },
+
+        get correccionMedidaValida() {
+            const c = this.correccionMedida;
+            return Boolean(
+                c.insumo && c.magnitud && c.unidad_medida
+                && Number(c.factor_conversion) > 0
+                && (c.motivo || '').trim().length >= 5
+            );
+        },
+
+        async confirmarCorreccionMedida() {
+            if (!this.correccionMedidaValida || this.guardando) return;
+            const c = this.correccionMedida;
+            this.guardando = true;
+            try {
+                const resp = await fetch(`/api/inventario/insumos/${c.insumo.id}/corregir-medida/`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this._csrf(), Accept: 'application/json' },
+                    body: JSON.stringify({
+                        magnitud: Number(c.magnitud),
+                        unidad_medida: Number(c.unidad_medida),
+                        factor_conversion: c.factor_conversion,
+                        motivo: c.motivo.trim(),
+                    }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(this.mensajeError(data, 'No se pudo corregir la medida'));
+                this.modalCorregirMedida.hide();
+                await this.fetchInsumos();
+                this.toast(`Medida de "${c.insumo.nombre}" corregida correctamente`);
+            } catch (e) {
+                this.toast(e.message || 'Error de conexión', 'error');
+            } finally { this.guardando = false; }
         },
 
         _csrf() {

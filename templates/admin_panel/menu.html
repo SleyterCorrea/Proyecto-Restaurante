@@ -751,11 +751,19 @@ html.light .recipe-selector-row {
                                                         @blur="normalizarCantidadReceta(receta)"
                                                         @input="delete erroresPlato.receta"
                                                         :inputmode="esUnidadDiscreta(receta) ? 'numeric' : 'decimal'"
-                                                        :step="esUnidadDiscreta(receta) ? '1' : '0.0001'"
-                                                        :min="esUnidadDiscreta(receta) ? '1' : '0.0001'" />
+                                                        :step="pasoCantidadReceta(receta)"
+                                                        :min="pasoCantidadReceta(receta)" />
                                                 </td>
-                                                <td class="px-2 py-2 text-center text-xs text-on-surface-variant"
-                                                    x-text="receta.insumo_unidad"></td>
+                                                <td class="px-2 py-2 text-center">
+                                                    <select class="form-select form-select-sm"
+                                                        style="min-width: 90px"
+                                                        x-model="receta.unidad_medida_id"
+                                                        @change="cambiarUnidadReceta(receta)">
+                                                        <template x-for="unidad in receta.unidades_compatibles || []" :key="unidad.id">
+                                                            <option :value="unidad.id" x-text="unidad.simbolo"></option>
+                                                        </template>
+                                                    </select>
+                                                </td>
                                                 <td class="px-2 py-2 text-center">
                                                     <input type="text" inputmode="decimal" class="form-control form-control-sm"
                                                         style="max-width: 60px; margin: 0 auto"
@@ -765,10 +773,10 @@ html.light .recipe-selector-row {
                                                 </td>
                                                 <td class="px-2 py-2 text-center">
                                                     <div class="text-xs font-bold"
-                                                        :class="Number(receta.insumo_stock) >= Number(receta.cantidad_por_porcion) ? 'text-emerald-400' : 'text-red-400'"
-                                                        x-text="formatearCantidad(receta.insumo_stock, receta) + ' ' + receta.insumo_unidad"></div>
+                                                        :class="Number(receta.insumo_stock) >= cantidadEnUnidadControl(receta) ? 'text-emerald-400' : 'text-red-400'"
+                                                        x-text="formatearCantidad(receta.insumo_stock, {es_discreta:false}) + ' ' + receta.unidad_control"></div>
                                                     <div class="text-[9px] text-on-surface-variant"
-                                                        x-text="Math.max(0, Math.floor(Number(receta.insumo_stock || 0) / Number(receta.cantidad_por_porcion || 1))) + ' platos'"></div>
+                                                        x-text="Math.max(0, Math.floor(Number(receta.insumo_stock || 0) / Math.max(cantidadEnUnidadControl(receta), 0.000001))) + ' platos'"></div>
                                                 </td>
                                                 <td class="px-2 py-2 text-center">
                                                     <button type="button" class="btn btn-sm text-red-400 border-0"

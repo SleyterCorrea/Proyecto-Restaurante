@@ -144,7 +144,7 @@ function menuApp() {
             const recetas = (this.platoForm.recetas || []).filter((r) => Number(r.cantidad_por_porcion) > 0);
             if (!recetas.length) return 0;
             return Math.max(0, Math.min(...recetas.map((receta) =>
-                Math.floor(Number(receta.insumo_stock || 0) / Number(receta.cantidad_por_porcion))
+                Math.floor(Number(receta.insumo_stock || 0) / this.cantidadEnUnidadControl(receta))
             )));
         },
 
@@ -197,6 +197,7 @@ function menuApp() {
                 .map((item) => ({
                     insumo_id: Number(item.insumo_id),
                     cantidad: Number(item.cantidad_por_porcion),
+                    unidad_medida_id: Number(item.unidad_medida_id),
                     merma: Number(item.merma_porcentaje || 0),
                 }))
                 .sort((a, b) => a.insumo_id - b.insumo_id));
@@ -228,11 +229,29 @@ function menuApp() {
         },
 
         esUnidadDiscreta(receta) {
-            if (typeof receta.insumo_es_discreto === "boolean") {
-                return receta.insumo_es_discreto;
-            }
-            const unidad = (receta.insumo_unidad || "").trim().toUpperCase();
-            return ["UND", "UN", "UNI", "U", "PZA", "PZ", "BOT", "BOTELLA"].includes(unidad);
+            const unidad = this.unidadReceta(receta);
+            return unidad ? Boolean(unidad.es_discreta) : Boolean(receta.insumo_es_discreto);
+        },
+
+        unidadReceta(receta) {
+            return (receta.unidades_compatibles || []).find(
+                (unidad) => Number(unidad.id) === Number(receta.unidad_medida_id)
+            ) || null;
+        },
+
+        cambiarUnidadReceta(receta) {
+            const unidad = this.unidadReceta(receta);
+            receta.insumo_unidad = unidad ? unidad.simbolo : "";
+            receta.insumo_es_discreto = unidad ? Boolean(unidad.es_discreta) : false;
+            this.normalizarCantidadReceta(receta);
+        },
+
+        cantidadEnUnidadControl(receta) {
+            const unidad = this.unidadReceta(receta);
+            const factorSeleccionado = Number(unidad?.factor_conversion || 1);
+            const factorControl = Number(receta.unidad_control_factor || 1);
+            const cantidad = Number(receta.cantidad_por_porcion || 0);
+            return Math.max(0, cantidad * factorSeleccionado / factorControl);
         },
 
         formatearCantidad(valor, receta) {
@@ -247,13 +266,21 @@ function menuApp() {
             let numero = Number(receta.cantidad_por_porcion);
             if (!Number.isFinite(numero)) numero = 1;
             if (this.esUnidadDiscreta(receta)) {
-                receta.cantidad_por_porcion = String(Math.max(1, Math.round(numero)));
+                const factor = Number(this.unidadReceta(receta)?.factor_conversion || 1);
+                receta.cantidad_por_porcion = String(
+                    Math.max(1 / factor, Math.round(numero * factor) / factor)
+                );
             } else {
                 receta.cantidad_por_porcion = Math.max(0.0001, numero)
                     .toFixed(4)
                     .replace(/\.?0+$/, "");
             }
             delete this.erroresPlato.receta;
+        },
+
+        pasoCantidadReceta(receta) {
+            if (!this.esUnidadDiscreta(receta)) return 0.000001;
+            return 1 / Number(this.unidadReceta(receta)?.factor_conversion || 1);
         },
 
         decimal2(valor, minimo = 0, maximo = null) {
@@ -508,6 +535,10 @@ function menuApp() {
                     insumo_id: r.insumo_id,
                     insumo_nombre: r.insumo_nombre,
                     insumo_unidad: r.unidad_abreviatura || r.insumo_unidad || "",
+                    unidad_control: r.unidad_control || "",
+                    unidad_control_factor: r.unidad_control_factor || 1,
+                    unidad_medida_id: r.unidad_medida_id,
+                    unidades_compatibles: r.unidades_compatibles || [],
                     insumo_stock: r.insumo_stock,
                     insumo_es_discreto: Boolean(r.insumo_es_discreto),
                     cantidad_por_porcion: Boolean(r.insumo_es_discreto)
@@ -564,6 +595,10 @@ function menuApp() {
                     insumo_id: insumo.id,
                     insumo_nombre: insumo.nombre,
                     insumo_unidad: insumo.unidad_abreviatura || insumo.unidad_nombre || "",
+                    unidad_control: insumo.unidad_abreviatura || "",
+                    unidad_control_factor: insumo.unidad_factor_conversion || 1,
+                    unidad_medida_id: insumo.unidad_medida,
+                    unidades_compatibles: insumo.unidades_compatibles || [],
                     insumo_stock: insumo.stock_real,
                     insumo_es_discreto: Boolean(insumo.unidad_es_discreta),
                     cantidad_por_porcion: "1",
@@ -609,9 +644,11 @@ function menuApp() {
                 errores.receta = "La merma debe estar entre 0% y 100%.";
             }
             if (!errores.receta && recetas.some((r) =>
-                this.esUnidadDiscreta(r) && !Number.isInteger(Number(r.cantidad_por_porcion))
+                this.esUnidadDiscreta(r) && !Number.isInteger(
+                    Number(r.cantidad_por_porcion) * Number(this.unidadReceta(r)?.factor_conversion || 1)
+                )
             )) {
-                errores.receta = "Los insumos medidos en unidades o botellas deben usar cantidades enteras.";
+                errores.receta = "Las cantidades discretas deben equivaler a unidades base enteras.";
             }
             if (this.requiereMotivoPlato && !(this.platoForm.motivo || "").trim()) {
                 errores.motivo = "Explica por qué cambiaste el precio, la receta o la disponibilidad.";

@@ -55,20 +55,33 @@ def admin_reportes(request):
 @rol_requerido('ADMIN')
 def admin_inventario(request):
     import json
-    from apps.inventario.models import Insumo, UnidadMedida
-    from apps.inventario.serializers import InsumoSerializer, UnidadMedidaSerializer
+    from django.core.serializers.json import DjangoJSONEncoder
+    from apps.inventario.models import Insumo, MagnitudMedida, UnidadMedida
+    from apps.inventario.serializers import (
+        InsumoSerializer,
+        MagnitudMedidaSerializer,
+        UnidadMedidaSerializer,
+    )
 
-    insumos = Insumo.objects.filter(activo=True).select_related('unidad_medida').order_by('nombre')
-    unidades = UnidadMedida.objects.filter(activo=True).order_by('nombre')
+    insumos = Insumo.objects.filter(activo=True).select_related(
+        'magnitud', 'unidad_medida__magnitud'
+    ).prefetch_related('magnitud__unidades').order_by('nombre')
+    unidades = UnidadMedida.objects.filter(activo=True).select_related(
+        'magnitud'
+    ).order_by('magnitud__nombre', 'factor_conversion')
+    magnitudes = MagnitudMedida.objects.filter(activo=True).order_by('nombre')
 
     insumos_data = InsumoSerializer(insumos, many=True).data
     unidades_data = UnidadMedidaSerializer(unidades, many=True).data
+    magnitudes_data = MagnitudMedidaSerializer(magnitudes, many=True).data
 
     return render(request, 'admin_panel/inventario.html', {
-        'insumos_json': json.dumps(list(insumos_data)),
-        'unidades_json': json.dumps(list(unidades_data)),
+        'insumos_json': json.dumps(list(insumos_data), cls=DjangoJSONEncoder),
+        'unidades_json': json.dumps(list(unidades_data), cls=DjangoJSONEncoder),
+        'magnitudes_json': json.dumps(list(magnitudes_data), cls=DjangoJSONEncoder),
         # Necesario para el {% for u in unidades %} del <select> en el modal Django server-side
         'unidades': unidades,
+        'magnitudes': magnitudes,
     })
 
 @login_required

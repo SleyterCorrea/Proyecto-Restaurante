@@ -70,7 +70,9 @@ def test_inventario_service_ajustes_merma_y_estado(usuario_admin, insumo_con_sto
     assert insumo_con_stock.stock_real == Decimal('10')
     assert insumo_con_stock.movimientos.count() == 3
 
-    InventarioService.cambiar_activo(insumo_con_stock.id, False)
+    InventarioService.cambiar_activo(
+        insumo_con_stock.id, False, motivo='Insumo retirado del catalogo de prueba.'
+    )
     InventarioService.cambiar_activo(insumo_con_stock.id, True)
     insumo_con_stock.refresh_from_db()
     assert insumo_con_stock.activo is True

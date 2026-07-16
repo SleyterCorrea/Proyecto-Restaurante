@@ -18,7 +18,7 @@ from apps.mesas.models import Mesa, Zona
 from apps.menu.models import Plato, Categoria
 from apps.comandas.models import Comanda, LineaComanda
 from apps.caja.models import CajaTurno, MetodoPago
-from apps.inventario.models import Insumo, UnidadMedida, RecetaInsumo
+from apps.inventario.models import Insumo, MagnitudMedida, UnidadMedida, RecetaInsumo
 
 Usuario = get_user_model()
 
@@ -61,17 +61,36 @@ def mesa_libre(db):
     return Mesa.objects.create(numero=1, capacidad=4, zona=zona, estado=Mesa.Estado.LIBRE)
 
 @pytest.fixture
-def insumo_con_stock(db):
-    um, _ = UnidadMedida.objects.get_or_create(nombre='Kilo', abreviatura='kg')
+def magnitudes_medida(db):
+    return {
+        codigo: MagnitudMedida.objects.get_or_create(codigo=codigo, defaults={'nombre': nombre})[0]
+        for codigo, nombre in (('MASA', 'Masa'), ('VOLUMEN', 'Volumen'), ('UNIDAD', 'Unidad'))
+    }
+
+
+@pytest.fixture
+def insumo_con_stock(db, magnitudes_medida):
+    um, _ = UnidadMedida.objects.get_or_create(
+        simbolo='kg',
+        defaults={
+            'nombre': 'Kilogramo', 'magnitud': magnitudes_medida['MASA'],
+            'factor_conversion': 1000, 'tipo': 'CONTINUA',
+        },
+    )
     return Insumo.objects.create(
-        nombre='Papa', stock_actual=10, stock_real=10, stock_minimo=1, unidad_medida=um
+        nombre='Papa', stock_actual=10, stock_real=10, stock_minimo=1,
+        magnitud=magnitudes_medida['MASA'], unidad_medida=um
     )
 
 @pytest.fixture
 def plato_con_receta(db, insumo_con_stock):
     cat, _ = Categoria.objects.get_or_create(nombre='Entradas')
     plato = Plato.objects.create(nombre='Papa a la huancaina', precio_actual=15, categoria=cat, disponible=True)
-    RecetaInsumo.objects.create(plato=plato, insumo=insumo_con_stock, cantidad_por_porcion=0.5)
+    RecetaInsumo.objects.create(
+        plato=plato, insumo=insumo_con_stock,
+        unidad_medida=insumo_con_stock.unidad_medida,
+        cantidad_por_porcion=0.5,
+    )
     return plato
 
 @pytest.fixture

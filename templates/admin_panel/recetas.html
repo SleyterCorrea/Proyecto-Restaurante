@@ -109,6 +109,17 @@
                         </select>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label small text-muted">Unidad compatible</label>
+                        <select class="form-select border-0" style="background: var(--color-surface2);"
+                                x-model="nuevoItem.unidad_medida"
+                                :disabled="!nuevoItem.insumo">
+                            <option value="">Elegir...</option>
+                            <template x-for="unidad in unidadesNuevoItem" :key="unidad.id">
+                                <option :value="unidad.id" x-text="unidad.nombre + ' (' + unidad.simbolo + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label small text-muted">Cantidad por Porción</label>
                         <input type="number" step="0.001" class="form-control border-0" style="background: var(--color-surface2);" x-model="nuevoItem.cantidad_por_porcion">
                     </div>
@@ -128,7 +139,7 @@ function recetasApp() {
         allInsumos: [],
         selectedPlato: null,
         recetaItems: [],
-        nuevoItem: { insumo: '', cantidad_por_porcion: 0 },
+        nuevoItem: { insumo: '', unidad_medida: '', cantidad_por_porcion: 0 },
         modalAdd: null,
 
         init() {
@@ -139,29 +150,46 @@ function recetasApp() {
 
         async fetchPlatos() {
             const resp = await fetch('/api/menu/platos/');
-            this.platos = await resp.json();
+            const data = await resp.json();
+            this.platos = Array.isArray(data) ? data : (data.results || []);
         },
 
         async fetchInsumos() {
             const resp = await fetch('/api/inventario/insumos/');
-            this.allInsumos = await resp.json();
+            const data = await resp.json();
+            this.allInsumos = Array.isArray(data) ? data : (data.results || []);
         },
 
         async seleccionarPlato(plato) {
             this.selectedPlato = plato;
             const resp = await fetch(`/api/inventario/recetas/?plato=${plato.id}`);
-            this.recetaItems = await resp.json();
+            const data = await resp.json();
+            this.recetaItems = Array.isArray(data) ? data : (data.results || []);
         },
 
         abrirModalAgregar() {
-            this.nuevoItem = { insumo: '', cantidad_por_porcion: 0 };
+            this.nuevoItem = { insumo: '', unidad_medida: '', cantidad_por_porcion: 0 };
             this.modalAdd.show();
+        },
+
+        get unidadesNuevoItem() {
+            const insumo = this.allInsumos.find(
+                item => Number(item.id) === Number(this.nuevoItem.insumo)
+            );
+            const unidades = insumo?.unidades_compatibles || [];
+            if (unidades.length && !unidades.some(
+                unidad => Number(unidad.id) === Number(this.nuevoItem.unidad_medida)
+            )) {
+                this.nuevoItem.unidad_medida = insumo.unidad_medida;
+            }
+            return unidades;
         },
 
         async guardarInsumo() {
             const data = {
                 plato: this.selectedPlato.id,
                 insumo: this.nuevoItem.insumo,
+                unidad_medida: this.nuevoItem.unidad_medida,
                 cantidad_por_porcion: this.nuevoItem.cantidad_por_porcion
             };
             const resp = await fetch('/api/inventario/recetas/', {

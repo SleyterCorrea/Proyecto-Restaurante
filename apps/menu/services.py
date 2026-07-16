@@ -9,7 +9,7 @@ from apps.auditoria.constants import obtener_umbral
 from apps.auditoria.models import AuditLog
 from apps.auditoria.services import AuditoriaService
 from apps.core.exceptions import DatosInvalidos, OperacionNoPermitida, RecursoNoEncontrado
-from apps.inventario.models import Insumo, RecetaInsumo
+from apps.inventario.models import Insumo, RecetaInsumo, UnidadMedida
 
 from .models import Categoria, Plato
 
@@ -49,6 +49,8 @@ class MenuService:
                 cantidad = Decimal(str(item.get("cantidad_por_porcion", 0)))
                 merma = Decimal(str(item.get("merma_porcentaje", 0)))
                 insumo_id = int(item["insumo_id"])
+                unidad_id = item.get('unidad_medida_id') or item.get('unidad_medida')
+                unidad_id = int(unidad_id) if unidad_id else None
             except (InvalidOperation, TypeError, ValueError):
                 raise DatosInvalidos("Cantidad o merma invalida en la receta.")
             if cantidad <= 0 or merma < 0 or merma > 100:
@@ -56,7 +58,9 @@ class MenuService:
             if insumo_id in insumos_vistos:
                 raise DatosInvalidos("Un insumo no puede repetirse en la receta.")
             insumos_vistos.add(insumo_id)
-            normalizada.append((insumo_id, cantidad, merma, item.get("activo", True)))
+            normalizada.append((
+                insumo_id, cantidad, merma, item.get("activo", True), unidad_id
+            ))
         return normalizada
 
     @staticmethod
@@ -66,6 +70,7 @@ class MenuService:
                 'id': receta.id,
                 'insumo_id': receta.insumo_id,
                 'cantidad_por_porcion': str(receta.cantidad_por_porcion),
+                'unidad_medida_id': receta.unidad_medida_id,
                 'merma_porcentaje': str(receta.merma_porcentaje),
                 'activo': receta.activo,
             }
@@ -87,14 +92,16 @@ class MenuService:
         }
 
     @staticmethod
-    def _validar_cantidad_por_unidad(insumo, cantidad):
-        if (
-            insumo.unidad_medida.es_discreta
-            and cantidad != cantidad.to_integral_value()
-        ):
+    def _validar_cantidad_por_unidad(insumo, cantidad, unidad):
+        if unidad.magnitud_id != insumo.magnitud_id:
             raise DatosInvalidos(
-                f'{insumo.nombre} se controla en {insumo.unidad_medida.abreviatura}; '
-                'la cantidad por porcion debe ser un numero entero.'
+                f'La unidad {unidad.simbolo} no es compatible con {insumo.nombre}.'
+            )
+        cantidad_base = cantidad * unidad.factor_conversion
+        if unidad.es_discreta and cantidad_base != cantidad_base.to_integral_value():
+            raise DatosInvalidos(
+                f'La cantidad de {insumo.nombre} debe equivaler a un número entero '
+                'de unidades base.'
             )
 
     @staticmethod
@@ -304,15 +311,30 @@ class MenuService:
         }
         if set(insumos) != insumo_ids:
             raise RecursoNoEncontrado("Uno o mas insumos no existen o estan inactivos.")
-        for insumo_id, cantidad, merma, activo in receta:
+        unidades_ids = {
+            unidad_id or insumos[insumo_id].unidad_medida_id
+            for insumo_id, cantidad, merma, activo, unidad_id in receta
+        }
+        unidades = {
+            unidad.id: unidad
+            for unidad in UnidadMedida.objects.select_related('magnitud').filter(
+                pk__in=unidades_ids,
+                activo=True,
+            )
+        }
+        if set(unidades) != unidades_ids:
+            raise RecursoNoEncontrado('Una o más unidades no existen o están inactivas.')
+        for insumo_id, cantidad, merma, activo, unidad_id in receta:
+            unidad = unidades[unidad_id or insumos[insumo_id].unidad_medida_id]
             MenuService._validar_cantidad_por_unidad(
-                insumos[insumo_id], cantidad
+                insumos[insumo_id], cantidad, unidad
             )
             RecetaInsumo.objects.update_or_create(
                 plato=plato,
                 insumo_id=insumo_id,
                 defaults={
                     "cantidad_por_porcion": cantidad,
+                    "unidad_medida": unidad,
                     "merma_porcentaje": merma,
                     "activo": activo,
                 },
@@ -355,6 +377,7 @@ class MenuService:
             insumo_id = int(data.get("insumo_id"))
             cantidad = Decimal(str(data.get("cantidad_por_porcion")))
             merma = Decimal(str(data.get("merma_porcentaje", 0)))
+            unidad_id = data.get('unidad_medida_id') or data.get('unidad_medida')
         except (TypeError, ValueError, InvalidOperation):
             raise DatosInvalidos("Insumo, cantidad o merma invalidos.")
         if cantidad <= 0:
@@ -366,13 +389,21 @@ class MenuService:
             )
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
-        MenuService._validar_cantidad_por_unidad(insumo, cantidad)
+        try:
+            unidad = UnidadMedida.objects.select_related('magnitud').get(
+                pk=unidad_id or insumo.unidad_medida_id,
+                activo=True,
+            )
+        except (UnidadMedida.DoesNotExist, ValueError, TypeError):
+            raise RecursoNoEncontrado('Unidad de receta no encontrada.')
+        MenuService._validar_cantidad_por_unidad(insumo, cantidad, unidad)
         existente = RecetaInsumo.objects.filter(
             plato=plato, insumo_id=insumo_id
         ).first()
         anterior = (
             {
                 'cantidad_por_porcion': str(existente.cantidad_por_porcion),
+                'unidad_medida_id': existente.unidad_medida_id,
                 'merma_porcentaje': str(existente.merma_porcentaje),
                 'activo': existente.activo,
             } if existente else None
@@ -385,6 +416,7 @@ class MenuService:
             insumo_id=insumo_id,
             defaults={
                 "cantidad_por_porcion": cantidad,
+                "unidad_medida": unidad,
                 "merma_porcentaje": merma,
                 "activo": True,
             },
@@ -404,6 +436,7 @@ class MenuService:
                 valores_nuevos={
                     'insumo_id': insumo_id,
                     'cantidad_por_porcion': str(cantidad),
+                    'unidad_medida_id': unidad.id,
                     'merma_porcentaje': str(merma),
                     'activo': True,
                 },

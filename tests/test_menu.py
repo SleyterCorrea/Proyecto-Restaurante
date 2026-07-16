@@ -38,11 +38,14 @@ def test_receta_exige_enteros_para_unidades_discretas(
     client,
     usuario_admin,
     plato_con_receta,
+    magnitudes_medida,
 ):
     client.force_login(usuario_admin)
     unidad = UnidadMedida.objects.create(
         nombre='Unidad discreta de prueba',
-        abreviatura='UND',
+        simbolo='und-menu',
+        magnitud=magnitudes_medida['UNIDAD'],
+        factor_conversion=1,
         tipo=UnidadMedida.TIPO_DISCRETA,
     )
     insumo = Insumo.objects.create(
@@ -50,6 +53,7 @@ def test_receta_exige_enteros_para_unidades_discretas(
         stock_actual=10,
         stock_real=10,
         stock_minimo=1,
+        magnitud=magnitudes_medida['UNIDAD'],
         unidad_medida=unidad,
     )
     url = f'/api/menu/platos/{plato_con_receta.id}/'
@@ -70,7 +74,7 @@ def test_receta_exige_enteros_para_unidades_discretas(
     )
 
     assert response.status_code == 400
-    assert 'numero entero' in str(response.json()).lower()
+    assert 'entero' in str(response.json()).lower()
 
     receta[0]['cantidad_por_porcion'] = '2'
     response = client.patch(
@@ -84,7 +88,7 @@ def test_receta_exige_enteros_para_unidades_discretas(
 
     assert response.status_code == 200
     assert response.json()['receta'][0]['insumo_es_discreto'] is True
-    assert response.json()['receta'][0]['cantidad_por_porcion'] == '2.0000'
+    assert response.json()['receta'][0]['cantidad_por_porcion'] == '2.000000'
 
 
 @pytest.mark.django_db
@@ -100,6 +104,7 @@ def test_editar_receta_json_reemplaza_y_permite_vaciar_receta(
         stock_actual=20,
         stock_real=20,
         stock_minimo=1,
+        magnitud=insumo_con_stock.magnitud,
         unidad_medida=insumo_con_stock.unidad_medida,
     )
     url = f'/api/menu/platos/{plato_con_receta.id}/'

@@ -3,7 +3,7 @@ import io
 import logging
 from collections import defaultdict
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.cache import cache
 from django.db import models, transaction
@@ -15,10 +15,13 @@ from apps.auditoria.services import AuditoriaService
 from apps.core.exceptions import DatosInvalidos, OperacionNoPermitida, RecursoNoEncontrado, StockInsuficiente
 from apps.inventario.models import (
     Insumo,
+    InsumoCambioMedida,
+    MagnitudMedida,
     MovimientoInventario,
     OrdenCompra,
     OrdenCompraItem,
     RecetaInsumo,
+    UnidadMedida,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,19 +31,62 @@ class InventarioService:
     """Coordinates stock validation and inventory movements."""
 
     @staticmethod
+    def validar_compatibilidad_medida(magnitud, unidad):
+        if not isinstance(magnitud, MagnitudMedida) or not magnitud.activo:
+            raise DatosInvalidos('La magnitud seleccionada no es válida o está inactiva.')
+        if not unidad or not unidad.activo:
+            raise DatosInvalidos('La unidad de control no es válida o está inactiva.')
+        if unidad.magnitud_id != magnitud.id:
+            raise DatosInvalidos(
+                f'La unidad {unidad.simbolo} pertenece a {unidad.magnitud.nombre}, '
+                f'no a {magnitud.nombre}.'
+            )
+
+    @staticmethod
+    def validar_cambio_medida(insumo, magnitud, unidad):
+        InventarioService.validar_compatibilidad_medida(magnitud, unidad)
+        if not insumo or not insumo.pk:
+            return
+        if (
+            insumo.magnitud_id == magnitud.id
+            and insumo.unidad_medida_id == unidad.id
+        ):
+            return
+        tiene_stock = insumo.stock_actual != 0 or insumo.stock_real != 0
+        if tiene_stock or insumo.movimientos.exists() or insumo.platos.exists():
+            raise OperacionNoPermitida(
+                'No se puede cambiar la magnitud o unidad de un insumo con stock, '
+                'recetas o movimientos. Registra una presentación nueva o realiza '
+                'un proceso explícito de migración.'
+            )
+
+    @staticmethod
+    @transaction.atomic
+    def guardar_insumo(serializer):
+        datos = serializer.validated_data
+        instancia = serializer.instance
+        magnitud = datos.get('magnitud') or getattr(instancia, 'magnitud', None)
+        unidad = datos.get('unidad_medida') or getattr(instancia, 'unidad_medida', None)
+        InventarioService.validar_cambio_medida(instancia, magnitud, unidad)
+        return serializer.save()
+
+    @staticmethod
     def _contextualizar_cambio(insumo, usuario=None, request=None):
         insumo._auditoria_usuario = usuario
         insumo._auditoria_request = request
 
     @staticmethod
     def _validar_cantidad_por_unidad(insumo, cantidad):
+        if insumo.medida_requiere_revision:
+            return
+        cantidad_base = cantidad * insumo.unidad_medida.factor_conversion
         if (
             insumo.unidad_medida.es_discreta
-            and cantidad != cantidad.to_integral_value()
+            and cantidad_base != cantidad_base.to_integral_value()
         ):
             raise DatosInvalidos(
-                f'{insumo.nombre} se controla en {insumo.unidad_medida.abreviatura}; '
-                'la cantidad debe ser un numero entero.'
+                f'{insumo.nombre} se controla en {insumo.unidad_medida.simbolo}; '
+                'la cantidad debe equivaler a un numero entero de unidades base.'
             )
 
     @staticmethod
@@ -218,9 +264,9 @@ class InventarioService:
     def verificar_stock_plato(plato, cantidad=1):
         recetas = RecetaInsumo.objects.filter(
             plato=plato, activo=True
-        ).select_related("insumo")
+        ).select_related("insumo__unidad_medida", "unidad_medida")
         for receta in recetas:
-            requerido = receta.cantidad_por_porcion * Decimal(str(cantidad))
+            requerido = receta.cantidad_en_unidad_control * Decimal(str(cantidad))
             if not receta.insumo.activo or receta.insumo.stock_real < requerido:
                 raise StockInsuficiente(
                     receta.insumo.nombre,
@@ -252,7 +298,7 @@ class InventarioService:
         recetas = list(
             RecetaInsumo.objects.filter(
                 plato_id__in={linea.plato_id for linea in pendientes}, activo=True
-            ).select_related("insumo")
+            ).select_related("insumo__unidad_medida", "unidad_medida")
         )
         recetas_por_plato = defaultdict(list)
         for receta in recetas:
@@ -267,7 +313,7 @@ class InventarioService:
         for linea in pendientes:
             for receta in recetas_por_plato[linea.plato_id]:
                 requerimientos[receta.insumo_id] += (
-                    receta.cantidad_por_porcion * Decimal(str(linea.cantidad))
+                    receta.cantidad_en_unidad_control * Decimal(str(linea.cantidad))
                 )
         for insumo_id, requerido in requerimientos.items():
             insumo = insumos[insumo_id]
@@ -280,7 +326,7 @@ class InventarioService:
         for linea in pendientes:
             for receta in recetas_por_plato[linea.plato_id]:
                 insumo = insumos[receta.insumo_id]
-                cantidad = receta.cantidad_por_porcion * Decimal(str(linea.cantidad))
+                cantidad = receta.cantidad_en_unidad_control * Decimal(str(linea.cantidad))
                 anterior = insumo.stock_real
                 insumo.stock_real -= cantidad
                 movimientos.append(MovimientoInventario(
@@ -506,6 +552,7 @@ class InventarioService:
             insumo = Insumo.objects.select_for_update().get(pk=insumo_id, activo=True)
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
+        InventarioService._validar_cantidad_por_unidad(insumo, cantidad)
         if insumo.stock_real < cantidad:
             raise StockInsuficiente(
                 insumo.nombre, insumo.stock_real, cantidad, insumo_id=insumo.id
@@ -623,18 +670,175 @@ class InventarioService:
 
     @staticmethod
     @transaction.atomic
-    def cambiar_activo(insumo_id, activo):
+    def cambiar_activo(
+        insumo_id, activo, motivo='', usuario=None, request=None
+    ):
         try:
             insumo = Insumo.objects.select_for_update().get(pk=insumo_id)
         except Insumo.DoesNotExist:
             raise RecursoNoEncontrado("Insumo no encontrado.")
         if insumo.activo == activo:
             raise OperacionNoPermitida("El insumo ya tiene el estado solicitado.")
+        motivo = str(motivo or '').strip()
+        if not activo and len(motivo) < 5:
+            raise DatosInvalidos(
+                'El motivo de inactivacion es obligatorio y debe tener al menos 5 caracteres.'
+            )
         insumo.activo = activo
-        insumo.save(update_fields=["activo"])
+        campos = ['activo']
+        if not activo:
+            insumo.motivo_inactivacion = motivo
+            insumo.inactivado_en = timezone.now()
+            insumo.inactivado_por = usuario
+            campos.extend([
+                'motivo_inactivacion', 'inactivado_en', 'inactivado_por'
+            ])
+        insumo.save(update_fields=campos)
         if not activo:
             RecetaInsumo.objects.filter(insumo=insumo, activo=True).update(activo=False)
             actualizar_disponibilidad_platos(insumo)
+        return insumo
+
+    @staticmethod
+    @transaction.atomic
+    def corregir_medida(
+        insumo_id, magnitud, unidad, factor_conversion, motivo, usuario
+    ):
+        """Migra explicitamente un insumo marcado para revision de medida."""
+        try:
+            insumo = Insumo.objects.select_for_update().select_related(
+                'magnitud', 'unidad_medida'
+            ).get(pk=insumo_id)
+        except Insumo.DoesNotExist:
+            raise RecursoNoEncontrado('Insumo no encontrado.')
+
+        if not insumo.medida_requiere_revision:
+            raise OperacionNoPermitida(
+                'La correccion explicita solo esta disponible para insumos marcados para revision.'
+            )
+        InventarioService.validar_compatibilidad_medida(magnitud, unidad)
+        if (
+            insumo.magnitud_id == magnitud.id
+            and insumo.unidad_medida_id == unidad.id
+        ):
+            raise DatosInvalidos('Selecciona una magnitud o unidad diferente a la actual.')
+        try:
+            factor = Decimal(str(factor_conversion))
+        except Exception:
+            raise DatosInvalidos('El factor de conversion no es valido.')
+        if factor <= 0:
+            raise DatosInvalidos('El factor de conversion debe ser mayor a cero.')
+        motivo = str(motivo or '').strip()
+        if len(motivo) < 5:
+            raise DatosInvalidos('El motivo debe tener al menos 5 caracteres.')
+
+        precision_cantidad = Decimal('0.000001')
+        precision_costo = Decimal('0.0001')
+
+        def convertir_cantidad(valor):
+            return (Decimal(valor) * factor).quantize(
+                precision_cantidad, rounding=ROUND_HALF_UP
+            )
+
+        def convertir_costo(valor):
+            return (Decimal(valor) / factor).quantize(
+                precision_costo, rounding=ROUND_HALF_UP
+            )
+
+        recetas = list(
+            RecetaInsumo.objects.select_for_update().select_related(
+                'unidad_medida', 'insumo__unidad_medida'
+            ).filter(insumo=insumo)
+        )
+        cantidades_receta = {
+            receta.id: convertir_cantidad(receta.cantidad_en_unidad_control)
+            for receta in recetas
+        }
+        nuevos_stocks = {
+            'stock_actual': convertir_cantidad(insumo.stock_actual),
+            'stock_real': convertir_cantidad(insumo.stock_real),
+            'stock_minimo': convertir_cantidad(insumo.stock_minimo),
+        }
+        for cantidad in [*nuevos_stocks.values(), *cantidades_receta.values()]:
+            if unidad.es_discreta:
+                cantidad_base = cantidad * unidad.factor_conversion
+                if cantidad_base != cantidad_base.to_integral_value():
+                    raise DatosInvalidos(
+                        'El factor indicado produce fracciones incompatibles con la nueva unidad.'
+                    )
+
+        valores_anteriores = {
+            'magnitud': insumo.magnitud.codigo,
+            'unidad': insumo.unidad_medida.simbolo,
+            'stock_actual': str(insumo.stock_actual),
+            'stock_real': str(insumo.stock_real),
+            'stock_minimo': str(insumo.stock_minimo),
+            'costo_unitario': str(insumo.costo_unitario),
+        }
+        magnitud_anterior = insumo.magnitud
+        unidad_anterior = insumo.unidad_medida
+
+        for movimiento in insumo.movimientos.select_for_update():
+            movimiento.cantidad = convertir_cantidad(movimiento.cantidad)
+            movimiento.stock_anterior = convertir_cantidad(movimiento.stock_anterior)
+            movimiento.stock_nuevo = convertir_cantidad(movimiento.stock_nuevo)
+            movimiento.costo_unitario = convertir_costo(movimiento.costo_unitario)
+            movimiento.save(update_fields=[
+                'cantidad', 'stock_anterior', 'stock_nuevo', 'costo_unitario'
+            ])
+
+        for item in insumo.ordenes_items.select_for_update():
+            item.cantidad_solicitada = convertir_cantidad(item.cantidad_solicitada)
+            item.cantidad_recibida = convertir_cantidad(item.cantidad_recibida)
+            item.costo_unitario = convertir_costo(item.costo_unitario)
+            item.save(update_fields=[
+                'cantidad_solicitada', 'cantidad_recibida', 'costo_unitario'
+            ])
+
+        insumo.magnitud = magnitud
+        insumo.unidad_medida = unidad
+        insumo.stock_actual = nuevos_stocks['stock_actual']
+        insumo.stock_real = nuevos_stocks['stock_real']
+        insumo.stock_minimo = nuevos_stocks['stock_minimo']
+        insumo.costo_unitario = convertir_costo(insumo.costo_unitario)
+        insumo.medida_requiere_revision = False
+        Insumo.objects.filter(pk=insumo.pk).update(
+            magnitud=magnitud,
+            unidad_medida=unidad,
+            stock_actual=insumo.stock_actual,
+            stock_real=insumo.stock_real,
+            stock_minimo=insumo.stock_minimo,
+            costo_unitario=insumo.costo_unitario,
+            medida_requiere_revision=False,
+        )
+
+        for receta in recetas:
+            receta.insumo = insumo
+            receta.cantidad_por_porcion = cantidades_receta[receta.id]
+            receta.unidad_medida = unidad
+            receta.save(update_fields=['cantidad_por_porcion', 'unidad_medida'])
+
+        valores_nuevos = {
+            'magnitud': magnitud.codigo,
+            'unidad': unidad.simbolo,
+            'stock_actual': str(insumo.stock_actual),
+            'stock_real': str(insumo.stock_real),
+            'stock_minimo': str(insumo.stock_minimo),
+            'costo_unitario': str(insumo.costo_unitario),
+        }
+        InsumoCambioMedida.objects.create(
+            insumo=insumo,
+            magnitud_anterior=magnitud_anterior,
+            magnitud_nueva=magnitud,
+            unidad_anterior=unidad_anterior,
+            unidad_nueva=unidad,
+            factor_conversion=factor,
+            motivo=motivo,
+            valores_anteriores=valores_anteriores,
+            valores_nuevos=valores_nuevos,
+            usuario=usuario,
+        )
+        actualizar_disponibilidad_platos(insumo)
         return insumo
 
     @staticmethod
@@ -801,7 +1005,7 @@ def obtener_insumos_criticos():
             'nombre':          insumo.nombre,
             'stock_real':      float(insumo.stock_real),
             'stock_minimo':    float(insumo.stock_minimo),
-            'unidad':          insumo.unidad_medida.abreviatura,
+            'unidad':          insumo.unidad_medida.simbolo,
             'estado':          estado,
             'platos_afectados': platos_afectados,
             'falta':           float(max(insumo.stock_minimo - insumo.stock_real, 0)),
@@ -821,7 +1025,9 @@ def verificar_disponibilidad_plato(plato):
     if not plato.activo:
         return False, "Plato desactivado"
 
-    recetas = RecetaInsumo.objects.filter(plato=plato, activo=True).select_related('insumo')
+    recetas = RecetaInsumo.objects.filter(plato=plato, activo=True).select_related(
+        'insumo__unidad_medida', 'unidad_medida'
+    )
     if not recetas.exists():
         return True, "Sin receta definida"
 
@@ -829,7 +1035,7 @@ def verificar_disponibilidad_plato(plato):
         insumo = receta.insumo
         if not insumo.activo:
             return False, f"Insumo inactivo: {insumo.nombre}"
-        if insumo.stock_real < receta.cantidad_por_porcion:
+        if insumo.stock_real < receta.cantidad_en_unidad_control:
             return False, f"Stock insuficiente: {insumo.nombre}"
 
     return True, "Disponible"
@@ -904,7 +1110,7 @@ def obtener_stock_bajo():
             'nombre':       insumo.nombre,
             'stock_real':   float(insumo.stock_real),
             'stock_minimo': float(insumo.stock_minimo),
-            'unidad':       insumo.unidad_medida.abreviatura,
+            'unidad':       insumo.unidad_medida.simbolo,
             'porcentaje':   porcentaje,
         })
 
@@ -978,7 +1184,7 @@ def generar_reporte_pdf(usuario):
         data.append([
             i.get_categoria_display(),
             i.nombre,
-            i.unidad_medida.abreviatura,
+            i.unidad_medida.simbolo,
             f'{i.stock_real:.2f}',
             f'{i.stock_minimo:.2f}',
             f'{i.costo_unitario:.2f}',
@@ -1043,8 +1249,8 @@ def notificar_stock_critico_si_aplica(insumo):
     asunto = f'⚠ [Inventario] {insumo.nombre} en estado {nivel}'
     cuerpo = (
         f'El insumo "{insumo.nombre}" ha cruzado el umbral crítico.\n\n'
-        f'  • Stock actual: {insumo.stock_real} {insumo.unidad_medida.abreviatura}\n'
-        f'  • Stock mínimo: {insumo.stock_minimo} {insumo.unidad_medida.abreviatura}\n'
+        f'  • Stock actual: {insumo.stock_real} {insumo.unidad_medida.simbolo}\n'
+        f'  • Stock mínimo: {insumo.stock_minimo} {insumo.unidad_medida.simbolo}\n'
         f'  • Estado: {nivel}\n\n'
         f'Genera una orden de compra desde el panel de inventario para reponer.\n'
     )
