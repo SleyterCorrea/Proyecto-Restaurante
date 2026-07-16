@@ -1,9 +1,8 @@
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
 from .models import UnidadMedida, Insumo, RecetaInsumo, MovimientoInventario, OrdenCompra
 from .serializers import (
@@ -26,7 +25,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 class UnidadMedidaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UnidadMedida.objects.filter(activo=True).order_by('nombre')
     serializer_class = UnidadMedidaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
 
 class InsumoViewSet(viewsets.ModelViewSet):
     """
@@ -46,15 +45,9 @@ class InsumoViewSet(viewsets.ModelViewSet):
     """
     queryset = Insumo.objects.all().order_by('nombre')
     serializer_class = InsumoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
     pagination_class = StandardResultsSetPagination
     filterset_fields = ['activo', 'unidad_medida', 'categoria']
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'disponibles', 'criticos', 'stock_bajo', 'historial']:
-            return [IsAuthenticated()]
-        return [EsAdmin()]
-
 
     @action(detail=False, methods=['get'], url_path='disponibles')
     def disponibles(self, request):
@@ -221,7 +214,7 @@ class MovimientoInventarioViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = MovimientoInventario.objects.select_related('insumo', 'usuario').order_by('-created_at')
     serializer_class = MovimientoInventarioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [EsAdmin]
     pagination_class = StandardResultsSetPagination
     filterset_fields = ['tipo_movimiento']
 
@@ -310,7 +303,7 @@ class OrdenCompraViewSet(viewsets.ModelViewSet):
                 pk, OrdenCompra.Estado.RECIBIDA, request.user, recepciones,
                 request=request,
             )
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, InvalidOperation, TypeError):
             return Response({'error': 'Datos de recepcion invalidos.'}, status=400)
         except AppError as exc:
             return Response(exc.as_dict(), status=exc.status_code)

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from apps.inventario.models import Insumo, MovimientoInventario, UnidadMedida
+from apps.inventario.models import Insumo, MovimientoInventario, OrdenCompra, UnidadMedida
 from apps.menu.models import Plato
 
 @pytest.mark.django_db
@@ -176,3 +176,82 @@ def test_api_editar_redondea_valor_antiguo_sin_reducir_precision_interna(
     assert insumo.stock_minimo == Decimal('4.000')
     assert insumo.stock_real == Decimal('9.875')
     assert insumo.stock_actual == Decimal('9.875')
+
+
+@pytest.mark.django_db
+def test_api_rechaza_edicion_directa_de_stock(client, usuario_admin, insumo_con_stock):
+    client.force_login(usuario_admin)
+    stock_anterior = insumo_con_stock.stock_real
+
+    response = client.patch(
+        f'/api/inventario/insumos/{insumo_con_stock.id}/',
+        {'stock_real': str(stock_anterior + 1)},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 400
+    assert 'trazabilidad' in str(response.json()).lower()
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == stock_anterior
+
+
+@pytest.mark.django_db
+def test_api_inventario_operativo_es_solo_para_admin(
+    client, usuario_mozo, insumo_con_stock
+):
+    client.force_login(usuario_mozo)
+
+    assert client.get('/api/inventario/insumos/').status_code == 403
+    assert client.get('/api/inventario/movimientos/').status_code == 403
+
+
+@pytest.mark.django_db
+def test_orden_automatica_no_duplica_insumo_con_compra_pendiente(
+    client, usuario_admin, insumo_con_stock
+):
+    client.force_login(usuario_admin)
+    Insumo.objects.filter(pk=insumo_con_stock.pk).update(
+        stock_real=Decimal('1'), stock_actual=Decimal('1'), stock_minimo=Decimal('2')
+    )
+
+    primera = client.post(
+        '/api/inventario/ordenes-compra/generar-automatica/',
+        {},
+        content_type='application/json',
+    )
+    segunda = client.post(
+        '/api/inventario/ordenes-compra/generar-automatica/',
+        {},
+        content_type='application/json',
+    )
+
+    assert primera.status_code == 201
+    assert segunda.status_code == 400
+    assert OrdenCompra.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_recepcion_de_orden_exige_cantidad_en_cada_item(
+    client, usuario_admin, insumo_con_stock
+):
+    client.force_login(usuario_admin)
+    Insumo.objects.filter(pk=insumo_con_stock.pk).update(
+        stock_real=Decimal('1'), stock_actual=Decimal('1'), stock_minimo=Decimal('2')
+    )
+    creada = client.post(
+        '/api/inventario/ordenes-compra/generar-automatica/',
+        {},
+        content_type='application/json',
+    ).json()
+
+    response = client.post(
+        f"/api/inventario/ordenes-compra/{creada['id']}/recibir/",
+        {'items': [{'id': item['id'], 'cantidad_recibida': 0} for item in creada['items']]},
+        content_type='application/json',
+    )
+
+    assert response.status_code == 400
+    orden = OrdenCompra.objects.get(pk=creada['id'])
+    assert orden.estado == OrdenCompra.Estado.BORRADOR
+    insumo_con_stock.refresh_from_db()
+    assert insumo_con_stock.stock_real == Decimal('1')

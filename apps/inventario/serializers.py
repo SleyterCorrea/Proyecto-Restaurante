@@ -47,6 +47,17 @@ class InsumoSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if self.instance:
+            cambios_directos = {}
+            for campo in ('stock_actual', 'stock_real'):
+                if campo in attrs and attrs[campo] != getattr(self.instance, campo):
+                    cambios_directos[campo] = (
+                        'El stock no se edita desde la ficha del insumo. '
+                        'Registra una entrada, merma o ajuste para conservar la trazabilidad.'
+                    )
+            if cambios_directos:
+                raise serializers.ValidationError(cambios_directos)
+
         unidad = attrs.get('unidad_medida') or (
             self.instance.unidad_medida if self.instance else None
         )

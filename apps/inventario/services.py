@@ -677,11 +677,16 @@ class InventarioService:
     @staticmethod
     @transaction.atomic
     def generar_orden_automatica(usuario, proveedor=""):
+        insumos_ya_solicitados = OrdenCompraItem.objects.filter(
+            orden__estado__in=(OrdenCompra.Estado.BORRADOR, OrdenCompra.Estado.ENVIADA),
+        ).values_list('insumo_id', flat=True)
         bajos = list(Insumo.objects.filter(
             activo=True, stock_real__lte=models.F("stock_minimo")
-        ))
+        ).exclude(pk__in=insumos_ya_solicitados))
         if not bajos:
-            raise OperacionNoPermitida("No hay insumos por reponer.")
+            raise OperacionNoPermitida(
+                "No hay insumos por reponer sin una orden pendiente."
+            )
         data = {"proveedor": proveedor, "notas": "Generada automaticamente", "items": []}
         for insumo in bajos:
             objetivo = insumo.stock_minimo * 2
@@ -704,6 +709,10 @@ class InventarioService:
         if nuevo_estado == OrdenCompra.Estado.ENVIADA:
             if orden.estado != OrdenCompra.Estado.BORRADOR:
                 raise OperacionNoPermitida("Solo se puede enviar una orden en borrador.")
+            if not orden.proveedor.strip():
+                raise OperacionNoPermitida(
+                    "La orden debe indicar un proveedor antes de ser enviada."
+                )
             orden.fecha_envio = timezone.now()
         elif nuevo_estado == OrdenCompra.Estado.CANCELADA:
             if orden.estado == OrdenCompra.Estado.RECIBIDA:
@@ -727,7 +736,9 @@ class InventarioService:
                     lote = None
                     costo = item.costo_unitario
                 if cantidad <= 0:
-                    continue
+                    raise DatosInvalidos(
+                        "Cada item de la recepcion debe tener una cantidad mayor a cero."
+                    )
                 insumo = insumos[item.insumo_id]
                 InventarioService.reponer(
                     insumo.id,
